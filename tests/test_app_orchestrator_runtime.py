@@ -5714,32 +5714,172 @@ def test_reclaim_retries_legacy_terminal_projection_without_a_duplicate_event(mo
         repository = orchestrator_app._job_repository()
         original_get, original_update = repository.get, repository.update
         terminal_writes = 0
+        reads = 0
 
-        async def unavailable_read(_job_id):
-            raise ConnectionError("interrupted reclaim lookup")
+        async def interrupted_read(job_id):
+            nonlocal reads
+            reads += 1
+            if reads == 1:
+                raise ConnectionError("interrupted reclaim lookup")
+            return await original_get(job_id)
 
         async def interrupted_projection(job_id, **fields):
             nonlocal terminal_writes
             if fields.get("state") == "worker_lost":
                 terminal_writes += 1
-                if terminal_writes == 1:
+                if terminal_writes <= 2:
                     raise ConnectionError("interrupted terminal write")
             return await original_update(job_id, **fields)
 
         class ExpiredLeaseBroker:
+            sweeps = 0
+
+            async def server_time(self):
+                if self.sweeps == 3:
+                    raise ConnectionError("broker unavailable during projection retry")
+                return orchestrator_app._now()
+
+            async def reclaim_expired_leases(self, *, now):
+                self.sweeps += 1
+                return [job.id] if self.sweeps in {1, 3} else []
+
+        monkeypatch.setattr(repository, "get", interrupted_read)
+        monkeypatch.setattr(repository, "update", interrupted_projection)
+        broker = ExpiredLeaseBroker()
+        pending = {}
+        assert await orchestrator_app._reclaim_sweep_once(broker, repository, pending=pending) == [job.id]
+        assert pending == {job.id: None}
+        assert terminal_writes == 0
+
+        assert await orchestrator_app._reclaim_sweep_once(broker, repository, pending=pending) == []
+        assert terminal_writes == 1
+        staged = pending[job.id]
+        assert staged.state == "worker_lost"
+        provisional = await original_get(job.id)
+        assert provisional.state == "succeeded" and provisional.finished_at is None
+        hydrated = orchestrator_app._overlay_runtime_state(orchestrator_app._job_from_record(provisional), job)
+        assert hydrated is job and hydrated.finished_at == staged.finished_at and hydrated.state == "worker_lost"
+        # The retry owns a detached result even if another local reference
+        # mutates the cached job after publication.
+        job.error["retriable"] = False
+        newer_event_at = staged.done_published_at + 1
+        await original_update(job.id, cancel_requested=True, last_event_at=newer_event_at)
+        assert await orchestrator_app._reclaim_sweep_once(broker, repository, pending=pending) == [job.id]
+        assert pending[job.id] is staged
+        assert terminal_writes == 2
+        assert await orchestrator_app._reclaim_sweep_once(broker, repository, pending=pending) == []
+        assert pending == {}
+
+        completed = await original_get(job.id)
+        assert completed is not None and completed.state == "worker_lost"
+        assert terminal_writes == 3
+        assert completed.error["retriable"] is True
+        assert completed.cancel_requested is True and completed.last_event_at == newer_event_at
+        events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
+        assert [event.payload["state"] for event in events if event.event_type == "done"] == ["worker_lost"]
+
+    asyncio.run(scenario())
+
+
+def test_reclaim_protects_cancellation_published_during_the_repository_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        job = orchestrator_app.Job(id="job_cancel_during_reclaim_lookup", created_at=orchestrator_app._now())
+        await _seed_job_async(job)
+        orchestrator_app.JOBS.pop(job.id)
+        repository = orchestrator_app._job_repository()
+        real_get = repository.get
+        read_paused, read_released = asyncio.Event(), asyncio.Event()
+
+        async def delayed_first_read(job_id):
+            record = await real_get(job_id)
+            if not read_paused.is_set():
+                read_paused.set()
+                await read_released.wait()
+            return record
+
+        class RequeuedBroker:
             async def server_time(self):
                 return orchestrator_app._now()
 
             async def reclaim_expired_leases(self, *, now):
                 return [job.id]
 
-        monkeypatch.setattr(repository, "get", unavailable_read)
-        monkeypatch.setattr(repository, "update", interrupted_projection)
-        await orchestrator_app._reclaim_sweep_once(ExpiredLeaseBroker(), repository)
+            async def cancel(self, job_id):
+                return job_id == job.id
 
-        completed = await original_get(job.id)
-        assert completed is not None and completed.state == "worker_lost"
-        assert terminal_writes == 2
+            async def leased_job_ids(self):
+                return []
+
+        broker = RequeuedBroker()
+        pending = {}
+        monkeypatch.setattr(repository, "get", delayed_first_read)
+        monkeypatch.setattr(orchestrator_app, "get_queue_broker", lambda: broker)
+        sweep = asyncio.create_task(orchestrator_app._reclaim_sweep_once(broker, repository, pending=pending))
+        try:
+            await asyncio.wait_for(read_paused.wait(), timeout=5)
+            response = await orchestrator_app._cancel_job(job.id)
+            assert response.status_code == 200
+        finally:
+            read_released.set()
+            await asyncio.wait_for(sweep, timeout=5)
+
+        assert pending[job.id].state == "canceled"
+        await orchestrator_app._reclaim_sweep_once(broker, repository, pending=pending)
+        completed = await real_get(job.id)
+        assert completed.state == "canceled" and pending == {}
+        events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
+        assert [event.payload["state"] for event in events if event.event_type == "done"] == ["canceled"]
+
+    asyncio.run(scenario())
+
+
+def test_legacy_cancel_and_reclaim_share_terminal_publication(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        job = orchestrator_app.Job(id="job_cancel_during_reclaim_publication", created_at=orchestrator_app._now())
+        await _seed_job_async(job)
+        orchestrator_app.JOBS.pop(job.id)
+        repository = orchestrator_app._job_repository()
+        original_publish = orchestrator_app._publish_event
+        publish_entered, publish_released, cancel_ready = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+        async def pause_reclaim_publication(job_id, event, payload):
+            if event == "done" and payload["state"] == "worker_lost":
+                publish_entered.set()
+                await publish_released.wait()
+            await original_publish(job_id, event, payload)
+
+        class RequeuedBroker:
+            async def server_time(self):
+                return orchestrator_app._now()
+
+            async def reclaim_expired_leases(self, *, now):
+                return [job.id]
+
+            async def cancel(self, job_id):
+                return job_id == job.id
+
+            async def leased_job_ids(self):
+                cancel_ready.set()
+                return []
+
+        broker = RequeuedBroker()
+        monkeypatch.setattr(orchestrator_app, "_publish_event", pause_reclaim_publication)
+        monkeypatch.setattr(orchestrator_app, "get_queue_broker", lambda: broker)
+        sweep = asyncio.create_task(orchestrator_app._reclaim_sweep_once(broker, repository))
+        cancel = None
+        try:
+            await asyncio.wait_for(publish_entered.wait(), timeout=5)
+            cancel = asyncio.create_task(orchestrator_app._cancel_job(job.id))
+            await asyncio.wait_for(cancel_ready.wait(), timeout=5)
+            assert not cancel.done()
+        finally:
+            publish_released.set()
+            await asyncio.wait_for(sweep, timeout=5)
+            if cancel is not None:
+                await asyncio.wait_for(cancel, timeout=5)
+
+        completed = await repository.get(job.id)
+        assert completed.state == "worker_lost" and completed.cancel_requested is True
         events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
         assert [event.payload["state"] for event in events if event.event_type == "done"] == ["worker_lost"]
 

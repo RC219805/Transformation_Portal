@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from email.parser import BytesParser
 from email.policy import default as email_policy
-from functools import lru_cache
+from functools import lru_cache, partial
 from importlib.util import find_spec
 from itertools import chain
 from pathlib import Path, PurePosixPath
@@ -1766,7 +1766,10 @@ def _overlay_runtime_state(job: Job, cached: Optional[Job]) -> Job:
         return job
     if cached is None:
         return job
-    if cached.proc is not None and cached.proc.returncode is None:
+    cached_has_completion = cached.finished_at is not None or cached.done_published_at is not None
+    durable_has_completion = job.finished_at is not None or job.done_published_at is not None
+    cached_completion_pending = cached_has_completion and not durable_has_completion
+    if cached.proc is not None and cached.proc.returncode is None and not cached_completion_pending:
         # While the subprocess is alive, the runtime object owns volatile
         # state/progress/log fields. Still refresh durable metadata that may
         # be advanced by non-runner paths such as artifact delete/retention.
@@ -1790,7 +1793,7 @@ def _overlay_runtime_state(job: Job, cached: Optional[Job]) -> Job:
         return cached
     cached_is_terminal = cached.finished_at is not None or cached.state in _TERMINAL_JOB_STATES
     durable_is_terminal = job.finished_at is not None or job.state in _TERMINAL_JOB_STATES
-    if cached_is_terminal and not durable_is_terminal:
+    if cached_completion_pending or (cached_is_terminal and not durable_is_terminal):
         # A terminal runtime cache means the local runner already finished,
         # but its final repository persist may have failed or lagged. Keep
         # the terminal view so list/detail do not regress to stale active
@@ -3767,9 +3770,7 @@ def _check_legacy_artifact_output_overlap(job: Job, output_dir: Path, peers: Ite
         try:
             # Inspect identity even if the peer's historical root is outside
             # today's allowlist. This grants no authority over that path.
-            peer_output = resolve_rejecting_symlink_loops(
-                _portal_path_security._resolve_untrusted_request_path(requested, repo_root=REPO_ROOT)
-            )
+            peer_output = _portal_path_security._resolve_untrusted_request_path(requested, repo_root=REPO_ROOT)
         except (OSError, RuntimeError, ValueError) as exc:
             raise _AmbiguousLegacyArtifactOwnership("legacy peer output identity is unavailable") from exc
         if output_dir.is_relative_to(peer_output) or peer_output.is_relative_to(output_dir):
@@ -9430,6 +9431,7 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
     if broker is not None:
         app.state.queue_broker = broker
         stop_event = asyncio.Event()
+        pending_legacy_reclaims: Dict[str, Optional[JobRecord]] = {}
         app.state.worker_stop_event = stop_event
         if ORCHESTRATOR_IN_PROCESS_WORKERS_ENABLED:
             for slot in range(MAX_CONCURRENT_JOBS):
@@ -9444,7 +9446,7 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
                         run_worker_forever(
                             broker=broker,
                             config=worker_config,
-                            executor=_orchestrator_job_executor,
+                            executor=partial(_orchestrator_job_executor, pending_legacy_reclaims=pending_legacy_reclaims),
                             stop_event=stop_event,
                         )
                     )
@@ -9454,7 +9456,9 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
         # Phase 2.D — periodic broker-reclaim reconciler. Shares
         # ``stop_event`` with the worker pool so a single signal
         # winds down the whole broker-dispatch substrate.
-        app.state.reclaim_sweep_task = asyncio.create_task(_reclaim_sweep_loop(broker, repo, stop_event))
+        app.state.reclaim_sweep_task = asyncio.create_task(
+            _reclaim_sweep_loop(broker, repo, stop_event, pending_legacy_reclaims=pending_legacy_reclaims)
+        )
     try:
         yield
     finally:
@@ -11553,6 +11557,10 @@ async def _cancel_job(job_id: str, *, request: Optional[Request] = None) -> JSON
     tenant_access_error = await _pilot_enforce_job_tenant(tenant, job, action="job_cancel", request=request)
     if tenant_access_error is not None:
         return tenant_access_error
+    if not _uses_dispatch_authority():
+        # Reclaim and cancellation can select the same job after its expired
+        # lease is requeued. Both must publish through the same runtime lock.
+        job = JOBS.setdefault(job_id, job)
     audit_response = await _record_pilot_audit(
         action="job_cancel",
         decision="accepted",
@@ -11980,8 +11988,17 @@ def _job_execution_service() -> JobExecutionService[Job]:
 async def _orchestrator_job_executor(
     request: JobEnqueueRequest | DispatchLocator,
     cancellation_event: "asyncio.Event",
+    *,
+    pending_legacy_reclaims: Optional[Mapping[str, Optional[JobRecord]]] = None,
 ) -> int:
     """Compatibility entry point; execution belongs to JobExecutionService."""
+    if (
+        isinstance(request, JobEnqueueRequest)
+        and pending_legacy_reclaims is not None
+        and request.job_id in pending_legacy_reclaims
+    ):
+        LOGGER.info("worker released legacy job %s pending reclaim reconciliation", request.job_id)
+        return 0
     return await _job_execution_service().execute(request, cancellation_event, run_job=_run_job)
 
 
@@ -11995,29 +12012,33 @@ async def _publish_cancellation_terminal(job: "Job") -> None:
     worker has already leased, ``_run_job``'s finally-block remains
     the source of truth and this helper is a no-op.
     """
-    if job.finished_at is not None:
-        return
-    job.state = "canceled"
-    job.exit_code = job.exit_code if job.exit_code is not None else 0
-    now = _now()
-    await _publish_event(
-        job.id,
-        "done",
-        {
-            "id": job.id,
-            "state": job.state,
-            "exit_code": job.exit_code,
-            "error": job.error,
-            "artifacts": job.artifacts,
-            "run_summary": job.run_summary or None,
-        },
-    )
-    job.done_published_at = now
-    job.finished_at = now
-    await _persist_job_state(job)
+    async with job.terminal_lock:
+        if job.finished_at is not None or job.done_published_at is not None:
+            return
+        exit_code = job.exit_code if job.exit_code is not None else 0
+        await _publish_event(
+            job.id,
+            "done",
+            {
+                "id": job.id,
+                "state": "canceled",
+                "exit_code": exit_code,
+                "error": job.error,
+                "artifacts": job.artifacts,
+                "run_summary": job.run_summary or None,
+            },
+        )
+        now = _now()
+        job.state = "canceled"
+        job.exit_code = exit_code
+        job.done_published_at = now
+        job.finished_at = now
+        await _persist_job_state(job)
 
 
-async def _publish_worker_lost_terminal(job: "Job", *, reason_code: str) -> None:
+async def _publish_worker_lost_terminal(
+    job: "Job", *, reason_code: str, pending: Optional[Dict[str, Optional[JobRecord]]] = None
+) -> bool:
     """Publish the terminal ``worker_lost`` event for a reclaimed lease.
 
     Phase 2.D: the broker-reclaim reconciler calls this when
@@ -12033,7 +12054,9 @@ async def _publish_worker_lost_terminal(job: "Job", *, reason_code: str) -> None
     """
     async with job.terminal_lock:
         if job.finished_at is not None or job.done_published_at is not None:
-            return
+            if pending is not None:
+                pending[job.id] = _record_from_job(job).copy()
+            return False
         error = {
             "code": reason_code,
             "message": "Worker lease expired without heartbeat; job marked worker_lost.",
@@ -12057,34 +12080,18 @@ async def _publish_worker_lost_terminal(job: "Job", *, reason_code: str) -> None
         job.last_event_at = now
         job.done_published_at = now
         job.finished_at = now
+        if pending is not None:
+            # The runtime projection can be hydrated while the store write
+            # awaits. Keep the exact already-published result for retries.
+            pending[job.id] = _record_from_job(job).copy()
         await _persist_job_state(job)
+        return True
 
 
-async def _reclaim_sweep_once(broker: "QueueBroker", repository: Any) -> List[str]:
-    """One pass of the Phase 2.D broker-reclaim reconciler.
-
-    Calls ``broker.reclaim_expired_leases(now=server_time())`` and,
-    for each reclaimed ``job_id``, drives BOTH:
-
-    - the in-process ``Job`` (so SSE subscribers see the terminal
-      ``done`` event immediately), and
-    - the durable ``JobRepository`` row (so Postgres-backed state
-      reflects the same ``worker_lost`` + ``retriable=True``
-      payload — without this dual-write a restart could resurrect
-      the row as ``running``).
-
-    Returns the reclaimed ids so callers (lifespan loop, tests)
-    can log / metric the sweep. The broker's contract still
-    re-queues reclaimed dispatch payloads at the head of the ready
-    FIFO; the orchestrator's executor adapter has an explicit
-    terminal-state guard so a stale lease pickup of a reclaimed-
-    then-terminal job is a no-op.
-
-    ``repository`` may be ``None`` when broker construction
-    succeeded but the repository singleton did not; in that case
-    only the in-process Job is updated and a warning is logged so
-    the operator can see the missing persistence.
-    """
+async def _reclaim_sweep_once(
+    broker: "QueueBroker", repository: Optional[JobRepository], *, pending: Optional[Dict[str, Optional[JobRecord]]] = None
+) -> List[str]:
+    """Return newly reclaimed IDs and retry pending legacy reconciliation."""
     if isinstance(broker, RedisLocatorQueueBroker):
         records = get_operational_record_store()
         expired = await records.expire_dispatches()
@@ -12098,44 +12105,61 @@ async def _reclaim_sweep_once(broker: "QueueBroker", repository: Any) -> List[st
             except Exception:
                 LOGGER.exception("deferred attempt/staging cleanup failed for %s", job_id)
         return expired
+    if pending is None:
+        pending = {}
     try:
         now = await broker.server_time()
         reclaimed = await broker.reclaim_expired_leases(now=now)
     except Exception:  # noqa: BLE001 - sweep failures must not crash the loop
         LOGGER.exception("broker reclaim sweep failed")
-        return []
+        reclaimed = []
     for jid in reclaimed:
-        job = JOBS.get(jid)
-        record = None
-        if repository is not None:
-            try:
-                record = await repository.get(jid)
-            except Exception:  # noqa: BLE001 - the local worker can still be stopped
-                LOGGER.exception("repository read for reclaimed job %s failed", jid)
+        pending.setdefault(jid, None)
+    if repository is None:
+        if reclaimed:
+            LOGGER.warning("legacy reclaim is pending because the repository is unavailable")
+        return list(reclaimed)
+    for jid, completion in tuple(pending.items()):
         try:
-            # The subprocess can report a terminal state before indexing,
-            # mirroring and publishing done. Only completion markers prove
-            # that the persisted terminal outcome survived finalization.
-            if record is not None and (record.finished_at is not None or record.done_published_at is not None):
-                LOGGER.info("reclaim sweep skipped job %s: already finalized", jid)
-                continue
-            if job is None and record is not None:
-                job = _job_from_record(record)
-            if job is not None:
-                try:
-                    await _publish_worker_lost_terminal(job, reason_code=WORKER_LOST_REASON_RECLAIMED)
-                except _JobRepositoryUnavailable:
-                    # The terminal event has already gone out. Retry only the
-                    # projection write while preserving its exact outcome.
-                    await _persist_job_state(job)
-            elif repository is None:
-                LOGGER.warning("reclaim sweep skipped job %s (no repository configured)", jid)
+            record = await repository.get(jid)
+            if record is not None and record.finished_at is None and record.done_published_at is None:
+                job = JOBS.get(jid)
+                if job is None:
+                    job = _job_from_record(completion if completion is not None else record)
+                    JOBS[jid] = job
+                if completion is not None:
+                    async with job.terminal_lock:
+                        # Retry only the final projection. Separate telemetry
+                        # and cancellation writes may have advanced meanwhile.
+                        await _persist_job_fields(
+                            job,
+                            state=completion.state,
+                            progress=completion.progress,
+                            started_at=completion.started_at,
+                            finished_at=completion.finished_at,
+                            done_published_at=completion.done_published_at,
+                            exit_code=completion.exit_code,
+                            run_summary=completion.run_summary,
+                            error=completion.error,
+                        )
+                elif not await _publish_worker_lost_terminal(job, reason_code=WORKER_LOST_REASON_RECLAIMED, pending=pending):
+                    # The local runner won publication. Check durable state
+                    # again before retrying its recorded result.
+                    continue
+            # Missing rows and durable completion markers need no write.
+            pending.pop(jid)
         except Exception:  # noqa: BLE001 - one job's failure must not block others
-            LOGGER.exception("reclaim reconciliation failed for job %s", jid)
+            LOGGER.exception("reclaim reconciliation pending for job %s", jid)
     return list(reclaimed)
 
 
-async def _reclaim_sweep_loop(broker: "QueueBroker", repository: Any, stop_event: "asyncio.Event") -> None:
+async def _reclaim_sweep_loop(
+    broker: "QueueBroker",
+    repository: Optional[JobRepository],
+    stop_event: "asyncio.Event",
+    *,
+    pending_legacy_reclaims: Dict[str, Optional[JobRecord]],
+) -> None:
     """Periodic reconciler driven by ``_orchestrator_lifespan``.
 
     Sleeps ``RECLAIM_SWEEP_INTERVAL_SECONDS`` between sweeps; the
@@ -12147,7 +12171,7 @@ async def _reclaim_sweep_loop(broker: "QueueBroker", repository: Any, stop_event
     """
     while not stop_event.is_set():
         try:
-            await _reclaim_sweep_once(broker, repository)
+            await _reclaim_sweep_once(broker, repository, pending=pending_legacy_reclaims)
         except Exception:  # noqa: BLE001 - defense in depth; never crash the loop
             LOGGER.exception("reclaim sweep loop iteration raised")
         try:
