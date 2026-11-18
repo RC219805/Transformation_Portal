@@ -893,3 +893,69 @@ class TestEnsembleUnitsAndGeometry:
         assert observed.focal_length_px == baseline.focal_length_px == 525.0
         assert observed.per_model_weights == {"depth_pro": 0.0, **baseline.per_model_weights}
         np.testing.assert_array_equal(observed.per_model_depths["depth_pro"], with_fallback["depth_pro"].depth_map)
+
+
+class TestEnsembleAvailabilityAndWeights:
+    """Readiness must reflect constituent runtimes; weights must not leak or divide by zero."""
+
+    @staticmethod
+    def _ensemble_with(monkeypatch, readiness, checked=None):
+        config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
+        ensemble = DepthEnsembleBackend(
+            config,
+            models=[ModelConfig(name=name, weight=0.5) for name in readiness],
+        )
+        calls = checked if checked is not None else []
+
+        class Constituent:
+            def __init__(self, name):
+                self.name = name
+
+            def ensure_available(self) -> None:
+                calls.append(self.name)
+                if readiness[self.name] is not None:
+                    raise readiness[self.name]
+
+        monkeypatch.setattr(ensemble, "_get_backend", lambda model: Constituent(model.name))
+        return ensemble
+
+    def test_ensure_available_fails_when_no_constituent_runtime_is_ready(self, monkeypatch):
+        ensemble = self._ensemble_with(
+            monkeypatch,
+            {"depth_pro": FileNotFoundError("checkpoint missing"), "da3": ImportError("transformers missing")},
+        )
+
+        with pytest.raises(RuntimeError, match="No ensemble constituent is ready") as exc_info:
+            ensemble.ensure_available()
+
+        assert "checkpoint missing" in str(exc_info.value)
+        assert "transformers missing" in str(exc_info.value)
+
+    def test_ensure_available_accepts_ready_constituents(self, monkeypatch):
+        checked = []
+        ensemble = self._ensemble_with(monkeypatch, {"depth_pro": None, "da3": None}, checked=checked)
+
+        ensemble.ensure_available()
+
+        assert checked == ["depth_pro", "da3"]
+
+    def test_caller_model_weights_are_not_mutated(self):
+        models = [ModelConfig(name="da3", weight=2.0), ModelConfig(name="synthetic", weight=6.0)]
+        config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
+
+        ensemble = DepthEnsembleBackend(config, models=models)
+
+        assert [m.weight for m in models] == [2.0, 6.0]
+        assert [m.weight for m in ensemble._models] == [0.25, 0.75]
+
+    @pytest.mark.parametrize(
+        "weights",
+        [(0.0, 0.0), (float("nan"), 1.0), (float("inf"), 1.0), ("heavy", 1.0)],
+        ids=["all_zero", "nan", "inf", "non_numeric"],
+    )
+    def test_invalid_weights_are_rejected(self, weights):
+        models = [ModelConfig(name="da3", weight=weights[0]), ModelConfig(name="synthetic", weight=weights[1])]
+        config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
+
+        with pytest.raises(ValueError, match="weight"):
+            DepthEnsembleBackend(config, models=models)
