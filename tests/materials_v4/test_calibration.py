@@ -652,3 +652,126 @@ def test_calibration_loader_refuses_symlink_artifact(calibration_fixture, tmp_pa
     link.symlink_to(path.name)
     with pytest.raises(ArtifactEvidenceError, match="opened safely"):
         load_calibration(link)
+
+
+def _shared_bundle_payload(tmp_path, *, shared):
+    """Six records drawn from one photograph; optionally one bundle and one mask file."""
+    source_root, data_root = tmp_path / "sources", tmp_path / "data"
+    source_root.mkdir(parents=True)
+    data_root.mkdir()
+    Image.new("RGB", (24, 24), (10, 20, 30)).save(source_root / "photo.png")
+    source_sha = hashlib.sha256((source_root / "photo.png").read_bytes()).hexdigest()
+    recipe = {key: f"{index + 1:064x}" for index, key in enumerate(sorted(calibration_module.RECIPE_KEYS))}
+    recipe["taxonomy_sha256"] = calibration_module.taxonomy_digest()
+    scores, correct = [0.5, 0.6, 0.7, 0.8, 0.9, 0.95], [False, True, False, True, True, True]
+    regions = []
+    for index, score in enumerate(scores):
+        mask = np.zeros((24, 24), bool)
+        mask[index * 4 : (index + 1) * 4] = True
+        regions.append(
+            RegionEvidence(
+                f"region-{index:04d}", "water", mask, score, provenance="inferred", score_type="uncalibrated_clip_ranking_v1"
+            )
+        )
+    evidence = MaterialEvidence(source_sha, (24, 24), tuple(regions), producer=recipe)
+    records, bindings = [], []
+    for index, score in enumerate(scores):
+        bundle = data_root / ("bundle" if shared else f"bundle-{index}")
+        if not (bundle / "evidence.json").exists():
+            bundle.mkdir()
+            write_evidence(evidence, bundle / "evidence.json")
+        # Unshared: each annotation and its mask live in their own directory, so
+        # every annotation document keeps the same bytes as in the shared layout.
+        annotation_dir = data_root if shared else data_root / f"annotation-{index}"
+        annotation_dir.mkdir(exist_ok=True)
+        annotation_path = annotation_dir / f"annotation-{index}.json"
+        np.save(annotation_dir / "target.npy", np.ones((24, 24), np.float32), allow_pickle=False)
+        label = "water" if correct[index] else "sky"
+        annotation = {
+            "schema": "tp.materials.annotation.v1",
+            "source_sha256": source_sha,
+            "shape": [24, 24],
+            "property_group": "property-0",
+            "label": label,
+            "mask_path": "target.npy",
+            "mask_sha256": hashlib.sha256((annotation_dir / "target.npy").read_bytes()).hexdigest(),
+            "annotator": "unit-annotator",
+            "reviewer": "unit-reviewer",
+            "review_status": "reviewed",
+        }
+        records.append(
+            {
+                "record_id": f"record-{index}",
+                "source_sha256": source_sha,
+                "property_group": "property-0",
+                "split": "calibration",
+                "true_label": label,
+                "predicted_label": "water",
+                "confidence": score,
+                "predicted_mask": None,
+                "target_mask": None,
+            }
+        )
+        bindings.append(
+            {
+                "record_id": f"record-{index}",
+                "evidence_path": f"{bundle.name}/evidence.json",
+                "evidence_sha256": hashlib.sha256((bundle / "evidence.json").read_bytes()).hexdigest(),
+                "region_id": f"region-{index:04d}",
+                "annotation_path": annotation_path.relative_to(data_root).as_posix(),
+                "annotation_sha256": _write(annotation_path, annotation),
+            }
+        )
+    payload = {
+        "schema": CALIBRATION_INPUT_SCHEMA,
+        "evaluation": {"schema": "tp.materials.evaluation_input.v1", "records": records, "selection_sources": [source_sha]},
+        "split_membership": [
+            {"source_path": "photo.png", "source_sha256": source_sha, "property_group": "property-0", "split": "calibration"}
+        ],
+        "bindings": bindings,
+    }
+    return payload, source_root, data_root
+
+
+def test_fitting_reads_each_shared_input_once_with_identical_output(tmp_path, monkeypatch):
+    """LN-7: records sharing a bundle must not reload every region mask per record."""
+    shared = _shared_bundle_payload(tmp_path / "shared", shared=True)
+    unshared = _shared_bundle_payload(tmp_path / "unshared", shared=False)
+    loads, reads = [], []
+    real_load, real_snapshot = calibration_module.load_evidence, calibration_module.snapshot
+
+    def counted_load(*args, **kwargs):
+        loads.append(args[0])
+        return real_load(*args, **kwargs)
+
+    def counted_snapshot(root, path, **kwargs):
+        reads.append(path.name)
+        return real_snapshot(root, path, **kwargs)
+
+    monkeypatch.setattr(calibration_module, "load_evidence", counted_load)
+    monkeypatch.setattr(calibration_module, "snapshot", counted_snapshot)
+    fitted = fit_calibration(shared[0], source_root=shared[1], data_root=shared[2])
+    assert len(loads) == 1
+    # Membership, first use and one final mutation re-check: not one read per record.
+    assert reads.count("photo.png") == 3
+    assert reads.count("target.npy") == 2
+    assert reads.count("evidence.json") == 2
+    # Memoised inputs yield exactly the payload of a layout with no shared files.
+    baseline = fit_calibration(unshared[0], source_root=unshared[1], data_root=unshared[2])
+    assert len(loads) == 7
+    assert canonicalize_json(fitted.to_payload()) == canonicalize_json(baseline.to_payload())
+    assert fitted.receipt.classes == ("water",)
+
+
+def test_fitting_detects_a_shared_input_changed_after_its_first_use(tmp_path, monkeypatch):
+    payload, source_root, data_root = _shared_bundle_payload(tmp_path, shared=True)
+    real_load = calibration_module.load_evidence
+
+    def mutating_load(*args, **kwargs):
+        result = real_load(*args, **kwargs)
+        Image.new("RGB", (24, 24), (99, 20, 30)).save(source_root / "photo.png")
+        return result
+
+    monkeypatch.setattr(calibration_module, "load_evidence", mutating_load)
+    with pytest.raises(MaterialsError, match="changed during fitting"):
+        fit_calibration(payload, source_root=source_root, data_root=data_root)
