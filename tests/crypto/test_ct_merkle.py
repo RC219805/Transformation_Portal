@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 
 import pytest
 
@@ -52,6 +53,67 @@ RFC_ROOT_1_LEAF = RFC_LEAF_HASH_D0  # MTH({d0}) = leaf_hash(d0)
 RFC_ROOT_2_LEAVES = "fac54203e7cc696cf0dfcb42c92a1d9dbaf70ad9e621f4bd8d98662f00e3c125"  # MTH({d0, d1})
 RFC_ROOT_3_LEAVES = "68cb24df6ba89442113931dd829cbcae8ae19a76996ce0c4b7d9d65d168d35d2"  # MTH({d0, d1, d2})
 RFC_ROOT_7_LEAVES = "f50c51ec2b7e07916f1a744c80e39f0b5d2932c2a0f411a75c9ff869013a75f9"  # MTH({d0..d6})
+RFC_LEAVES_D0_TO_D6 = (
+    RFC_LEAF_HASH_D0,
+    RFC_LEAF_HASH_D1,
+    RFC_LEAF_HASH_D2,
+    RFC_LEAF_HASH_D3,
+    RFC_LEAF_HASH_D4,
+    RFC_LEAF_HASH_D5,
+    RFC_LEAF_HASH_D6,
+)
+
+
+def _node(left: bytes, right: bytes) -> bytes:
+    """Interior node hash computed without the module under test."""
+    return hashlib.sha256(b"\x01" + left + right).digest()
+
+
+def _rfc9162_verify_consistency(first: int, second: int, first_hash: bytes, second_hash: bytes, path: list[bytes]) -> bool:
+    """Step-by-step transcription of RFC 9162 section 2.1.4.2, kept independent of tp.crypto."""
+    if not path:  # step 1
+        return False
+    path = list(path)
+    if first & (first - 1) == 0:  # step 2
+        path.insert(0, first_hash)
+    fn, sn = first - 1, second - 1  # step 3
+    while fn % 2 == 1:  # step 4
+        fn, sn = fn // 2, sn // 2
+    fr = sr = path[0]  # step 5
+    for c in path[1:]:  # step 6
+        if sn == 0:  # 6a
+            return False
+        if fn % 2 == 1 or fn == sn:  # 6b
+            fr = _node(c, fr)
+            sr = _node(c, sr)
+            if fn % 2 == 0:
+                while fn % 2 == 0 and fn != 0:
+                    fn, sn = fn // 2, sn // 2
+        else:
+            sr = _node(sr, c)
+        fn, sn = fn // 2, sn // 2  # 6c
+    return fr == first_hash and sr == second_hash and sn == 0  # step 7
+
+
+@dataclass(frozen=True)
+class _ConsistencyCorpus:
+    """Roots and honest consistency proofs for every 1 <= first <= second <= 65."""
+
+    roots: dict[int, bytes]
+    proofs: dict[tuple[int, int], list[bytes]]
+
+
+@pytest.fixture(scope="module")
+def consistency_corpus() -> _ConsistencyCorpus:
+    # 65 leaves so that every pair up to 64 has an honest proof for its neighbouring sizes.
+    leaves = [ct_leaf_hash(b"leaf-%d" % index) for index in range(65)]
+    roots = {size: ct_merkle_root(leaves[:size]) for size in range(1, 66)}
+    proofs = {
+        (first, second): ct_consistency_proof(leaves[:second], first)
+        for second in range(1, 66)
+        for first in range(1, second + 1)
+    }
+    return _ConsistencyCorpus(roots=roots, proofs=proofs)
 
 
 class TestRfc9162GoldenVectors:
@@ -351,6 +413,150 @@ class TestCtConsistencyProof:
                 first_root=first_root,
                 second_root=second_root,
                 proof=proof,
+            )
+
+    def test_rfc9162_worked_example_proofs(self) -> None:
+        """PROOF(3, D[7]), PROOF(4, D[7]) and PROOF(6, D[7]) from RFC 9162 section 2.1.5."""
+        d = [bytes.fromhex(value) for value in RFC_LEAVES_D0_TO_D6]
+        g = _node(d[0], d[1])
+        h = _node(d[2], d[3])
+        i = _node(d[4], d[5])
+        j = d[6]
+        k = _node(g, h)
+        l_node = _node(i, j)
+        expected = {3: [d[2], d[3], g, l_node], 4: [l_node], 6: [i, j, k]}
+        roots = {3: _node(g, d[2]), 4: k, 6: _node(k, i), 7: bytes.fromhex(RFC_ROOT_7_LEAVES)}
+
+        for first_size, expected_proof in expected.items():
+            assert ct_consistency_proof(d, first_size) == expected_proof
+            assert verify_ct_consistency_proof(
+                first_tree_size=first_size,
+                second_tree_size=7,
+                first_root=roots[first_size],
+                second_root=roots[7],
+                proof=expected_proof,
+            )
+
+    def test_every_honest_proof_verifies_up_to_64_leaves(self, consistency_corpus: _ConsistencyCorpus) -> None:
+        """RFC 9162 section 2.1.4.2 accepts every honestly generated proof.
+
+        The previous verifier rejected about a quarter of them, first at (10, 13).
+        """
+        rejected = [
+            (first, second)
+            for (first, second), proof in consistency_corpus.proofs.items()
+            if second <= 64
+            and not verify_ct_consistency_proof(
+                first_tree_size=first,
+                second_tree_size=second,
+                first_root=consistency_corpus.roots[first],
+                second_root=consistency_corpus.roots[second],
+                proof=proof,
+            )
+        ]
+
+        assert rejected == []
+        assert sum(1 for _, second in consistency_corpus.proofs if second <= 64) == 64 * 65 // 2
+
+    def test_tampered_truncated_and_extended_proofs_are_rejected_up_to_64_leaves(
+        self,
+        consistency_corpus: _ConsistencyCorpus,
+    ) -> None:
+        extra = hashlib.sha256(b"not part of any tree").digest()
+        accepted: list[tuple[str, int, int]] = []
+
+        for (first, second), proof in consistency_corpus.proofs.items():
+            if first == second or second > 64:
+                continue
+            variants = {
+                "drop-last": proof[:-1],
+                "drop-first": proof[1:],
+                "append": [*proof, extra],
+                "prepend": [extra, *proof],
+                "repeat-last": [*proof, proof[-1]],
+            }
+            for index, node in enumerate(proof):
+                flipped = bytes([node[0] ^ 0x01]) + node[1:]
+                variants[f"tamper-{index}"] = [*proof[:index], flipped, *proof[index + 1 :]]
+            for label, variant in variants.items():
+                if verify_ct_consistency_proof(
+                    first_tree_size=first,
+                    second_tree_size=second,
+                    first_root=consistency_corpus.roots[first],
+                    second_root=consistency_corpus.roots[second],
+                    proof=variant,
+                ):
+                    accepted.append((label, first, second))
+
+        assert accepted == []
+
+    def test_wrong_tree_sizes_are_rejected_as_rfc9162_requires_up_to_64_leaves(
+        self,
+        consistency_corpus: _ConsistencyCorpus,
+    ) -> None:
+        """Replaying a proof under neighbouring sizes must match the RFC 9162 verifier exactly.
+
+        A proof is rejected whenever the claimed sizes define a path of a
+        different length. Sizes that define the same path (for example a
+        proof for (1, 3) offered as (1, 4)) are indistinguishable to any
+        RFC 9162 verifier, which is why a tree size is only meaningful
+        together with an authenticated root.
+        """
+        disagreements: list[tuple[tuple[int, int], tuple[int, int]]] = []
+        accepted_with_wrong_length: list[tuple[tuple[int, int], tuple[int, int]]] = []
+        pairs_without_a_rejection: list[tuple[int, int]] = []
+
+        for (first, second), proof in consistency_corpus.proofs.items():
+            if first == second or second > 64:
+                continue
+            first_root = consistency_corpus.roots[first]
+            second_root = consistency_corpus.roots[second]
+            rejections = 0
+            for claimed in ((first, second + 1), (first, second - 1), (first + 1, second), (first - 1, second)):
+                claimed_first, claimed_second = claimed
+                if claimed_first < 1 or claimed_second < claimed_first:
+                    continue
+                result = verify_ct_consistency_proof(
+                    first_tree_size=claimed_first,
+                    second_tree_size=claimed_second,
+                    first_root=first_root,
+                    second_root=second_root,
+                    proof=proof,
+                )
+                reference = _rfc9162_verify_consistency(claimed_first, claimed_second, first_root, second_root, proof)
+                if result != reference:
+                    disagreements.append(((first, second), claimed))
+                if result and len(consistency_corpus.proofs[claimed]) != len(proof):
+                    accepted_with_wrong_length.append(((first, second), claimed))
+                rejections += not result
+            if rejections == 0:
+                pairs_without_a_rejection.append((first, second))
+
+        assert disagreements == []
+        assert accepted_with_wrong_length == []
+        assert pairs_without_a_rejection == []
+
+    def test_proof_for_two_leaves_is_not_accepted_for_three(self, consistency_corpus: _ConsistencyCorpus) -> None:
+        """The previous verifier folded every node and ignored the newer tree size."""
+        assert not verify_ct_consistency_proof(
+            first_tree_size=1,
+            second_tree_size=3,
+            first_root=consistency_corpus.roots[1],
+            second_root=consistency_corpus.roots[2],
+            proof=consistency_corpus.proofs[(1, 2)],
+        )
+
+    def test_verifier_rejects_non_integer_tree_sizes(self, consistency_corpus: _ConsistencyCorpus) -> None:
+        for first_size, second_size in ((2.0, 4), (2, 4.0), ("2", 4), (None, 4)):
+            assert (
+                verify_ct_consistency_proof(
+                    first_tree_size=first_size,  # type: ignore[arg-type]
+                    second_tree_size=second_size,  # type: ignore[arg-type]
+                    first_root=consistency_corpus.roots[2],
+                    second_root=consistency_corpus.roots[4],
+                    proof=consistency_corpus.proofs[(2, 4)],
+                )
+                is False
             )
 
 
