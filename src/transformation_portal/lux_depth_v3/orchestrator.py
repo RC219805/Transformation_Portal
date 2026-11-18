@@ -288,6 +288,12 @@ from .execution_plan_adapter import LuxExecutionPlanAuthorityError
 
 logger = logging.getLogger(__name__)
 
+# Checkout (or install prefix) that holds this package:
+# <root>/src/transformation_portal/lux_depth_v3/orchestrator.py. Every git
+# revision a run records is read from here, never from the caller's working
+# directory, which may be an unrelated repository.
+_PIPELINE_REPO_ROOT = Path(__file__).resolve().parents[3]
+
 
 def _new_batch_id() -> str:
     """Return a filename-safe, collision-resistant UTC completion identity."""
@@ -792,10 +798,7 @@ class EnhanceOrchestrator:
                 "V2 enhancement disabled" + " (PBR-only mode)",
             )
 
-        # Adjusted path logic for
-        # src/transformation_portal/lux_depth_v3
-        repo_root = Path(__file__).resolve().parent.parent.parent.parent
-        git_rev = get_git_revision(repo_root)
+        git_rev = get_git_revision(_PIPELINE_REPO_ROOT)
         self.v3_git = git_rev
         self.v2_git = git_rev
         self.environment = capture_environment()
@@ -6308,8 +6311,10 @@ class EnhanceOrchestrator:
                 ),
                 config_fingerprint=config_fp_str,
                 cli_args=cli_args,
-                # Repository root for git SHA
-                repo_root=Path.cwd(),
+                # Git SHA of the pipeline checkout, the same revision the
+                # manifest records as ``repro.v3_git_revision``. The working
+                # directory is the operator's and may be another repository.
+                repo_root=_PIPELINE_REPO_ROOT,
                 require_exiftool=is_audit_input,
                 ingest_profile=str(
                     raw_summary.get("profile", ""),

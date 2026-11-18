@@ -644,3 +644,59 @@ class TestRuntimeLicensingManifest:
 
         assert restored.start_time == "2026-05-30T00:00:00Z"
         assert restored.licensing is None
+
+
+class TestProvenanceSidecarGitRevision:
+    """The provenance sidecar and the manifest must name the same pipeline revision."""
+
+    def test_sidecar_git_sha_ignores_the_callers_working_directory(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Running from inside an unrelated repository must not record that repository's HEAD.
+
+        The sidecar used to ask git for the HEAD of ``Path.cwd()``, so a CLI or
+        service started from a customer's own checkout stamped every
+        ``*_combined_provenance.json`` with the customer's commit while the
+        manifest beside it carried the pipeline revision.
+        """
+        import subprocess
+
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+        pipeline_sha = "a" * 40
+        unrelated_sha = "f" * 40
+        unrelated_repo = tmp_path / "customer-project"
+        unrelated_repo.mkdir()
+        real_run = subprocess.run
+        git_head_lookups: list[Path] = []
+
+        def fake_run(command: Any, *args: Any, **kwargs: Any) -> Any:
+            """Answer ``git rev-parse HEAD`` per directory; run everything else for real."""
+            if isinstance(command, (list, tuple)) and list(command[:3]) == ["git", "rev-parse", "HEAD"]:
+                lookup_dir = Path(kwargs["cwd"]).resolve()
+                git_head_lookups.append(lookup_dir)
+                sha = unrelated_sha if lookup_dir == unrelated_repo.resolve() else pipeline_sha
+                return subprocess.CompletedProcess(command, 0, stdout=f"{sha}\n", stderr="")
+            return real_run(command, *args, **kwargs)
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        image = _make_test_image(inputs, "villa.png")
+        orchestrator = _create_orchestrator(tmp_path / "output")
+        monkeypatch.chdir(unrelated_repo)
+
+        result = orchestrator.enhance_image(ImageInput(path=image), input_root=inputs)
+
+        manifest_path = Path(result["manifest"])
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        sidecar_path = manifest_path.with_name(f"{manifest_path.stem}_provenance.json")
+        ingest_context = json.loads(sidecar_path.read_text(encoding="utf-8"))["ingest_context"]
+        # The run really did start inside the unrelated repository ...
+        assert Path(ingest_context["working_directory"]).resolve() == unrelated_repo.resolve()
+        # ... yet both records name the pipeline checkout, and agree.
+        assert manifest["repro"]["v3_git_revision"] == pipeline_sha
+        assert ingest_context["git_commit_sha"] == pipeline_sha
+        assert unrelated_repo.resolve() not in git_head_lookups
