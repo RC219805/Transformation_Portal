@@ -39,7 +39,7 @@ class VQAIssue:
         """Create issue from dictionary."""
         return cls(
             issue_type=str(data.get("issue_type", data.get("type", "unknown"))),
-            severity=str(data.get("severity", "medium")).lower(),
+            severity=str(data.get("severity", "medium")).strip().lower(),
             evidence=str(data.get("evidence", "")),
         )
 
