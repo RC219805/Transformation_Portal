@@ -190,22 +190,33 @@ def create_depth_zones(
         boundaries = np.linspace(depth.min(), depth.max(), num_zones + 1)
 
     elif method == "log":
-        # Logarithmic quantization (more zones in foreground)
-        log_depth = np.log(depth + 1e-8)
+        # Logarithmic quantization (more zones in foreground). Zero/negative
+        # depth (always present after min-max normalisation) is floored at the
+        # smallest positive depth so it cannot stretch the log range to
+        # log(1e-8) and collapse every real pixel into the last zone.
+        positive = depth[depth > 0]
+        floor = positive.min() if positive.size else 0.0
+        log_depth = np.log(np.maximum(depth, floor) + 1e-8)
         log_boundaries = np.linspace(log_depth.min(), log_depth.max(), num_zones + 1)
         boundaries = np.exp(log_boundaries)
 
     else:
         raise ValueError(f"Unknown zoning method: {method}")
 
-    # Create hard zone masks
+    # Create hard zone masks. The first and last zones are open-ended so that
+    # every pixel lands in exactly one zone even when a boundary does not
+    # coincide with the data extremes (e.g. the log boundaries carry +1e-8).
     zone_masks = []
     for i in range(num_zones):
         lower = boundaries[i]
         upper = boundaries[i + 1]
 
-        if i == num_zones - 1:
-            mask = (depth >= lower) & (depth <= upper)
+        if num_zones == 1:
+            mask = ~np.isnan(depth)
+        elif i == 0:
+            mask = depth < upper
+        elif i == num_zones - 1:
+            mask = depth >= lower
         else:
             mask = (depth >= lower) & (depth < upper)
 

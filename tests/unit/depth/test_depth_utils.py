@@ -1,11 +1,11 @@
-"""Unit coverage for depth map utility functions (smoothing and hole inpainting)."""
+"""Unit coverage for depth map utility functions (zoning, smoothing and hole inpainting)."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from transformation_portal.depth.utils.depth_utils import CV2_AVAILABLE, inpaint_depth_holes, smooth_depth
+from transformation_portal.depth.utils.depth_utils import CV2_AVAILABLE, create_depth_zones, inpaint_depth_holes, smooth_depth
 
 pytestmark = pytest.mark.unit
 
@@ -101,3 +101,53 @@ def test_inpaint_depth_holes_explicit_mask_and_unknown_method():
     assert float(out[0:3, 0:3].min()) >= 1.0 - 1e-6
     with pytest.raises(ValueError):
         inpaint_depth_holes(depth, method="bogus")
+
+
+def _half_zero_ramp() -> np.ndarray:
+    depth = np.zeros((16, 32), dtype=np.float32)
+    depth[:, 16:] = np.linspace(0.01, 1.0, 16, dtype=np.float32)[None, :]
+    return depth
+
+
+@pytest.mark.parametrize("smooth_sigma", [0.0, 2.0])
+def test_create_depth_zones_log_assigns_every_pixel_and_spreads_zones(smooth_sigma):
+    """Regression (D-05): zero depth stretched the log range and left pixels in no zone."""
+    depth = _half_zero_ramp()
+
+    zones = create_depth_zones(depth, num_zones=3, method="log", smooth_sigma=smooth_sigma)
+
+    np.testing.assert_allclose(np.sum(zones, axis=0), 1.0, atol=1e-5)
+    hard = create_depth_zones(depth, num_zones=3, method="log", smooth_sigma=0.0)
+    # Zero depth belongs to the nearest zone and the positive ramp is split
+    # across all zones instead of collapsing into the last one.
+    assert (hard[0][:, :16] == 1.0).all()
+    assert all(float(z[:, 16:].sum()) > 0 for z in hard)
+
+
+def test_create_depth_zones_log_includes_minimum_of_positive_depth():
+    """Regression (D-05): the +1e-8 log boundary excluded the minimum-depth pixels from every zone."""
+    depth = np.tile(np.linspace(0.05, 1.0, 20, dtype=np.float32), (4, 1))
+
+    zones = create_depth_zones(depth, num_zones=4, method="log", smooth_sigma=0.0)
+
+    np.testing.assert_allclose(np.sum(zones, axis=0), 1.0, atol=1e-5)
+    assert (zones[0][:, 0] == 1.0).all()
+
+
+@pytest.mark.parametrize("method", ["percentile", "linear"])
+def test_create_depth_zones_percentile_and_linear_partition_unchanged(method):
+    depth = _noisy_ramp()
+
+    zones = create_depth_zones(depth, num_zones=3, method=method, smooth_sigma=0.0)
+
+    if method == "percentile":
+        bounds = np.percentile(depth, np.linspace(0, 100, 4))
+    else:
+        bounds = np.linspace(depth.min(), depth.max(), 4)
+    expected = [
+        (depth >= bounds[0]) & (depth < bounds[1]),
+        (depth >= bounds[1]) & (depth < bounds[2]),
+        (depth >= bounds[2]) & (depth <= bounds[3]),
+    ]
+    for zone, mask in zip(zones, expected):
+        np.testing.assert_allclose(zone, mask.astype(np.float32), atol=1e-6)
