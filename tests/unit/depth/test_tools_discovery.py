@@ -84,6 +84,42 @@ def test_find_file_for_base_matches_glob_metacharacters_literally(tmp_path) -> N
     assert tools.find_file_for_base(str(tmp_path), "IMG[1]") == str(own)
 
 
+def test_find_file_for_base_matches_a_root_with_glob_metacharacters_literally(tmp_path) -> None:
+    # A folder such as "[2026] villa" is a folder name, not a character class.
+    own = tmp_path / "[2026] villa" / "nested" / "villa_plain.png"
+    _touch(own)
+    _touch(tmp_path / "2 villa" / "villa_plain.png")
+
+    assert tools.find_file_for_base(str(tmp_path / "[2026] villa"), "villa") == str(own)
+
+
+def test_find_mask_for_base_matches_glob_metacharacters_literally(tmp_path) -> None:
+    # The mask of IMG1 must never be applied to the photograph IMG[1], whichever extension either mask has.
+    _touch(tmp_path / "IMG1_mask_sky.png")
+    _touch(tmp_path / "IMG1_mask_building.webp")
+
+    assert tools.find_mask_for_base(str(tmp_path), "IMG[1]", "sky") is None
+    assert tools.find_mask_for_base(str(tmp_path), "IMG[1]", "building") is None
+
+    own_sky = tmp_path / "IMG[1]_mask_sky.png"
+    own_building = tmp_path / "IMG[1]_mask_building.webp"
+    _touch(own_sky)
+    _touch(own_building)
+
+    assert tools.find_mask_for_base(str(tmp_path), "IMG[1]", "sky") == str(own_sky)
+    assert tools.find_mask_for_base(str(tmp_path), "IMG[1]", "building") == str(own_building)
+
+
+def test_find_mask_for_base_matches_a_mask_root_with_glob_metacharacters_literally(tmp_path) -> None:
+    mask = tmp_path / "masks [v2]" / "villa_mask_sky.png"
+    generic = tmp_path / "masks [v2]" / "villa_mask_building.webp"
+    _touch(mask)
+    _touch(generic)
+
+    assert tools.find_mask_for_base(str(tmp_path / "masks [v2]"), "villa", "sky") == str(mask)
+    assert tools.find_mask_for_base(str(tmp_path / "masks [v2]"), "villa", "building") == str(generic)
+
+
 def test_find_mask_for_base_finds_exact_mask_by_kind(tmp_path) -> None:
     exact = tmp_path / "villa_mask_sky.png"
     generic = tmp_path / "villa_mask_sky.webp"

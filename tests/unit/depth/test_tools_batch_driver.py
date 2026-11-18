@@ -190,6 +190,21 @@ def test_process_batch_pairs_depth16_maps_of_every_extension(tmp_path, ext: str)
     assert [p.name for p in output.iterdir()] == ["villa_enh_depthhaze.png"]
 
 
+def test_process_batch_reads_folders_with_glob_metacharacters_literally(tmp_path) -> None:
+    # "[2026] villa" is a folder name: the depth maps and photographs inside it must be found.
+    project = tmp_path / "[2026] villa"
+    project.mkdir()
+    images, depths, output = _batch_dirs(project)
+    _write_rgb(images / "villa_enh.png")
+    _write_depth(depths / "villa_depth16.png")
+    opts = tools.BatchOptions(images_root=str(images), depths_root=str(depths), out_root=str(output), fmt="png")
+
+    error_count = tools.process_batch(opts)
+
+    assert error_count == 0
+    assert [p.name for p in output.iterdir()] == ["villa_enh_depthhaze.png"]
+
+
 def test_process_batch_raises_when_no_depth_maps_exist(tmp_path) -> None:
     opts = tools.BatchOptions(
         images_root=str(tmp_path / "images"),

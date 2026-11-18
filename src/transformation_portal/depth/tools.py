@@ -394,12 +394,12 @@ def find_file_for_base(
     Search recursively under root for the files of 'base' and return the one with the best priority tag.
 
     A file belongs to 'base' when its name is 'base' followed by the extension, a separator or a priority tag
-    (see _name_belongs_to_base); 'base' is matched literally, not as a glob pattern.
+    (see _name_belongs_to_base); 'root' and 'base' are matched literally, not as glob patterns.
     Returns best matching path or None.
     """
     tags = priority_tags or PRIORITY_TAGS
     exts = extensions or SUPPORTED_EXTENSIONS
-    pattern = os.path.join(root, "**", f"{glob.escape(base)}{pattern_suffix}")
+    pattern = os.path.join(glob.escape(root), "**", f"{glob.escape(base)}{pattern_suffix}")
     candidates: List[str] = []
     for path in glob.glob(pattern, recursive=True):
         name = os.path.basename(path)
@@ -425,17 +425,22 @@ def find_file_for_base(
 
 
 def find_mask_for_base(mask_root: Optional[str], base: str, kind: str) -> Optional[str]:
-    """Look for _mask_{kind}.* under mask_root (first match)."""
+    """
+    Look for {base}_mask_{kind}.* under mask_root (first match).
+
+    'mask_root' and 'base' are matched literally, like the source image lookup: a "[1]" in a name is not a
+    character class that would select the mask of another photograph.
+    """
     if not mask_root:
         return None
     exts = ("png", "ti", "tif", "jpg", "jpeg")
+    prefix = os.path.join(glob.escape(mask_root), f"{glob.escape(base)}_mask_{kind}")
     for ext in exts:
-        pat = os.path.join(mask_root, f"{base}_mask_{kind}.{ext}")
-        matches = glob.glob(pat)
+        matches = glob.glob(f"{prefix}.{ext}")
         if matches:
             return matches[0]
     # fallback generic glob
-    generic = glob.glob(os.path.join(mask_root, f"{base}_mask_{kind}.*"))
+    generic = glob.glob(f"{prefix}.*")
     return generic[0] if generic else None
 
 
@@ -917,7 +922,7 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
     Returns the number of errors encountered.
     """
     os.makedirs(opts.out_root, exist_ok=True)
-    depth_maps = sorted(glob.glob(os.path.join(opts.depths_root, "*_depth16.*")))
+    depth_maps = sorted(glob.glob(os.path.join(glob.escape(opts.depths_root), "*_depth16.*")))
     if not depth_maps:
         raise SystemExit(f"No depth maps found in {opts.depths_root}")
 
@@ -1148,7 +1153,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             # If all files failed, still return non-zero
             # Note: process_batch raises SystemExit if no depth maps found, so we have at least 1 depth map
             # error_count < total means at least one file succeeded
-            depth_maps = sorted(glob.glob(os.path.join(opts.depths_root, "*_depth16.*")))
+            depth_maps = sorted(glob.glob(os.path.join(glob.escape(opts.depths_root), "*_depth16.*")))
             total = len(depth_maps)
             if error_count >= total:
                 # All files failed
