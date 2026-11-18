@@ -165,3 +165,22 @@ def test_depth_postprocessing_unknown_method_is_a_noop(monkeypatch):
     out = pipeline.process_render("dummy.png")["depth"]
 
     assert np.array_equal(out, depth)
+
+
+def test_depth_postprocessing_median_default_sigma_smooths_float_depth(monkeypatch):
+    """Regression (D-03): median at the default sigma must not be a silent no-op for float32 depth."""
+    rng = np.random.default_rng(0)
+    ramp = np.tile(np.linspace(0.0, 1.0, 32, dtype=np.float32), (32, 1))
+    depth = (ramp + rng.normal(0, 0.05, (32, 32))).astype(np.float32)
+    config = {
+        "depth_model": {"variant": "small", "backend": "pytorch_cpu"},
+        "processing": {"depth_postprocessing": {"enabled": True, "method": "median", "sigma": 5.0}},
+    }
+
+    pipeline = _build_pipeline(monkeypatch, config, depth)
+    out = pipeline.process_render("dummy.png")["depth"]
+
+    assert out.shape == depth.shape
+    assert not np.array_equal(out, depth)
+    # A median filter reduces the injected per-pixel noise.
+    assert float(np.abs(np.diff(out, axis=0)).mean()) < float(np.abs(np.diff(depth, axis=0)).mean())

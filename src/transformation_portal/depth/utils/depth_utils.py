@@ -13,7 +13,7 @@ import logging
 from typing import List, Optional, Tuple
 
 import numpy as np
-from scipy.ndimage import gaussian_filter, sobel
+from scipy.ndimage import gaussian_filter, median_filter, sobel
 
 try:
     import matplotlib
@@ -265,10 +265,14 @@ def smooth_depth(
             logger.warning("cv2 not available, falling back to gaussian smoothing")
             return gaussian_filter(depth, sigma=sigma)
 
-        # Median filter
-        ksize = int(sigma * 2) + 1
-        smoothed = cv2.medianBlur(depth, ksize)
-        return smoothed
+        # Median filter. The aperture must be odd; cv2.medianBlur accepts
+        # 16-bit / float32 input only for apertures 3 and 5 (8-bit for any),
+        # so other cases use scipy with replicate borders (identical result).
+        ksize = (int(sigma * 2) + 1) | 1
+        if depth.dtype == np.uint8 or (depth.dtype in (np.uint16, np.int16, np.float32) and ksize <= 5):
+            return cv2.medianBlur(depth, ksize)
+        size = (ksize, ksize) + (1,) * (depth.ndim - 2)
+        return median_filter(depth, size=size, mode="nearest")
 
     else:
         raise ValueError(f"Unknown smoothing method: {method}")
