@@ -151,6 +151,23 @@ class TestCanonicalizerPreservesSemantics:
 
         assert not are_semantically_equivalent("m = a == None", "m = a is None")
 
+    @pytest.mark.parametrize("source", ["x = {1, True}", "x = {1, 1.0}", "x = {'a', 1.0, True}"])
+    def test_set_with_equal_members_is_not_reordered(self, source):
+        from transformation_portal.dev.ast_normalize import are_semantically_equivalent, canonicalize_code
+
+        canonical = canonicalize_code(source)
+
+        result = self._run(canonical)["x"]
+        expected = self._run(source)["x"]
+        assert result == expected
+        assert [type(v) for v in sorted(result, key=str)] == [type(v) for v in sorted(expected, key=str)]
+        assert not are_semantically_equivalent("x = {1, True}", "x = {True, 1}")
+
+    def test_set_with_distinct_constants_is_still_sorted(self):
+        from transformation_portal.dev.ast_normalize import canonicalize_code
+
+        assert canonicalize_code("x = {'b', 'a', 2}") == canonicalize_code("x = {2, 'a', 'b'}")
+
     def test_write_canonical_keeps_comments(self, tmp_path):
         from unittest import mock
 

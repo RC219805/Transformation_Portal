@@ -105,9 +105,14 @@ class Canonicalizer(ast.NodeTransformer):
         """Normalize set literals by sorting constant elements."""
         self.generic_visit(node)
 
-        # Only sort if all elements are constants (safe)
+        # Only sort if all elements are constants and no two of them are equal
+        # set members: for equal members (``{1, True}``, ``{1, 1.0}``) the first
+        # one in source order is the one the set keeps.
         if all(isinstance(el, ast.Constant) for el in node.elts):
             try:
+                values = [el.value for el in node.elts]
+                if len(set(values)) != len(values):
+                    return node
                 node.elts = sorted(node.elts, key=lambda x: (type(x.value).__name__, str(x.value)))
                 self._transformations_applied.append("set_element_sort")
             except Exception as e:
