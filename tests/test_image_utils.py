@@ -242,6 +242,24 @@ def test_extract_output_metadata_drops_non_rgb_icc_and_malformed_values():
     assert extract_output_metadata(Image.new("RGB", (4, 4))) == {}
 
 
+def test_extract_output_metadata_drops_exif_too_large_for_jpeg(tmp_path):
+    """M-07 follow-up: EXIF over the JPEG APP1 limit must not make the JPEG save raise."""
+    from transformation_portal.utils.image_utils import extract_output_metadata
+
+    source = Image.new("RGB", (8, 8))
+    exif = source.getexif()
+    exif[0x010E] = "x" * 70000  # ImageDescription; PNG eXIf has no 64 KB cap
+    source_path = tmp_path / "big_exif.png"
+    source.save(source_path, exif=exif, dpi=(300, 300))
+
+    with Image.open(source_path) as loaded:
+        metadata = extract_output_metadata(loaded.convert("RGB"))
+
+    assert "exif" not in metadata
+    assert metadata["dpi"] == pytest.approx((300, 300), abs=0.01)
+    Image.new("RGB", (8, 8)).save(tmp_path / "out.jpg", **metadata)
+
+
 def test_output_stem_allocator_keeps_unique_stems_and_moves_only_colliders(tmp_path):
     """M-02: same-stem batch inputs get distinct output stems; other names are unchanged."""
     from transformation_portal.utils.image_utils import OutputStemAllocator

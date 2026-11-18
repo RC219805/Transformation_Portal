@@ -25,6 +25,9 @@ log = logging.getLogger(__name__)
 CUBE_LUT_3D_MIN_SIZE = 2
 CUBE_LUT_3D_MAX_SIZE = 256
 
+# Largest EXIF payload a JPEG APP1 segment holds (Pillow refuses to save more).
+_JPEG_MAX_EXIF_BYTES = 65533
+
 
 def load_image(path: Union[str, Path]) -> Image.Image:
     """Load path into an RGB Image instance.
@@ -46,6 +49,7 @@ def extract_output_metadata(img: Image.Image) -> Dict[str, Any]:
     Pillow save keywords (``icc_profile``, ``dpi``, ``exif``). The ICC profile is kept
     only when it describes an RGB colour space: pipeline outputs are RGB, so a CMYK or
     greyscale profile carried over from a ``convert("RGB")`` source would mis-describe them.
+    EXIF larger than a JPEG APP1 segment holds is dropped, since saving it as JPEG raises.
 
     Args:
         img: Image as loaded (``convert`` keeps ``info``, so a converted image works too)
@@ -69,7 +73,14 @@ def extract_output_metadata(img: Image.Image) -> Dict[str, Any]:
         try:
             exif = Image.Exif()
             exif.load(exif_bytes)
+            exif_size = len(exif.tobytes())
         except Exception:  # noqa: BLE001 - malformed EXIF is dropped, not fatal
+            exif = None
+            exif_size = 0
+        if exif is not None and exif_size > _JPEG_MAX_EXIF_BYTES:
+            # A JPEG APP1 segment cannot hold it and Pillow raises on save, which would
+            # fail an image that processed fine; drop the EXIF rather than the output.
+            log.warning("Source EXIF is %d bytes, over the JPEG limit; it is not carried to outputs", exif_size)
             exif = None
         if exif is not None and len(exif) > 0:
             metadata["exif"] = exif
