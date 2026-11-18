@@ -1930,6 +1930,108 @@ def test_relative_output_spelling_with_parent_component_is_rejected_before_fallb
     assert exc_info.value.code == "path_escape"
 
 
+@pytest.mark.regression
+def test_root_relative_paths_never_consult_the_working_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A root-relative value must name one file wherever the process runs."""
+
+    import transformation_portal.lux_depth_v3.execution_evidence as evidence_module
+
+    output_root = tmp_path / "depth"
+    (output_root / "depth").mkdir(parents=True)
+    (output_root / "x_depth.png").write_bytes(b"root-level file")
+    (output_root / "depth" / "x_depth.png").write_bytes(b"nested file")
+
+    # Parent of a root named like its own sub-directory, the root, and a
+    # directory below the root: each used to re-home the same value.
+    for working_directory in (tmp_path, output_root, output_root / "depth"):
+        monkeypatch.chdir(working_directory)
+        with evidence_module._pin_output_root(output_root) as root:
+            assert root.confined_relative_path(Path("depth/x_depth.png"), root_relative=True) == "depth/x_depth.png"
+            data, relative_path, _identity = evidence_module._read_confined_artifact_bytes(
+                root,
+                Path("depth/x_depth.png"),
+                context="root-relative artifact",
+                root_relative=True,
+            )
+            assert (data, relative_path) == (b"nested file", "depth/x_depth.png")
+            capture = evidence_module._capture_artifact(
+                root,
+                Path("depth/x_depth.png"),
+                budget=evidence_module._CaptureBudget(),
+                root_relative=True,
+            )
+            assert capture.record["path"] == "depth/x_depth.png"
+            assert capture.record["sha256"] == hashlib.sha256(b"nested file").hexdigest()
+
+    # Writer-supplied paths keep the caller's relative output-root spelling:
+    # from the parent directory ``depth/x_depth.png`` is ``<root>/x_depth.png``.
+    monkeypatch.chdir(tmp_path)
+    with evidence_module._pin_output_root(output_root) as root:
+        assert root.confined_relative_path(Path("depth/x_depth.png")) == "x_depth.png"
+        assert root.confined_relative_path(Path("depth/depth/x_depth.png")) == "depth/x_depth.png"
+    snapshot = evidence_module.read_confined_artifact_snapshot(
+        Path("depth"),
+        Path("depth/depth/x_depth.png"),
+        context="writer-spelled artifact",
+        max_bytes=64,
+    )
+    assert (snapshot.data, snapshot.relative_path) == (b"nested file", "depth/x_depth.png")
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("root_name", ["depth", "manifests"])
+def test_prepared_run_accepts_relative_output_root_named_like_an_artifact_folder(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    root_name: str,
+) -> None:
+    """``--output-dir depth`` from the parent directory must not fail the run."""
+
+    prepared, image_path = _prepared(tmp_path, emit_run_card=True)
+    monkeypatch.chdir(tmp_path)
+    output_root = Path(root_name)
+    orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
+
+    results = orchestrator.enhance_batch(prepared.input_root, input_files=[image_path])
+
+    assert [result["status"] for result in results] == ["ok"]
+    evidence_path = next((output_root / "manifests").glob("execution_evidence_*.json"))
+    evidence = verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan)
+    require_required_artifacts(evidence)
+    produced_paths = {record["path"] for outcome in evidence["produced_artifacts"] for record in outcome["artifacts"]}
+    assert any(path.startswith("depth/") for path in produced_paths)
+    assert all((tmp_path / root_name / path).is_file() for path in produced_paths)
+
+
+@pytest.mark.regression
+def test_prepared_run_and_verification_do_not_depend_on_the_working_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unchanged run verifies identically from any working directory."""
+
+    prepared, image_path = _prepared(tmp_path, emit_run_card=True)
+    # An absolute root named like its own ``depth`` sub-directory, with the
+    # run itself launched from a directory below the root.
+    output_root = tmp_path / "depth"
+    (output_root / "manifests").mkdir(parents=True)
+    monkeypatch.chdir(output_root / "manifests")
+    orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
+
+    results = orchestrator.enhance_batch(prepared.input_root, input_files=[image_path])
+
+    assert [result["status"] for result in results] == ["ok"]
+    evidence_path = next((output_root / "manifests").glob("execution_evidence_*.json"))
+    expected = verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan)
+    require_required_artifacts(expected)
+    for working_directory in (tmp_path, tmp_path / "inputs", output_root, output_root / "depth"):
+        monkeypatch.chdir(working_directory)
+        assert verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan) == expected
+
+
 def test_execution_evidence_rejects_symlinked_artifact_path(tmp_path: Path) -> None:
     prepared, _ = _prepared(tmp_path)
     output_root = tmp_path / "output"
