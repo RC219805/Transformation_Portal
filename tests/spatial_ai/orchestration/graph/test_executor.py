@@ -617,6 +617,30 @@ class TestExecutor:
         assert second.stage_results[0].cache_hit is False
         assert second.outputs["stage1.output"] == [1, "x"]
 
+    @pytest.mark.parametrize("value", [range(3), bytearray(b"abc")], ids=["range", "bytearray"])
+    def test_array_like_output_is_never_committed(
+        self, executor: Executor, store: ArtifactStore, output_dir: Path, caplog, value: Any
+    ):
+        """An array-like that is not a list, tuple or array is not cached at all (G-3).
+
+        Such a value converts to a multi-element array but was recorded as a scalar, so
+        the committed entry could never be loaded: every run stored it, failed the load
+        as "Corrupted artifact", evicted it and stored it again.
+        """
+        graph = ExecutionGraph()
+        graph.add_stage("stage1", MockStage("stage1", transform_fn=lambda _x: value), inputs={})
+
+        first = executor.execute(graph=graph, inputs={"value": 0}, output_dir=output_dir)
+        assert not store.exists(first.stage_results[0].cache_key)
+
+        caplog.clear()
+        second = executor.execute(graph=graph, inputs={"value": 0}, output_dir=output_dir)
+
+        assert second.stage_results[0].cache_hit is False
+        assert second.outputs["stage1.output"] == value
+        assert type(second.outputs["stage1.output"]) is type(value)
+        assert "Cache load failed" not in caplog.text
+
 
 class TestExecutionContext:
     """Tests for ExecutionContext."""

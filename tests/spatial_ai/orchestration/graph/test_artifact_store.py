@@ -11,6 +11,7 @@ Test Coverage:
 
 from __future__ import annotations
 
+import enum
 import hashlib
 import json
 from pathlib import Path
@@ -35,6 +36,12 @@ def _make_cache_key(seed: str) -> str:
         64-character lowercase hex string (SHA256 format).
     """
     return hashlib.sha256(seed.encode()).hexdigest()
+
+
+class _Shade(enum.IntEnum):
+    """Scalar subclass that NumPy conversion flattens to a plain int."""
+
+    DARK = 1
 
 
 class TestArtifactStore:
@@ -990,6 +997,37 @@ class TestCommitMarker:
         with pytest.raises(ValueError, match="cannot be cached"):
             store.store(cache_key, {"v": value}, self._make_provenance(cache_key))
         assert not store.exists(cache_key)
+
+    @pytest.mark.parametrize(
+        "value",
+        ["ab\x00", b"ab\x00", _Shade.DARK, range(3), bytearray(b"abc")],
+        ids=["str_trailing_nul", "bytes_trailing_nul", "int_enum", "range", "bytearray"],
+    )
+    def test_store_rejects_scalars_numpy_would_alter(self, store: ArtifactStore, value: Any):
+        """A non-sequence value that would load as another type or value is not cached (G-3).
+
+        NumPy strips trailing NULs from strings, turns an enum member into a plain int,
+        and turns other array-likes into arrays that cannot be rebuilt as what they were.
+        """
+        cache_key = _make_cache_key(f"lossy_scalar_{value!r}")
+        with pytest.raises(ValueError, match="cannot be cached"):
+            store.store(cache_key, {"v": value}, self._make_provenance(cache_key))
+        assert not store.exists(cache_key)
+
+    @pytest.mark.parametrize(
+        "value",
+        [float("nan"), complex("nan"), np.float32("nan"), np.datetime64("NaT"), np.str_("oak"), "", 2**63],
+        ids=["float_nan", "complex_nan", "float32_nan", "nat", "numpy_str", "empty_str", "uint64_range_int"],
+    )
+    def test_scalars_that_survive_conversion_stay_cacheable(self, store: ArtifactStore, value: Any):
+        """NaN/NaT and other exactly representable scalars are still cached with their type."""
+        cache_key = _make_cache_key(f"exact_scalar_{value!r}")
+        store.store(cache_key, {"v": value}, self._make_provenance(cache_key))
+
+        loaded = store.load(cache_key)["v"]
+
+        assert type(loaded) is type(value)
+        assert repr(loaded) == repr(value)
 
     def test_store_rejects_reserved_value_kinds_key(self, store: ArtifactStore):
         """The payload key recording value kinds cannot be overwritten by a stage output."""

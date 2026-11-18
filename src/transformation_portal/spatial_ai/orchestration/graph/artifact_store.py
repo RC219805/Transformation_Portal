@@ -158,7 +158,6 @@ def _is_artifact_temp_name(name: str) -> bool:
 # a list stays a list, a 0-d array stays an array). Entries written before this
 # record existed load with the legacy conversion.
 _VALUE_KINDS_KEY = "__tp_value_kinds__"
-_SEQUENCE_KINDS = ("list", "tuple", "list_of_ndarray", "tuple_of_ndarray")
 
 
 def _value_kind(value: Any) -> str:
@@ -201,13 +200,25 @@ def _same_value(original: Any, restored: Any) -> bool:
     if isinstance(original, np.ndarray):
         if original.dtype != restored.dtype or original.shape != restored.shape:
             return False
-        equal_nan = original.dtype.kind in "fc"
+        equal_nan = original.dtype.kind in "fcmM"
         return bool(np.array_equal(original, restored, equal_nan=equal_nan))
+    if isinstance(original, np.generic):
+        # Bitwise, so NaN and NaT scalars compare equal to themselves.
+        return bool(original.dtype == restored.dtype and original.tobytes() == restored.tobytes())
     if isinstance(original, (list, tuple)):
         return len(original) == len(restored) and all(_same_value(a, b) for a, b in zip(original, restored))
-    if isinstance(original, float) and original != original:
-        return restored != restored
+    if original != original:  # NaN (float or complex)
+        return bool(restored != restored)
     return bool(original == restored)
+
+
+def _survives_roundtrip(value: Any, arr: np.ndarray, kind: str) -> bool:
+    """Return True when loading ``arr`` as ``kind`` gives ``value`` back unchanged."""
+    try:
+        return _same_value(value, _restore_value(arr, kind))
+    except (TypeError, ValueError):
+        # e.g. an array-like recorded as a scalar: more than one element to restore
+        return False
 
 
 class CacheLockTimeout(Exception):
@@ -809,9 +820,11 @@ class ArtifactStore:
                     )
 
                 # A cache hit must return what the stage returned: refuse values
-                # that NumPy conversion would change (e.g. [1, "x"] -> ["1", "x"]).
+                # that NumPy conversion would change (e.g. [1, "x"] -> ["1", "x"], an
+                # enum member -> int, "ab\0" -> "ab") or that cannot be rebuilt as
+                # the type they had (a range, a bytearray, any other array-like).
                 kind = _value_kind(value)
-                if kind in _SEQUENCE_KINDS and not _same_value(value, _restore_value(arr, kind)):
+                if kind != "ndarray" and not _survives_roundtrip(value, arr, kind):
                     raise ValueError(
                         f"Artifact value for key '{key}' ({type(value).__name__}) does not survive "
                         "array conversion with its types and values intact and cannot be cached."
