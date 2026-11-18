@@ -293,7 +293,7 @@ class ApexEvaluationHarness:
                 context=context,
             )
 
-            return {
+            vlm_payload: dict[str, Any] = {
                 "score": result.summary_score,
                 "passes": result.passes_basic_quality,
                 "issues": [
@@ -307,6 +307,14 @@ class ApexEvaluationHarness:
                 "raw_text": result.raw_text,
                 "model_key": result.model_key,
             }
+            # An unparseable VLM answer comes back as a result with parse_error set
+            # (score 0.0) instead of an exception. Under fail_on_vlm_error it is a VLM
+            # error like any other and must fail the gate, not be blended by weight.
+            parse_error = getattr(result, "parse_error", None)
+            if self.fail_on_vlm_error and isinstance(parse_error, str) and parse_error:
+                logger.error("VLM response could not be parsed: %s", parse_error)
+                vlm_payload["error"] = f"VLM response could not be parsed: {parse_error}"
+            return vlm_payload
 
         except Exception as exc:
             logger.error("VLM evaluation failed: %s", exc)

@@ -233,6 +233,35 @@ class TestApexEvaluationHarness:
         assert result.details["vlm_raw"]["error"] == "CUDA out of memory"
         assert result.details["vlm_error_fails"] is True
 
+    @pytest.mark.parametrize("fail_on_vlm_error", [True, False])
+    def test_unparseable_vlm_answer_counts_as_vlm_error(self, fail_on_vlm_error):
+        """M-07: a parse_error result (score 0.0, no exception) fails the gate under fail_on_vlm_error."""
+        from transformation_portal.evals.vision_language.llava_schema import parse_vqa_result
+
+        mock_vlm = MagicMock()
+        mock_vlm.evaluate_images.return_value = parse_vqa_result("m", "I cannot answer that.")
+
+        def good_metric(paths):
+            return 0.95
+
+        harness = ApexEvaluationHarness(
+            llava_backend=mock_vlm,
+            metric_fns=[good_metric],
+            threshold=0.70,
+            metric_weight=0.8,
+            fail_on_vlm_error=fail_on_vlm_error,
+        )
+
+        result = harness.evaluate(image_paths=[Path("x.png")])
+
+        assert result.score == pytest.approx(0.76)
+        assert result.details["vlm_error_fails"] is fail_on_vlm_error
+        assert result.passes is (not fail_on_vlm_error)
+        if fail_on_vlm_error:
+            assert "could not be parsed" in result.details["vlm_raw"]["error"]
+        else:
+            assert "error" not in result.details["vlm_raw"]
+
     def test_fail_on_vlm_error_without_error_still_passes(self):
         mock_vlm = MagicMock()
         mock_vlm.evaluate_images.return_value = MagicMock(
