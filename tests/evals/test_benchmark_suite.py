@@ -457,3 +457,59 @@ class TestRunBenchmarkBatch:
             agg = run_benchmark_batch(suite, [{"prediction": np.zeros((4, 4, 3))}] * 2)
 
         assert agg["mean_lpips"] is None
+
+
+class TestBatchMeansOverMeasuredSamples:
+    """M-06: batch means average only samples that measured the metric, finite values only."""
+
+    def test_real_batch_with_identical_pair_and_one_masked_sample(self):
+        rng = np.random.default_rng(0)
+        img = rng.random((16, 16, 3))
+        noisy = np.clip(img + rng.normal(0, 0.05, img.shape), 0, 1)
+        mask = np.zeros((16, 16), dtype=np.uint8)
+        mask[4:12, 4:12] = 1
+        suite = BenchmarkSuite()
+
+        with patch("transformation_portal.evals.benchmark_suite.lpips_available", return_value=False):
+            agg = run_benchmark_batch(
+                suite,
+                [
+                    {"prediction": img, "ground_truth": img},  # identical pair: PSNR = inf
+                    {"prediction": noisy, "ground_truth": img},
+                    {"prediction": img, "pred_mask": mask, "gt_mask": mask},  # masks only
+                ],
+            )
+
+        assert agg["count"] == 3
+        assert np.isfinite(agg["mean_psnr"])
+        assert agg["mean_psnr"] == pytest.approx(suite._compute_psnr(noisy, img))
+        assert agg["psnr_infinite_count"] == 1
+        # SSIM averages the two ground-truth samples, not three.
+        assert agg["mean_ssim"] == pytest.approx((1.0 + suite._compute_ssim(noisy, img)) / 2)
+        # IoU/Dice come from the one masked sample (perfect overlap), not diluted to 1/3.
+        assert agg["mean_iou"] == pytest.approx(1.0)
+        assert agg["mean_dice"] == pytest.approx(1.0)
+        assert agg["mean_llava"] is None
+        assert agg["mean_lpips"] is None
+
+    def test_mean_none_when_no_sample_has_metric(self):
+        suite = BenchmarkSuite()
+        agg = run_benchmark_batch(suite, [{"prediction": np.zeros((8, 8, 3))}] * 2)
+
+        assert agg["mean_psnr"] is None
+        assert agg["mean_iou"] is None
+        assert agg["mean_combined"] == 0.0
+
+    def test_llava_weight_not_charged_without_prediction_path(self):
+        backend = MagicMock()
+        suite = BenchmarkSuite(llava_backend=backend)
+        img = np.full((8, 8, 3), 0.5)
+
+        with patch("transformation_portal.evals.benchmark_suite.lpips_available", return_value=False):
+            with_backend = suite.run(prediction=img, ground_truth=img)
+            without_backend = BenchmarkSuite().run(prediction=img, ground_truth=img)
+
+        backend.evaluate_images.assert_not_called()
+        assert with_backend.metadata["has_llava"] is False
+        assert with_backend.combined_score == pytest.approx(without_backend.combined_score)
+        assert with_backend.combined_score == pytest.approx(1.0)

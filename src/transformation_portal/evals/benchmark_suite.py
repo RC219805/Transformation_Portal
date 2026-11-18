@@ -161,7 +161,9 @@ class BenchmarkSuite:
             metadata={
                 "has_ground_truth": ground_truth is not None,
                 "has_masks": pred_mask is not None and gt_mask is not None,
-                "has_llava": self.llava_backend is not None,
+                # LLaVA only runs when there is a backend AND an image path to send it;
+                # its weight must not be charged when it never ran.
+                "has_llava": self.llava_backend is not None and prediction_path is not None,
             }
         )
 
@@ -336,7 +338,12 @@ def run_benchmark_batch(
         samples: List of sample dicts with keys matching suite.run() args
 
     Returns:
-        Aggregated results
+        Aggregated results. Each ``mean_*`` averages only the samples that actually
+        measured that metric (ground truth for PSNR/SSIM/LPIPS, both masks for
+        IoU/Dice, a LLaVA run for LLaVA) and skips non-finite values, so an identical
+        pair (PSNR = inf) cannot make the mean infinite and samples without masks do
+        not dilute it with 0.0. A mean is ``None`` when no sample measured it.
+        ``psnr_infinite_count`` counts the identical pairs left out of ``mean_psnr``.
     """
     results = []
 
@@ -349,15 +356,28 @@ def run_benchmark_batch(
     if n == 0:
         return {"count": 0}
 
-    lpips_values = [r.lpips for r in results if r.lpips is not None]
+    def _measured(r: BenchmarkResult, flag: str) -> bool:
+        # Results built by BenchmarkSuite.run always carry the flag; hand-built
+        # results without metadata are treated as having measured the metric.
+        return bool(r.metadata.get(flag, True))
+
+    def _mean(values: list[Optional[float]]) -> Optional[float]:
+        finite = [float(v) for v in values if v is not None and np.isfinite(v)]
+        return sum(finite) / len(finite) if finite else None
+
+    with_gt = [r for r in results if _measured(r, "has_ground_truth")]
+    with_masks = [r for r in results if _measured(r, "has_masks")]
+    with_llava = [r for r in results if _measured(r, "has_llava")]
 
     return {
         "count": n,
-        "mean_psnr": sum(r.psnr for r in results) / n,
-        "mean_ssim": sum(r.ssim for r in results) / n,
+        "mean_psnr": _mean([r.psnr for r in with_gt]),
+        "psnr_infinite_count": sum(1 for r in with_gt if r.psnr is not None and np.isposinf(r.psnr)),
+        "mean_ssim": _mean([r.ssim for r in with_gt]),
         # Unmeasured LPIPS (None) is excluded; None when no sample measured it.
-        "mean_lpips": sum(lpips_values) / len(lpips_values) if lpips_values else None,
-        "mean_iou": sum(r.iou for r in results) / n,
-        "mean_llava": sum(r.llava_score for r in results) / n,
-        "mean_combined": sum(r.combined_score for r in results) / n,
+        "mean_lpips": _mean([r.lpips for r in with_gt]),
+        "mean_iou": _mean([r.iou for r in with_masks]),
+        "mean_dice": _mean([r.dice for r in with_masks]),
+        "mean_llava": _mean([r.llava_score for r in with_llava]),
+        "mean_combined": _mean([r.combined_score for r in results]),
     }
