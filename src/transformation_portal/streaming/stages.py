@@ -959,37 +959,52 @@ class ResizeStage(AsyncStage[ImageData, ImageData]):
         self._maintain_aspect = maintain_aspect
         self._worker_pool = worker_pool
 
+    @staticmethod
+    def _resize_float_planes(array: Any, size: Tuple[int, int], resample: Any) -> Any:
+        """Resize an (H, W) or (H, W, C) array plane by plane in float32 (PIL mode "F")."""
+        import numpy as np
+        from PIL import Image
+
+        planes = array[..., np.newaxis] if array.ndim == 2 else array
+        resized = [
+            np.asarray(Image.fromarray(np.ascontiguousarray(planes[..., c], dtype=np.float32)).resize(size, resample))
+            for c in range(planes.shape[2])
+        ]
+        stacked = np.stack(resized, axis=-1)
+        return stacked[..., 0] if array.ndim == 2 else stacked
+
     def _resize_sync(self, image_data: ImageData) -> ImageData:
-        """Synchronous image resizing."""
+        """Synchronous image resizing.
+
+        uint8 images are resized by PIL directly. Float and other integer images
+        (for example the float32 produced by ``ImageLoadStage`` from 16-bit
+        sources) are resized per channel in float32 so their precision is not
+        quantised to 8 bits; integer results are rounded and clipped back to
+        their dtype, float results are clipped to the pipeline's [0, 1] range.
+        A depth map of the same size as the image is resized alongside it.
+        """
         import numpy as np
         from PIL import Image
 
         array = image_data.array
         original_dtype = array.dtype
         original_shape = array.shape
-
-        # Convert to PIL Image
-        if array.dtype in (np.float32, np.float64):
-            pil_array = (np.clip(array, 0, 1) * 255).astype(np.uint8)
-        else:
-            pil_array = array
-
-        img = Image.fromarray(pil_array)
+        src_h, src_w = original_shape[:2]
 
         # Determine target size
         if self._target_size:
             target_w, target_h = self._target_size
         elif self._scale_factor:
-            target_w = int(img.width * self._scale_factor)
-            target_h = int(img.height * self._scale_factor)
+            target_w = int(src_w * self._scale_factor)
+            target_h = int(src_h * self._scale_factor)
         else:
             return image_data  # No resize needed
 
         # Maintain aspect ratio if requested
         if self._maintain_aspect:
-            ratio = min(target_w / img.width, target_h / img.height)
-            target_w = int(img.width * ratio)
-            target_h = int(img.height * ratio)
+            ratio = min(target_w / src_w, target_h / src_h)
+            target_w = int(src_w * ratio)
+            target_h = int(src_h * ratio)
 
         # Select resampling method
         method_map = {
@@ -1001,12 +1016,28 @@ class ResizeStage(AsyncStage[ImageData, ImageData]):
         resample = method_map.get(self._method, Image.Resampling.LANCZOS)
 
         # Resize
-        resized = img.resize((target_w, target_h), resample=resample)
-        result_array = np.array(resized)
+        if original_dtype == np.uint8:
+            result_array = np.array(Image.fromarray(array).resize((target_w, target_h), resample=resample))
+        else:
+            result_array = self._resize_float_planes(array, (target_w, target_h), resample)
+            if np.issubdtype(original_dtype, np.floating):
+                result_array = np.clip(result_array, 0.0, 1.0).astype(original_dtype)
+            elif np.issubdtype(original_dtype, np.integer):
+                info = np.iinfo(original_dtype)
+                result_array = np.clip(np.rint(result_array), info.min, info.max).astype(original_dtype)
 
-        # Convert back to original dtype
-        if original_dtype in (np.float32, np.float64):
-            result_array = result_array.astype(np.float32) / 255.0
+        # Keep a per-pixel depth map aligned with the resized image (downstream
+        # stages combine them element-wise). Bilinear (nearest when requested)
+        # avoids ringing beyond the original depth range at depth edges.
+        depth = image_data.depth_map
+        if depth is not None and getattr(depth, "shape", ())[:2] == (src_h, src_w):
+            depth_resample = Image.Resampling.NEAREST if self._method == "nearest" else Image.Resampling.BILINEAR
+            depth_dtype = np.asarray(depth).dtype
+            resized_depth = self._resize_float_planes(np.asarray(depth), (target_w, target_h), depth_resample)
+            if np.issubdtype(depth_dtype, np.integer):
+                info = np.iinfo(depth_dtype)
+                resized_depth = np.clip(np.rint(resized_depth), info.min, info.max)
+            image_data.depth_map = resized_depth.astype(depth_dtype)
 
         image_data.array = result_array
         image_data.metadata["resized"] = True

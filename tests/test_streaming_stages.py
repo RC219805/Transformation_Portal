@@ -22,6 +22,7 @@ from transformation_portal.streaming.stages import (
     ImageLoadStage,
     ImageSaveStage,
     MaterialResponseStage,
+    ResizeStage,
 )
 
 
@@ -280,3 +281,46 @@ def test_material_response_stage_handles_2d_greyscale(shape: tuple, tmp_path: Pa
     assert flat.array.min() >= 0.0 and flat.array.max() <= 1.0
     # Same result as the equivalent single-channel (H, W, 1) image.
     np.testing.assert_allclose(flat.array, channel.array[..., 0], atol=1e-6)
+
+
+def test_resize_stage_keeps_float_precision() -> None:
+    """M-14: float images are resized in float, not quantised to 256 levels."""
+    ramp = np.linspace(0.0, 1.0, 4096, dtype=np.float32)[None, :, None].repeat(8, 0).repeat(3, 2)
+
+    same = ResizeStage(scale_factor=1.0)._resize_sync(ImageData(array=ramp.copy(), path=Path("x.tif")))
+    assert same.array.dtype == np.float32
+    assert len(np.unique(same.array)) == 4096
+    np.testing.assert_allclose(same.array, ramp, atol=1e-6)
+
+    half = ResizeStage(scale_factor=0.5, method="bilinear")._resize_sync(ImageData(array=ramp.copy(), path=Path("x.tif")))
+    assert half.array.shape == (4, 2048, 3)
+    assert len(np.unique(half.array[..., 0])) > 256
+    assert half.array.min() >= 0.0 and half.array.max() <= 1.0
+
+
+def test_resize_stage_handles_16bit_rgb_and_keeps_uint8_path() -> None:
+    """M-14: uint16 RGB keeps its dtype and precision; uint8 output is unchanged."""
+    rng = np.random.default_rng(1)
+    deep = (rng.random((16, 24, 3)) * 65535).astype(np.uint16)
+    result = ResizeStage(scale_factor=0.5)._resize_sync(ImageData(array=deep.copy(), path=Path("x.tif")))
+    assert result.array.dtype == np.uint16
+    assert result.array.shape == (8, 12, 3)
+    assert len(np.unique(result.array)) > 256
+
+    eight = (rng.random((16, 24, 3)) * 255).astype(np.uint8)
+    expected = np.array(Image.fromarray(eight).resize((12, 8), resample=Image.Resampling.LANCZOS))
+    out = ResizeStage(scale_factor=0.5)._resize_sync(ImageData(array=eight.copy(), path=Path("x.png")))
+    np.testing.assert_array_equal(out.array, expected)
+
+
+def test_resize_stage_resizes_depth_map_with_image() -> None:
+    """M-14: the depth map follows the image so depth-aware stages stay aligned."""
+    image = np.random.default_rng(2).random((20, 30, 3)).astype(np.float32)
+    depth = np.tile(np.linspace(0.0, 1.0, 30, dtype=np.float32), (20, 1))
+    result = ResizeStage(target_size=(15, 10))._resize_sync(ImageData(array=image, path=Path("x.png"), depth_map=depth))
+
+    assert result.array.shape == (10, 15, 3)
+    assert result.depth_map.shape == (10, 15)
+    assert result.depth_map.dtype == np.float32
+    assert result.depth_map.min() >= 0.0 and result.depth_map.max() <= 1.0
+    assert np.all(np.diff(result.depth_map[0]) > 0)
