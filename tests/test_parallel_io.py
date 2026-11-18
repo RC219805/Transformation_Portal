@@ -154,3 +154,88 @@ def test_parallel_io_overlaps_processing_with_background_save(
 
     assert [result.succeeded for result in results] == [True, True]
     assert events.index("process-second") < events.index("save-first-end")
+
+
+def _run_batch_with_watchdog(
+    pipeline: ParallelIOPipeline,
+    paths: list[Path],
+    processor,
+    *,
+    timeout: float = 10.0,
+) -> BaseException | None:
+    """Run ``process_batch`` off-thread and fail if it does not finish in time."""
+
+    outcome: dict[str, BaseException | None] = {"error": None}
+
+    def run() -> None:
+        try:
+            pipeline.process_batch(paths, processor)
+        except BaseException as exc:  # noqa: BLE001 - capture interrupts for the assertion
+            outcome["error"] = exc
+
+    runner = threading.Thread(target=run, name="parallel_io_watchdog_runner", daemon=True)
+    runner.start()
+    runner.join(timeout)
+    assert not runner.is_alive(), "process_batch deadlocked after an interrupt"
+    return outcome["error"]
+
+
+@pytest.mark.regression
+def test_parallel_io_processor_interrupt_propagates_without_deadlock(
+    tmp_path: Path,
+) -> None:
+    """M-03: a KeyboardInterrupt in processor_fn must not hang the batch."""
+
+    saved: list[Path] = []
+    prefix = "parallel_io_kbint"
+
+    def processor(path: Path, value: Path) -> Path:
+        raise KeyboardInterrupt
+
+    def saver(path: Path, value: Path) -> Path:
+        saved.append(path)
+        return path
+
+    pipeline = ParallelIOPipeline(
+        loader=lambda path: path,
+        saver=saver,
+        prefetch_size=2,
+        num_savers=2,
+        thread_name_prefix=prefix,
+    )
+    paths = [tmp_path / f"img{index}.tif" for index in range(10)]
+
+    error = _run_batch_with_watchdog(pipeline, paths, processor)
+
+    assert isinstance(error, KeyboardInterrupt)
+    assert saved == []
+    assert not [thread.name for thread in threading.enumerate() if thread.name.startswith(prefix)]
+
+
+@pytest.mark.regression
+def test_parallel_io_loader_base_exception_propagates_without_deadlock(
+    tmp_path: Path,
+) -> None:
+    """M-03: a BaseException in the loader thread must still release the savers."""
+
+    prefix = "parallel_io_loader_exit"
+
+    def loader(path: Path) -> Path:
+        if path.name == "img1.tif":
+            raise SystemExit(7)
+        return path
+
+    pipeline = ParallelIOPipeline(
+        loader=loader,
+        saver=lambda path, value: path,
+        prefetch_size=1,
+        num_savers=2,
+        thread_name_prefix=prefix,
+    )
+    paths = [tmp_path / f"img{index}.tif" for index in range(4)]
+
+    error = _run_batch_with_watchdog(pipeline, paths, lambda path, value: value)
+
+    assert isinstance(error, SystemExit)
+    assert error.code == 7
+    assert not [thread.name for thread in threading.enumerate() if thread.name.startswith(prefix)]
