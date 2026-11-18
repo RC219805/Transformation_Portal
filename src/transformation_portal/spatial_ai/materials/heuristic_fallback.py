@@ -120,18 +120,17 @@ class HeuristicFallback:
         # Clip to [0, 1] for stability
         rgb_clipped = np.clip(rgb, 0, 1)
 
-        # Convert to uint8 for bilateral filtering (cv2 requirement)
+        # Filter in float32: quantising linear RGB to 8 bits would flatten the
+        # shadows (every value below 1/255 became 0) before the filter runs.
         try:
             import cv2
 
-            rgb_uint8 = (rgb_clipped * 255).astype(np.uint8)
-
             # Bilateral filter: smooth lighting while preserving edges
             # d=9: diameter of pixel neighborhood
-            # sigmaColor=75: color space sigma (larger = more colors mixed)
+            # sigmaColor=75/255: color space sigma (75 in 8-bit units, expressed on the
+            #   [0, 1] float scale; larger = more colors mixed)
             # sigmaSpace=75: coordinate space sigma (larger = farther pixels mixed)
-            albedo_uint8 = cv2.bilateralFilter(rgb_uint8, d=9, sigmaColor=75, sigmaSpace=75)
-            albedo = albedo_uint8.astype(np.float32) / 255.0
+            albedo = cv2.bilateralFilter(rgb_clipped.astype(np.float32), d=9, sigmaColor=75.0 / 255.0, sigmaSpace=75)
 
         except ImportError:
             # Fallback to Gaussian if cv2 not available

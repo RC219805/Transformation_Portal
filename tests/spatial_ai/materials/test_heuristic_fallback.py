@@ -90,6 +90,19 @@ class TestHeuristicFallback:
         # Should preserve color information
         assert albedo.shape == sample_rgb.shape
 
+    def test_albedo_keeps_linear_shadow_values(self, generator):
+        """M-3: albedo is filtered at float precision, not quantised to 8 bits."""
+        mask = np.ones((16, 16), dtype=bool)
+
+        uniform = generator._generate_albedo(np.full((16, 16, 3), 0.0030, dtype=np.float32), mask)
+        np.testing.assert_allclose(uniform, 0.0030, rtol=1e-5)
+
+        # A dark linear ramp spans less than one 8-bit step; its columns stay distinct.
+        ramp = np.broadcast_to(np.linspace(0.0005, 0.0035, 16, dtype=np.float32)[None, :, None], (16, 16, 3)).copy()
+        albedo = generator._generate_albedo(ramp, mask)
+        assert albedo.dtype == np.float32
+        assert np.all(np.diff(albedo[8, :, 0]) > 0)
+
     def test_normal_generation(self, generator, sample_rgb, sample_mask):
         """Test normal map generation."""
         normal = generator._generate_normal(
