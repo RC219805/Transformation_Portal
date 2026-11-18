@@ -45,7 +45,7 @@ from transformation_portal.compliance import (
 )
 from transformation_portal.reporting.contracts import build_stage_report
 from transformation_portal.spatial_ai.ingest.linear_decoder import LinearDecoder, LinearIngestResult
-from transformation_portal.spatial_ai.materials.contracts import MaterialInput, PBRTextures
+from transformation_portal.spatial_ai.materials.contracts import MaterialInput, PBRTextures, material_hint_from_label
 from transformation_portal.spatial_ai.materials.material_backend import MaterialBackend
 from transformation_portal.spatial_ai.reconstruction.contracts import Scene3D
 from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
@@ -1032,8 +1032,9 @@ class SpatialAIPipeline:
                 per_segment_strategy = ErrorRecoveryStrategy.SKIP_STAGE
 
             for i, (mask, metadata) in enumerate(zip(seg_result.masks, seg_result.metadata)):
-                # Create material input
-                material_hint = metadata.material_label if material_hints else None
+                # Create material input. Classifier labels are phrases ("wood floor");
+                # only an unambiguous category becomes a hint, anything else is unhinted.
+                material_hint = material_hint_from_label(metadata.material_label) if material_hints else None
 
                 mat_input = MaterialInput(
                     image=ingest_result.linear_rgb,

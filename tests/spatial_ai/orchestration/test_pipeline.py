@@ -834,6 +834,46 @@ class TestSpatialAIPipelineMaterialsStage:
         assert "segment_0" in result
         assert "segment_1" in result
 
+    def test_run_materials_accepts_classifier_phrase_labels(self, tmp_path):
+        """Classifier labels such as "wood floor" are not hint categories and must not fail the stage."""
+        config = PipelineConfig(
+            tier="standard",
+            stages=["materials"],
+            materials={"backend": "heuristic", "material_hints": True},
+            resource_limits=ResourceLimits(device_preference=["cpu"]),
+        )
+        pipeline = SpatialAIPipeline(config)
+
+        ingest_result = MagicMock(spec=LinearIngestResult)
+        ingest_result.linear_rgb = np.random.default_rng(0).random((24, 24, 3)).astype(np.float32)
+        ingest_result.gamma = 1.0
+
+        masks = np.zeros((3, 24, 24), dtype=bool)
+        masks[0, :8] = True
+        masks[1, 8:16] = True
+        masks[2, 16:] = True
+        labels = ["wood floor", "brushed steel", "frosted glass"]
+        seg_result = SegmentationResult(
+            masks=masks,
+            scores=np.full((3,), 0.9, dtype=np.float32),
+            metadata=[
+                MaskMetadata(
+                    area=24 * 8, bbox=(0, 8 * idx, 24, 8), stability_score=0.9, material_label=label, material_confidence=0.8
+                )
+                for idx, label in enumerate(labels)
+            ],
+        )
+
+        result = pipeline._run_materials(
+            ingest_result=ingest_result,
+            seg_result=seg_result,
+            output_dir=tmp_path,
+            save_intermediates=False,
+        )
+
+        assert list(result) == ["segment_0", "segment_1", "segment_2"]
+        assert [result[seg_id].metadata.material_hint for seg_id in result] == ["wood", None, "glass"]
+
     def test_run_materials_saves_intermediates(self, tmp_path):
         """Test materials saves textures plus diagnostics/provenance sidecars."""
         config = PipelineConfig(

@@ -153,7 +153,9 @@ Generate PBR textures for multiple segments.
 
 **Parameters:**
 - `masks` (List[np.ndarray]): List of N segmentation masks (H, W) bool
-- `material_hints` (List[str], optional): List of N material categories
+- `material_hints` (List[Optional[str]], optional): List of N material categories
+  (`wood`, `stone`, `metal`, `glass`, `fabric`, `concrete`, `leather`, `ceramic`) or `None`.
+  Use `material_hint_from_label()` to turn a classifier label into a category.
 
 **Returns:**
 - `List[PBRTextures]`: One result per segment
@@ -314,7 +316,7 @@ Material hints guide PBR generation for better results:
 ```python
 from transformation_portal.spatial_ai.ingest import load_depth_map
 from transformation_portal.spatial_ai.segmentation import SAM2Backend
-from transformation_portal.spatial_ai.materials import PBRGenerator
+from transformation_portal.spatial_ai.materials import PBRGenerator, material_hint_from_label
 
 # Phase 2.0: Load depth
 depth = load_depth_map("scene_depth.exr")
@@ -330,7 +332,9 @@ pbr_results = pbr_gen.generate_batch(
     gamma=1.0,
     masks=seg_result.masks,
     depth=depth,
-    material_hints=[meta.material_label for meta in seg_result.metadata],
+    # Classifier labels are phrases ("wood floor", "brushed steel"), not hint
+    # categories. Only a label naming exactly one category becomes a hint.
+    material_hints=[material_hint_from_label(meta.material_label) for meta in seg_result.metadata],
 )
 
 # Save outputs

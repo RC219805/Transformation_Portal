@@ -16,6 +16,7 @@ Architecture (ADR-027):
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Literal, Optional
@@ -23,6 +24,29 @@ from typing import Literal, Optional
 import numpy as np
 
 from transformation_portal.attestation.materials_policy import VALID_MATERIAL_BACKENDS
+
+#: Material categories that ``MaterialInput.material_hint`` accepts.
+VALID_MATERIAL_HINTS: frozenset[str] = frozenset(
+    {"wood", "stone", "metal", "glass", "fabric", "concrete", "leather", "ceramic"}
+)
+
+
+def material_hint_from_label(label: Optional[str]) -> Optional[str]:
+    """Map a free-form material label to a ``MaterialInput.material_hint``.
+
+    Segmentation classifiers label masks with phrases such as "wood floor" or
+    "brushed steel", which are not hint categories. A label maps to a hint only
+    when exactly one category appears in it as a whole word ("wood floor" ->
+    "wood"). Every other label ("brushed steel", "limestone wall", a label
+    naming two categories) returns ``None``: a label without an unambiguous
+    category must leave generation unhinted, never fail it.
+    """
+    if not isinstance(label, str):
+        return None
+    categories = VALID_MATERIAL_HINTS.intersection(re.findall(r"[a-z]+", label.lower()))
+    if len(categories) != 1:
+        return None
+    return next(iter(categories))
 
 
 @dataclass
@@ -83,9 +107,8 @@ class MaterialInput:
                 raise ValueError("Depth values must be non-negative")
 
         # Material hint validation
-        VALID_MATERIALS = {"wood", "stone", "metal", "glass", "fabric", "concrete", "leather", "ceramic"}
-        if self.material_hint is not None and self.material_hint not in VALID_MATERIALS:
-            raise ValueError(f"Material hint must be one of {VALID_MATERIALS}, got '{self.material_hint}'")
+        if self.material_hint is not None and self.material_hint not in VALID_MATERIAL_HINTS:
+            raise ValueError(f"Material hint must be one of {set(VALID_MATERIAL_HINTS)}, got '{self.material_hint}'")
 
 
 @dataclass
