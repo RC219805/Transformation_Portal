@@ -466,19 +466,28 @@ def test_cache_path_is_partitioned_by_id_prefix(tmp_path):
 
 
 class _FixedResultStage(_RecordingStage):
-    """Successful stage that returns the given artifacts and result metadata."""
+    """Stage that returns the given artifacts and result metadata with a fixed status."""
 
-    def __init__(self, name: str, *, artifacts: dict, metadata: dict | None = None):
-        super().__init__(name)
+    def __init__(
+        self,
+        name: str,
+        *,
+        artifacts: dict,
+        metadata: dict | None = None,
+        deps: List[str] | None = None,
+        status: StageStatus = StageStatus.COMPLETED,
+    ):
+        super().__init__(name, deps)
         self._artifacts = artifacts
         self._metadata = metadata or {}
+        self._status = status
 
     def compute(self, context: StageContext) -> StageResult:
         self.calls += 1
         return StageResult(
             stage_name=self.name,
             stage_version=self.version,
-            status=StageStatus.COMPLETED,
+            status=self._status,
             artifacts=dict(self._artifacts),
             metadata=dict(self._metadata),
         )
@@ -552,6 +561,26 @@ def test_manifest_larger_than_the_read_limit_is_not_published(make_executor, mon
     assert (result.cache_hits, result.cache_misses) == (0, 1)
     assert _manifests(executor) == []
     assert [path.name for path in manifest_path.parent.iterdir()] == []
+
+
+def test_skipped_stage_passes_its_artifacts_on_and_is_not_cached(make_executor):
+    """A stage that had nothing to do is not a failure, and leaves nothing to cache."""
+    executor = make_executor()
+    graph = StageGraph("optional-stage")
+    skipped = _FixedResultStage("optional", artifacts={"optional.image": "pixels"}, status=StageStatus.SKIPPED)
+    downstream = _RecordingStage("report", deps=["optional"])
+    graph.add_stage(skipped)
+    graph.add_stage(downstream)
+
+    first = executor.execute(graph, StageContext())
+    second = executor.execute(graph, StageContext())
+
+    assert first.success is True and first.error is None
+    assert first.execution_order == ["optional", "report"]
+    assert first.stage_results["optional"].status == StageStatus.SKIPPED
+    assert (skipped.calls, downstream.calls) == (2, 1)
+    assert (second.cache_hits, second.cache_misses) == (1, 1)
+    assert [json.loads(path.read_text())["stage_name"] for path in _manifests(executor)] == ["report"]
 
 
 # ---------------------------------------------------------------------------

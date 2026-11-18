@@ -105,8 +105,12 @@ class StageResult:
     timestamp: float = field(default_factory=time.time)
 
     def is_success(self) -> bool:
-        """Check if execution was successful."""
-        return self.status in (StageStatus.COMPLETED, StageStatus.CACHED)
+        """Check if execution was successful.
+
+        A skipped stage had nothing to do and passes its artifacts on, so it
+        does not fail the pipeline it is part of.
+        """
+        return self.status in (StageStatus.COMPLETED, StageStatus.CACHED, StageStatus.SKIPPED)
 
     def get_artifact(self, name: str, default: Any = None) -> Any:
         """Get output artifact."""
@@ -222,8 +226,9 @@ class Stage(ABC):
             if result.status == StageStatus.PENDING:
                 result.status = StageStatus.COMPLETED
 
-            # Save to cache if successful
-            if use_legacy_cache and context.cache_enabled and context.cache_dir and result.is_success():
+            # Save to cache if successful (a skipped stage did no work worth caching)
+            cacheable = result.is_success() and result.status != StageStatus.SKIPPED
+            if use_legacy_cache and context.cache_enabled and context.cache_dir and cacheable:
                 self._save_to_cache(result, cache_key, context.cache_dir)
 
             return result

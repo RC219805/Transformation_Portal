@@ -488,7 +488,8 @@ class CASDAGExecutor:
                             result = stage.execute_uncached(context)
                             cache_misses += 1
                             check(stage_name, "after_compute")
-                            if cache_enabled and result.is_success():
+                            # A skipped stage did no work worth caching.
+                            if cache_enabled and result.is_success() and result.status != StageStatus.SKIPPED:
                                 check(stage_name, "before_store")
                                 try:
                                     self._store_cache(identity, result)

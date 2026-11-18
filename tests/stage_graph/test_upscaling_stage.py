@@ -7,7 +7,8 @@ import pytest
 
 pytestmark = pytest.mark.unit
 
-from transformation_portal.stage_graph.stage import StageContext, StageStatus
+from transformation_portal.stage_graph.graph import StageGraph
+from transformation_portal.stage_graph.stage import Stage, StageContext, StageResult, StageStatus
 from transformation_portal.stage_graph.stages.upscaling import UpscalingStage
 
 
@@ -170,6 +171,48 @@ class TestUpscalingStageUnit:
         assert np.array_equal(result.artifacts["upscaled_image"], img)
         assert result.artifacts["upscale_metadata"]["skipped"] is True
         assert result.artifacts["upscale_metadata"]["scale_factor"] == 1.0
+
+    @pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
+    def test_pipeline_continues_past_disabled_upscaling(self, parallel):
+        """scale_factor=1.0 disables upscaling; the stages after it must still run."""
+
+        class _Enhancement(Stage):
+            def __init__(self):
+                super().__init__("enhancement")
+
+            def get_cache_key(self, context):
+                return "enhancement"
+
+            def compute(self, context):
+                return StageResult(
+                    self.name, self.version, StageStatus.COMPLETED, artifacts={"enhanced_image": context.artifacts["image"]}
+                )
+
+        class _Export(Stage):
+            def __init__(self):
+                super().__init__("export")
+
+            def get_dependencies(self):
+                return ["upscaling"]
+
+            def get_cache_key(self, context):
+                return "export"
+
+            def compute(self, context):
+                shape = context.artifacts["upscaled_image"].shape
+                return StageResult(self.name, self.version, StageStatus.COMPLETED, artifacts={"exported_shape": shape})
+
+        graph = StageGraph("no-upscale")
+        graph.add_stage(_Enhancement())
+        graph.add_stage(UpscalingStage(scale_factor=1.0))
+        graph.add_stage(_Export())
+        img = np.random.randint(0, 255, (12, 16, 3), dtype=np.uint8)
+
+        execution = graph.execute(StageContext(artifacts={"image": img}, cache_enabled=False), parallel=parallel)
+
+        assert execution.success is True and execution.error is None
+        assert execution.stage_results["upscaling"].status == StageStatus.SKIPPED
+        assert execution.stage_results["export"].artifacts["exported_shape"] == (12, 16, 3)
 
     def test_bicubic_backend_uint8(self):
         """Test bicubic upscaling with uint8 images."""
