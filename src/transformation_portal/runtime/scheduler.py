@@ -46,7 +46,8 @@ class TaskStatus(Enum):
 class ScheduledTask:
     """Task in the scheduler queue.
 
-    Lower priority values are executed first.
+    Lower priority values are executed first; tasks of equal priority run in
+    submission (FIFO) order via ``sequence``.
 
     Attributes:
         priority: Task priority (lower = higher priority)
@@ -55,6 +56,7 @@ class ScheduledTask:
         node_cls: DAG node class to execute
         inputs: Inputs for node execution
         node_id: Node identifier for sandbox
+        sequence: Submission sequence number (tie-breaker for equal priority)
         node_kwargs: Additional kwargs for node constructor
         retries: Current retry count
         max_retries: Maximum retry attempts
@@ -68,6 +70,7 @@ class ScheduledTask:
     node_cls: Type = field(compare=False)
     inputs: Dict[str, Any] = field(compare=False)
     node_id: str = field(compare=False)
+    sequence: int = 0
     node_kwargs: Dict[str, Any] = field(default_factory=dict, compare=False)
     retries: int = field(default=0, compare=False)
     max_retries: int = field(default=2, compare=False)
@@ -199,14 +202,15 @@ class ClusterScheduler:
             task_id = f"task_{self._task_counter:06d}"
 
             task = ScheduledTask(
-                priority=priority or self.default_priority,
+                priority=self.default_priority if priority is None else priority,
                 created_at=time.time(),
                 task_id=task_id,
                 node_cls=node_cls,
                 inputs=inputs,
                 node_id=node_id,
+                sequence=self._task_counter,
                 node_kwargs=node_kwargs or {},
-                max_retries=max_retries or self.default_max_retries,
+                max_retries=self.default_max_retries if max_retries is None else max_retries,
                 use_gpu=use_gpu,
                 timeout=timeout,
             )
