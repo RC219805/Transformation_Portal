@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 pytestmark = pytest.mark.unit
@@ -282,3 +284,91 @@ class TestMessageBus:
 
         messages = bus.read_all()
         assert len(messages) == 0
+
+
+@pytest.mark.ml
+class TestWorldModelInferenceAndCheckpoints:
+    """R10: deterministic inference and lossless save()/load() of the RL models."""
+
+    def test_predict_is_deterministic_and_restores_training_mode(self):
+        torch = pytest.importorskip("torch")
+        from transformation_portal.rl.world_model import WorldModel
+
+        torch.manual_seed(0)
+        model = WorldModel(state_dim=12, action_dim=5, hidden_dim=16, dropout=0.5)
+        state = torch.randn(12)
+
+        scores = {model.predict(state, 3).score for _ in range(5)}
+
+        assert len(scores) == 1
+        assert model.training is True
+        assert all(m.training for m in model.encoder if isinstance(m, torch.nn.Dropout))
+        assert model.eval().training is False
+        assert not any(m.training for m in model.encoder if isinstance(m, torch.nn.Dropout))
+
+    def test_ensemble_uncertainty_is_deterministic_and_finite(self):
+        torch = pytest.importorskip("torch")
+        from transformation_portal.rl.world_model import EnsembleWorldModel
+
+        torch.manual_seed(0)
+        ensemble = EnsembleWorldModel(n_models=3, state_dim=12, action_dim=5, hidden_dim=16, dropout=0.5)
+        state = torch.randn(12)
+
+        first = ensemble.predict_with_uncertainty(state, 2)
+        second = ensemble.predict_with_uncertainty(state, 2)
+
+        assert first == second
+        assert math.isfinite(first[1]) and first[1] >= 0.0
+        assert all(model.training for model in ensemble.models)
+
+    @pytest.mark.parametrize("n_models", [0, 1])
+    def test_ensemble_rejects_fewer_than_two_models(self, n_models):
+        pytest.importorskip("torch")
+        from transformation_portal.rl.world_model import EnsembleWorldModel
+
+        with pytest.raises(ValueError, match="n_models >= 2"):
+            EnsembleWorldModel(n_models=n_models, state_dim=4, action_dim=2, hidden_dim=8)
+
+    def test_world_model_round_trips_non_default_architecture(self, tmp_path):
+        torch = pytest.importorskip("torch")
+        from transformation_portal.rl.world_model import WorldModel
+
+        model = WorldModel(state_dim=10, action_dim=4, hidden_dim=32, action_embed_dim=16, dropout=0.25)
+        path = tmp_path / "wm.pt"
+        model.save(path)
+
+        loaded = WorldModel.load(path)
+
+        assert (loaded.action_embed_dim, loaded.dropout) == (16, 0.25)
+        state = torch.randn(10)
+        assert loaded.predict(state, 1).score == pytest.approx(model.predict(state, 1).score, abs=1e-6)
+
+    @pytest.mark.parametrize("kwargs", [{"hidden_dim": 64}, {"num_layers": 3}])
+    def test_policy_value_net_round_trips_non_default_architecture(self, tmp_path, kwargs):
+        torch = pytest.importorskip("torch")
+        from transformation_portal.rl.model import PolicyValueNet, create_model
+
+        model = create_model(10, 4, **kwargs)
+        path = tmp_path / "pv.pt"
+        model.save(str(path))
+
+        loaded = PolicyValueNet.load(str(path))
+
+        state = torch.randn(1, 10)
+        with torch.no_grad():
+            expected_logits, expected_value = model.forward(state)
+            logits, value = loaded.forward(state)
+        assert torch.allclose(logits, expected_logits)
+        assert torch.allclose(value, expected_value)
+
+    def test_policy_value_net_loads_legacy_checkpoint_without_architecture_fields(self, tmp_path):
+        torch = pytest.importorskip("torch")
+        from transformation_portal.rl.model import PolicyValueNet
+
+        model = PolicyValueNet(state_dim=6, action_dim=3)
+        path = tmp_path / "legacy.pt"
+        torch.save({"state_dict": model.state_dict(), "state_dim": 6, "action_dim": 3}, path)
+
+        loaded = PolicyValueNet.load(str(path))
+
+        assert (loaded.hidden_dim, loaded.num_layers) == (256, 2)
