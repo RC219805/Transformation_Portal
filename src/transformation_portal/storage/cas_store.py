@@ -56,6 +56,7 @@ import hashlib
 import logging
 import os
 import platform as _platform
+import re
 import shutil
 import stat
 import tempfile
@@ -76,6 +77,11 @@ QUARANTINE_MAX_SIZE_BYTES = 10 * 1024 * 1024 * 1024  # 10 GB
 # Cache platform check at module load time for efficiency
 _IS_WINDOWS = _platform.system() == "Windows"
 _HAS_O_DIRECTORY = hasattr(os, "O_DIRECTORY")
+
+# Object files are named by their lowercase SHA-256. Anything else under a
+# shard directory (notably the ``.cas_write_*.tmp`` files of in-flight writers)
+# is not a CAS object and must never be collected as one.
+_OBJECT_NAME_RE = re.compile(r"[0-9a-f]{64}")
 
 
 def _fsync_parent_directory(path: Path) -> None:
@@ -773,7 +779,12 @@ class ArtifactStore:
                 continue
 
             for obj_path in prefix_dir.iterdir():
-                sha = obj_path.name.lower()
+                sha = obj_path.name
+                # Only collect real objects: a writer's temp file in the same
+                # shard is about to be renamed into place by another thread or
+                # process, and deleting it would break that write.
+                if not _OBJECT_NAME_RE.fullmatch(sha) or sha[:2] != prefix_dir.name:
+                    continue
                 if sha not in referenced:
                     to_delete.append(sha)
                     if not dry_run:
