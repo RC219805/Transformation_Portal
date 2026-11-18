@@ -89,7 +89,8 @@ def verify_manifest_signature(manifest_data: Mapping[str, Any], *, trust_store_p
         raise PluginSignatureError(f"Plugin manifest signature_key_id {key_id!r} is not trusted")
 
     expected = sign_manifest(manifest_data, secret=secret)
-    if not hmac.compare_digest(signature.strip().lower(), expected):
+    # Compare bytes: str compare_digest raises TypeError on non-ASCII input.
+    if not hmac.compare_digest(signature.strip().lower().encode("utf-8"), expected.encode("ascii")):
         raise PluginSignatureError("Plugin manifest signature does not match trusted key")
 
 

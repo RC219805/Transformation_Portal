@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from pathlib import Path
 
 import pytest
@@ -492,3 +493,106 @@ def test_trust_store_signature_requirement_keeps_builtin_plugins_exempt(tmp_path
 
     assert loader._requires_manifest_signature(external_plugin) is True  # noqa: SLF001
     assert loader._requires_manifest_signature(builtin_plugin) is False  # noqa: SLF001
+
+
+@pytest.fixture
+def _forget_modules():
+    """Drop temp plugin modules from sys.modules so they cannot leak into other tests."""
+    names: list[str] = []
+    yield names
+    for name in names:
+        sys.modules.pop(name, None)
+
+
+def test_packages_with_same_entry_module_name_each_run_their_own_code(tmp_path: Path, _forget_modules):
+    """T-11: two packages shipping ``t11_shared_entry.py`` must not share the first package's module."""
+    _forget_modules.append("t11_shared_entry")
+    for package, plugin_name in (("alpha_package", "alpha_plugin"), ("beta_package", "beta_plugin")):
+        write_plugin_module(
+            tmp_path / package,
+            "t11_shared_entry",
+            class_name="SharedPlugin",
+            plugin_name=plugin_name,
+            execute_result=f"{plugin_name}-code",
+        )
+        write_plugin_json(tmp_path / package, name=plugin_name, module_name="t11_shared_entry", class_name="SharedPlugin")
+
+    discovered = {plugin.manifest.name: plugin for plugin in isolated_loader(tmp_path).discover_all() if plugin.manifest}
+
+    assert sorted(discovered) == ["alpha_plugin", "beta_plugin"]
+    assert discovered["alpha_plugin"].plugin.execute() == "alpha_plugin-code"
+    assert discovered["beta_plugin"].plugin.execute() == "beta_plugin-code"
+    assert discovered["beta_plugin"].plugin.metadata.name == "beta_plugin"
+    assert all(plugin.is_valid for plugin in discovered.values())
+
+
+def test_entry_module_shadowed_by_non_plugin_module_is_rejected(tmp_path: Path):
+    """T-11: an entry module named like an already-imported library is refused, not silently swapped."""
+    package_dir = tmp_path / "shadow_package"
+    package_dir.mkdir()
+    (package_dir / "json.py").write_text("raise AssertionError('must not be imported')\n", encoding="utf-8")
+    write_plugin_json(package_dir, name="shadow_plugin", module_name="json", class_name="Plugin")
+
+    discovered = isolated_loader(tmp_path).discover_all()
+
+    assert len(discovered) == 1
+    assert discovered[0].plugin is None
+    assert discovered[0].is_valid is False
+    assert "collides with already-imported module 'json'" in discovered[0].load_errors[-1]
+    assert sys.modules["json"] is json
+
+
+@pytest.mark.parametrize(
+    ("extra", "expected_error"),
+    [
+        ({"plugin_type": "bogus"}, "Invalid plugin_type: 'bogus'"),
+        ({"min_portal_version": "not-a-version"}, "Invalid portal version bounds"),
+        ({"dependencies": [42]}, "Invalid dependency specifier: 42"),
+        ({"dependencies": "numpy"}, "Invalid dependencies"),
+    ],
+)
+def test_malformed_manifest_is_reported_without_aborting_discovery(
+    tmp_path: Path, _forget_modules, extra: dict, expected_error: str
+):
+    """T-11: one malformed manifest must become a load error, not abort discovery of every plugin."""
+    _forget_modules.extend(["t11_good_entry", "t11_broken_entry"])
+    write_plugin_module(tmp_path / "a_good_package", "t11_good_entry", class_name="GoodPlugin", plugin_name="good")
+    write_plugin_json(tmp_path / "a_good_package", name="good", module_name="t11_good_entry", class_name="GoodPlugin")
+    write_plugin_module(tmp_path / "broken_package", "t11_broken_entry", class_name="BrokenPlugin", plugin_name="broken")
+    write_plugin_json(
+        tmp_path / "broken_package",
+        name="broken",
+        module_name="t11_broken_entry",
+        class_name="BrokenPlugin",
+        extra=extra,
+    )
+
+    discovered = {plugin.manifest.name: plugin for plugin in isolated_loader(tmp_path).discover_all() if plugin.manifest}
+
+    assert sorted(discovered) == ["broken", "good"]
+    assert discovered["good"].is_valid is True
+    assert discovered["broken"].is_valid is False
+    assert any(expected_error in error for error in discovered["broken"].load_errors)
+
+
+def test_non_ascii_signature_is_a_load_error_not_a_crash(tmp_path: Path):
+    """T-11: a non-ASCII signature must be rejected by the trust gate instead of raising TypeError."""
+    package_dir = tmp_path / "non_ascii_signature_package"
+    marker = tmp_path / "imported.txt"
+    package_dir.mkdir()
+    (package_dir / "t11_sig_entry.py").write_text(f"open({str(marker)!r}, 'w').close()\n", encoding="utf-8")
+    manifest_path = write_plugin_json(package_dir, name="non_ascii_sig", module_name="t11_sig_entry", class_name="Plugin")
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload.update(
+        {"signature_algorithm": PLUGIN_SIGNATURE_ALGORITHM, "signature_key_id": "local-dev", "signature": "déadbeef"}
+    )
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    discovered = isolated_loader(tmp_path, plugin_trust_store_path=_write_trust_store(tmp_path)).discover_all()
+
+    assert len(discovered) == 1
+    assert discovered[0].plugin is None
+    assert discovered[0].load_errors == [
+        "Plugin manifest signature verification failed: Plugin manifest signature does not match trusted key"
+    ]
+    assert not marker.exists()

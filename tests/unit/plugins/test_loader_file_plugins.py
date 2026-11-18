@@ -31,6 +31,22 @@ def test_file_plugin_discovery_skips_private_modules(tmp_path: Path):
     assert discovered[0].module_name == "plugin_public_file_plugin"
 
 
+def test_default_loader_discovers_builtin_plugins():
+    """T-11: the built-in plugin root (package-relative imports) must load through PluginLoader."""
+    from transformation_portal.plugins.loader import PluginLoader
+
+    discovered = PluginLoader(allow_external_plugins=False).discover_all()
+
+    names = {plugin.manifest.name for plugin in discovered if plugin.manifest}
+    assert {"edge_depth_estimator", "gaussian_blur_processor", "contrast_enhancer"} <= names
+    assert all(plugin.is_valid for plugin in discovered)
+    assert {plugin.module_name for plugin in discovered} <= {
+        "transformation_portal.plugins.builtin.depth_models",
+        "transformation_portal.plugins.builtin.enhancers",
+        "transformation_portal.plugins.builtin.processors",
+    }
+
+
 def test_file_plugin_discovery_loads_only_concrete_plugin_classes(tmp_path: Path):
     (tmp_path / "mixed_file_plugin.py").write_text(
         """from transformation_portal.plugins.interface import PluginInterface, PluginMetadata, PluginType

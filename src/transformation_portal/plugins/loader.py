@@ -19,12 +19,26 @@ logger = logging.getLogger(__name__)
 _ENABLE_EXTERNAL_PLUGINS_ENV = "TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS"
 _PLUGIN_TRUST_STORE_ENV = "TRANSFORMATION_PORTAL_PLUGIN_TRUST_STORE"
 _TRUTHY_VALUES = {"1", "true", "yes", "on"}
+_PLUGIN_SOURCE_ATTR = "__tp_plugin_source__"
+_BUILTIN_PACKAGE = f"{__package__}.builtin"
 
 
 def _external_plugins_enabled_from_env() -> bool:
     """Return True when external plugin loading is explicitly enabled."""
     value = os.environ.get(_ENABLE_EXTERNAL_PLUGINS_ENV, "")
     return value.strip().lower() in _TRUTHY_VALUES
+
+
+def builtin_module_name(file_path: Path) -> Optional[str]:
+    """Return the importable module name of a file under the built-in plugin package, else None."""
+    builtin_root = (Path(__file__).resolve().parent / "builtin").resolve()
+    try:
+        relative = Path(file_path).resolve().relative_to(builtin_root)
+    except ValueError:
+        return None
+    if relative.suffix != ".py" or not all(part.isidentifier() for part in relative.with_suffix("").parts):
+        return None
+    return ".".join((_BUILTIN_PACKAGE, *relative.with_suffix("").parts))
 
 
 @dataclass
@@ -334,21 +348,32 @@ class PluginLoader:
                         logger.warning(f"Failed to parse {pyproject}: {e}")
 
             if manifest and manifest.entry_point:
-                signature_error = self._verify_manifest_trust(item, manifest)
-                if signature_error:
-                    discovered.append(
-                        LoadedPlugin(
-                            plugin=None,  # type: ignore
-                            manifest=manifest,
-                            source_path=item,
-                            module_name="",
-                            load_errors=[signature_error],
+                try:
+                    signature_error = self._verify_manifest_trust(item, manifest)
+                    if signature_error:
+                        discovered.append(
+                            LoadedPlugin(
+                                plugin=None,  # type: ignore
+                                manifest=manifest,
+                                source_path=item,
+                                module_name="",
+                                load_errors=[signature_error],
+                            )
                         )
-                    )
-                    continue
+                        continue
 
-                # Load the plugin from manifest
-                loaded = self._load_from_manifest(item, manifest)
+                    # Load the plugin from manifest
+                    loaded = self._load_from_manifest(item, manifest)
+                except Exception as e:
+                    # One malformed package must not abort discovery of the others.
+                    logger.error(f"Failed to load plugin package {item}: {e}")
+                    loaded = LoadedPlugin(
+                        plugin=None,  # type: ignore
+                        manifest=manifest,
+                        source_path=item,
+                        module_name="",
+                        load_errors=[f"Failed to load plugin: {e}"],
+                    )
                 if loaded:
                     discovered.append(loaded)
 
@@ -435,16 +460,25 @@ class PluginLoader:
         # Check portal version compatibility
         from transformation_portal import __version__ as portal_version
 
-        metadata = PluginMetadata(
-            name=manifest.name,
-            version=manifest.version,
-            plugin_type=PluginType(manifest.plugin_type),
-            min_portal_version=manifest.min_portal_version,
-            max_portal_version=manifest.max_portal_version,
-        )
-
-        if not metadata.is_compatible(portal_version):
-            errors.append(f"Plugin {manifest.name} is not compatible with portal version {portal_version}")
+        try:
+            plugin_type = PluginType(manifest.plugin_type)
+        except ValueError:
+            errors.append(f"Invalid plugin_type: {manifest.plugin_type!r}")
+        else:
+            metadata = PluginMetadata(
+                name=manifest.name,
+                version=manifest.version,
+                plugin_type=plugin_type,
+                min_portal_version=manifest.min_portal_version,
+                max_portal_version=manifest.max_portal_version,
+            )
+            try:
+                compatible = metadata.is_compatible(portal_version)
+            except (TypeError, ValueError) as exc:
+                errors.append(f"Invalid portal version bounds for plugin {manifest.name}: {exc}")
+            else:
+                if not compatible:
+                    errors.append(f"Plugin {manifest.name} is not compatible with portal version {portal_version}")
 
         # Parse entry point (format: "module:ClassName" or "module.submodule:ClassName")
         try:
@@ -466,8 +500,26 @@ class PluginLoader:
             sys_path_modified = True
 
         try:
-            # Import the module
-            module = importlib.import_module(module_path)
+            # Import the module from this package directory, never a same-named module
+            # already imported from somewhere else.
+            collision_error = self._evict_foreign_plugin_module(package_dir, module_path)
+            if collision_error is None:
+                module = importlib.import_module(module_path)
+                if not self._module_is_from(module, package_dir):
+                    collision_error = (
+                        f"Entry module {module_path} resolved outside plugin package {package_dir}: "
+                        f"{getattr(module, '__file__', None)}"
+                    )
+            if collision_error is not None:
+                errors.append(collision_error)
+                return LoadedPlugin(
+                    plugin=None,  # type: ignore
+                    manifest=manifest,
+                    source_path=package_dir,
+                    module_name=module_path,
+                    load_errors=errors,
+                )
+            self._mark_plugin_module(module_path, package_dir)
 
             # Get the plugin class
             if not hasattr(module, class_name):
@@ -525,6 +577,47 @@ class PluginLoader:
             if sys_path_modified and str(package_dir) in sys.path:
                 sys.path.remove(str(package_dir))
 
+    @staticmethod
+    def _module_is_from(module: Any, package_dir: Path) -> bool:
+        """Return True when a module's source lives inside ``package_dir``."""
+        locations = [getattr(module, "__file__", None), *list(getattr(module, "__path__", None) or [])]
+        root = Path(package_dir).resolve()
+        found = False
+        for location in locations:
+            if not location:
+                continue
+            found = True
+            if not Path(location).resolve().is_relative_to(root):
+                return False
+        return found
+
+    def _evict_foreign_plugin_module(self, package_dir: Path, module_path: str) -> Optional[str]:
+        """Drop a same-named module that another plugin package imported earlier.
+
+        Plugin entry modules are imported under their declared name. Without
+        this, two packages that both ship ``plugin.py`` would silently share the
+        first package's code. A non-plugin module (stdlib, third-party) with the
+        same name is never evicted: the plugin is rejected instead.
+        """
+        top_level = module_path.split(".", 1)[0]
+        existing = sys.modules.get(top_level)
+        if existing is None or self._module_is_from(existing, package_dir):
+            return None
+        if getattr(existing, _PLUGIN_SOURCE_ATTR, None) is None:
+            return f"Entry module {module_path} collides with already-imported module {top_level!r}"
+        for name in [n for n in sys.modules if n == top_level or n.startswith(top_level + ".")]:
+            del sys.modules[name]
+        return None
+
+    @staticmethod
+    def _mark_plugin_module(module_path: str, package_dir: Path) -> None:
+        """Tag the imported entry module (and its parent packages) as plugin-owned."""
+        parts = module_path.split(".")
+        for depth in range(1, len(parts) + 1):
+            module = sys.modules.get(".".join(parts[:depth]))
+            if module is not None:
+                setattr(module, _PLUGIN_SOURCE_ATTR, str(package_dir))
+
     def _load_from_file(self, file_path: Path) -> List[LoadedPlugin]:
         """Load plugins from a single Python file.
 
@@ -538,14 +631,20 @@ class PluginLoader:
         module_name = f"plugin_{file_path.stem}"
 
         try:
-            spec = importlib.util.spec_from_file_location(module_name, file_path)
-            if spec is None or spec.loader is None:
-                logger.warning(f"Could not create spec for {file_path}")
-                return loaded
+            builtin_module = builtin_module_name(file_path)
+            if builtin_module is not None:
+                # Built-in plugins use package-relative imports: import them as package members.
+                module_name = builtin_module
+                module = importlib.import_module(module_name)
+            else:
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
+                if spec is None or spec.loader is None:
+                    logger.warning(f"Could not create spec for {file_path}")
+                    return loaded
 
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[module_name] = module
-            spec.loader.exec_module(module)
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+                spec.loader.exec_module(module)
 
             # Find all plugin classes in module
             import inspect
@@ -597,24 +696,43 @@ class PluginLoader:
         Returns:
             List of error messages for missing dependencies
         """
+        import importlib.metadata
+
+        from packaging.requirements import InvalidRequirement, Requirement
+
         errors: List[str] = []
+
+        if not isinstance(dependencies, list):
+            return [f"Invalid dependencies (expected a list of requirement strings): {dependencies!r}"]
 
         for dep in dependencies:
             # Parse dependency string (e.g., "numpy>=1.20.0")
-            import re
-
-            match = re.match(r"^([a-zA-Z0-9_-]+)(.*)$", dep)
-            if not match:
+            if not isinstance(dep, str):
+                errors.append(f"Invalid dependency specifier: {dep!r}")
+                continue
+            try:
+                requirement = Requirement(dep)
+            except InvalidRequirement:
+                errors.append(f"Invalid dependency specifier: {dep!r}")
+                continue
+            if requirement.marker is not None and not requirement.marker.evaluate():
                 continue
 
-            package_name = match.group(1)
-            _version_spec = match.group(2)  # noqa: F841
-
             try:
-                # Try to import the package
-                importlib.import_module(package_name.replace("-", "_"))
-            except ImportError:
-                errors.append(f"Missing dependency: {dep}")
+                installed_version: Optional[str] = importlib.metadata.version(requirement.name)
+            except importlib.metadata.PackageNotFoundError:
+                installed_version = None
+
+            if installed_version is None:
+                # No distribution metadata: accept a requirement written as an importable module name.
+                try:
+                    found = importlib.util.find_spec(requirement.name.replace("-", "_")) is not None
+                except (ImportError, ValueError):
+                    found = False
+                if not found:
+                    errors.append(f"Missing dependency: {dep}")
+            elif requirement.specifier and not requirement.specifier.contains(installed_version, prereleases=True):
+                errors.append(f"Unsatisfied dependency: {dep} (installed {installed_version})")
 
         return errors
 

@@ -327,6 +327,24 @@ class TestExternalPluginGating:
         assert any(p.resolve() == expected for p in paths)
 
 
+class TestBuiltinDiscovery:
+    def test_default_discovery_registers_builtin_plugins(self):
+        """T-11: built-in plugins use package-relative imports and must still be discoverable."""
+        import warnings
+
+        registry = _make_registry(allow_external=False)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            discovered = registry.discover_plugins()
+
+        failures = [str(w.message) for w in caught if issubclass(w.category, RuntimeWarning)]
+        assert failures == []
+        assert discovered > 0
+        assert registry.get_plugin("depth_model", "edge_depth_estimator") is not None
+        assert "gaussian_blur_processor" in registry.list_plugins()["processor"]
+        assert "contrast_enhancer" in registry.list_plugins()["enhancer"]
+
+
 # ---------------------------------------------------------------------------
 # Global singleton
 # ---------------------------------------------------------------------------

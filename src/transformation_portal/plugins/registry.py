@@ -10,7 +10,7 @@ from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from .interface import PluginInterface, PluginMetadata, PluginType
-from .loader import _PLUGIN_TRUST_STORE_ENV, PluginLoader
+from .loader import _PLUGIN_TRUST_STORE_ENV, PluginLoader, builtin_module_name
 
 _ENABLE_EXTERNAL_PLUGINS_ENV = "TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS"
 _TRUTHY_VALUES = {"1", "true", "yes", "on"}
@@ -218,19 +218,25 @@ class PluginRegistry:
 
                 try:
                     # Load module dynamically
-                    spec = importlib.util.spec_from_file_location(f"plugin_{plugin_file.stem}", plugin_file)
-                    if spec and spec.loader:
+                    builtin_module = builtin_module_name(plugin_file)
+                    if builtin_module is not None:
+                        # Built-in plugins use package-relative imports: import them as package members.
+                        module = importlib.import_module(builtin_module)
+                    else:
+                        spec = importlib.util.spec_from_file_location(f"plugin_{plugin_file.stem}", plugin_file)
+                        if not spec or not spec.loader:
+                            continue
                         module = importlib.util.module_from_spec(spec)
                         spec.loader.exec_module(module)
 
-                        # Find plugin classes in module
-                        for name, obj in inspect.getmembers(module, inspect.isclass):
-                            if issubclass(obj, PluginInterface) and obj is not PluginInterface and not inspect.isabstract(obj):
+                    # Find plugin classes in module
+                    for name, obj in inspect.getmembers(module, inspect.isclass):
+                        if issubclass(obj, PluginInterface) and obj is not PluginInterface and not inspect.isabstract(obj):
 
-                                # Instantiate and register plugin
-                                plugin_instance = obj()
-                                self.register(plugin_instance, replace_existing=True)
-                                discovered += 1
+                            # Instantiate and register plugin
+                            plugin_instance = obj()
+                            self.register(plugin_instance, replace_existing=True)
+                            discovered += 1
 
                 except Exception as e:
                     warnings.warn(f"Failed to load plugin from {plugin_file}: {e}", RuntimeWarning)

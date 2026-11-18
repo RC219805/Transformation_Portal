@@ -451,3 +451,47 @@ class TestGlobalManagerSingleton:
         m1 = get_global_manager()
         m2 = get_global_manager()
         assert m1 is m2
+
+
+# ---------------------------------------------------------------------------
+# Plugins with load errors are never handed out or executed (T-11)
+# ---------------------------------------------------------------------------
+
+
+class TestInvalidPluginsAreRefused:
+    def _manager_with_invalid_plugin(self, name: str, calls: list):
+        plugin = _make_plugin(name, execute_result="ran anyway")
+        original_execute = plugin.execute
+
+        def _tracking_execute(*args, **kwargs):
+            calls.append(name)
+            return original_execute(*args, **kwargs)
+
+        plugin.execute = _tracking_execute
+        manager = _make_manager_with_plugin(plugin)
+        loaded = manager._loader.load_plugin(name)  # noqa: SLF001 - mocked loader returns the shared LoadedPlugin
+        loaded.load_errors.append(f"Plugin {name} is not compatible with portal version 0.0.0")
+        return manager
+
+    def test_execute_refuses_plugin_with_load_errors(self):
+        calls: list = []
+        manager = self._manager_with_invalid_plugin("incompatible_proc", calls)
+
+        result = manager.execute("incompatible_proc")
+
+        assert result.success is False
+        assert result.result is None
+        assert calls == []
+
+    def test_lookup_apis_refuse_plugin_with_load_errors(self):
+        from transformation_portal.plugins.interface import PluginInitializationError, PluginType
+
+        manager = self._manager_with_invalid_plugin("incompatible_lookup", [])
+
+        assert manager.get_plugin("incompatible_lookup") is None
+        assert manager.get_plugins_by_type(PluginType.PROCESSOR) == []
+        with pytest.raises(PluginInitializationError):
+            manager.initialize_plugin("incompatible_lookup")
+        with pytest.raises(PluginInitializationError):
+            with manager.plugin_session("incompatible_lookup"):
+                pass

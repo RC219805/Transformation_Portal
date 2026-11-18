@@ -386,6 +386,15 @@ my_plugin/
 }
 ```
 
+`dependencies` are PEP 508 requirement strings checked against the installed
+distribution (name and version specifier, e.g. `PyYAML>=6`); a name with no
+installed distribution is accepted only when it is an importable module. A
+manifest with an invalid `plugin_type`, unparsable portal-version bounds,
+malformed or unmet dependencies, or an incompatible portal version is still
+reported by `PluginLoader.discover_all()` (with `load_errors`), but
+`PluginManager` refuses to hand out, initialize or execute it. Each package's
+entry module must not share a name with an already-imported non-plugin module.
+
 ### Distribution
 
 **PyPI Package**:
