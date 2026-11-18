@@ -6,6 +6,7 @@ import argparse
 import csv
 import hashlib
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -285,26 +286,84 @@ def write_merkle_proof(manifest_csv: Path, filename: str, out_json: Path) -> Non
     _write_json(out_json, payload)
 
 
-def verify_merkle_proof(proof_json: Path, out_json: Path) -> None:
-    """Verify a Merkle inclusion proof JSON. Exits non-zero on mismatch."""
+def _target_leaf_hex(target: Any) -> str | None:
+    """Leaf hash of the row a proof document claims to prove, or None when it names no usable row."""
+    if not isinstance(target, dict):
+        return None
+    filename, size_bytes, digest = target.get("filename"), target.get("bytes"), target.get("digest")
+    if not isinstance(filename, str) or type(size_bytes) is not int or not isinstance(digest, str):
+        return None
+    return _leaf_hex(ManifestRow(filename=filename, size_bytes=size_bytes, digest=digest))
+
+
+def _proof_length_for_leaf_count(leaf_count: int) -> int:
+    """Number of proof steps in the odd-duplication tree built over ``leaf_count`` leaves."""
+    length = 0
+    width = leaf_count
+    while width > 1:
+        width = (width + 1) // 2
+        length += 1
+    return length
+
+
+def verify_merkle_proof(
+    proof_json: Path,
+    out_json: Path,
+    *,
+    merkle_json: Path | None = None,
+    expected_root_hex: str | None = None,
+) -> None:
+    """Verify a Merkle inclusion proof JSON. Exits non-zero on mismatch.
+
+    The proof document carries its own root, so on its own it only shows internal consistency.
+    ``merkle_json`` (output of the ``merkle`` command) or ``expected_root_hex`` supplies the root
+    the proof has to lead to.
+    """
     proof_doc = json.loads(proof_json.read_text(encoding="utf-8"))
     leaf_hex = str(proof_doc["leaf_hex"])
     expected_root = str(proof_doc["root_hex"])
     steps = [MerkleProofStep(**item) for item in proof_doc["proof"]]
 
     computed_root = _merkle_root_from_proof(leaf_hex, steps)
-    ok = computed_root == expected_root
+    failures: list[str] = []
+    if computed_root != expected_root:
+        failures.append("root_mismatch")
+    # Without this the document can name any file as its target and still verify.
+    if _target_leaf_hex(proof_doc.get("target")) != leaf_hex:
+        failures.append("leaf_not_bound_to_target")
 
+    trusted_roots: list[str] = []
+    if expected_root_hex is not None:
+        trusted_roots.append(expected_root_hex.strip().lower())
+    if merkle_json is not None:
+        merkle_doc = json.loads(merkle_json.read_text(encoding="utf-8"))
+        trusted_roots.append(str(merkle_doc["global_root"]))
+        leaf_count = merkle_doc["leaf_count"]
+        if type(leaf_count) is not int or leaf_count < 1 or len(steps) != _proof_length_for_leaf_count(leaf_count):
+            failures.append("proof_length_mismatch")
+    if any(trusted_root != expected_root for trusted_root in trusted_roots):
+        failures.append("root_not_trusted")
+
+    ok = not failures
     report: dict[str, Any] = {
         "schema_version": "1.0",
         "verified": bool(ok),
         "expected_root_hex": expected_root,
         "computed_root_hex": computed_root,
         "proof_source": proof_json.name,
+        "anchored": bool(trusted_roots),
+        "failures": failures,
     }
     _write_json(out_json, report)
     if not ok:
+        print(f"Merkle proof verification failed: {', '.join(failures)}", file=sys.stderr)
         raise SystemExit(2)
+    if not trusted_roots:
+        print(
+            "WARNING: proof root was not compared with a trusted Merkle root; only the proof's internal "
+            "consistency was verified. Pass --merkle-json or --expected-root to anchor it.",
+            file=sys.stderr,
+        )
 
 
 def _classification_column(fieldnames: list[str]) -> str | None:
@@ -422,6 +481,21 @@ def build_parser() -> argparse.ArgumentParser:
     merkle_verify = subparsers.add_parser("merkle-verify", help="Verify a Merkle inclusion proof JSON.")
     merkle_verify.add_argument("--proof-json", type=Path, required=True, help="Input proof JSON.")
     merkle_verify.add_argument("--out-json", type=Path, required=True, help="Destination verification report JSON.")
+    merkle_verify.add_argument(
+        "--merkle-json",
+        type=Path,
+        default=None,
+        help=(
+            "Trusted output of the `merkle` command. The proof root must equal its global_root and the proof "
+            "length must fit its leaf_count."
+        ),
+    )
+    merkle_verify.add_argument(
+        "--expected-root",
+        type=str,
+        default=None,
+        help="Trusted global Merkle root (hex) that the proof root must equal.",
+    )
 
     governance_metrics = subparsers.add_parser(
         "governance-metrics",
@@ -456,7 +530,12 @@ def main() -> None:
     elif command == "merkle-proof":
         write_merkle_proof(args.manifest, args.filename, args.out_json)
     elif command == "merkle-verify":
-        verify_merkle_proof(args.proof_json, args.out_json)
+        verify_merkle_proof(
+            args.proof_json,
+            args.out_json,
+            merkle_json=args.merkle_json,
+            expected_root_hex=args.expected_root,
+        )
     elif command == "governance-metrics":
         write_governance_metrics(args.governance_csv, args.out_json)
     elif command == "governance-gate":

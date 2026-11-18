@@ -342,6 +342,166 @@ class ManifestTelemetryCliTest(unittest.TestCase):
             self.assertFalse(verify_payload["verified"])
             self.assertNotEqual(verify_payload["expected_root_hex"], verify_payload["computed_root_hex"])
 
+    def _write_three_row_manifest(self, manifest_csv: Path, *, digest_suffix: str = "") -> None:
+        with manifest_csv.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["filename", "bytes", "md5"])
+            writer.writerow(["driveA/a.jpg", "10", f"aaaa{digest_suffix}"])
+            writer.writerow(["driveA/b.jpg", "20", f"bbbb{digest_suffix}"])
+            writer.writerow(["driveB/c.jpg", "30", f"cccc{digest_suffix}"])
+
+    def _merkle_and_proof(self, temp: Path, name: str, *, digest_suffix: str = "") -> tuple[Path, Path]:
+        manifest_csv = temp / f"{name}.csv"
+        merkle_json = temp / f"{name}.merkle.json"
+        proof_json = temp / f"{name}.proof.json"
+        self._write_three_row_manifest(manifest_csv, digest_suffix=digest_suffix)
+        merkle = self._run_cli("merkle", "--manifest", str(manifest_csv), "--out-json", str(merkle_json))
+        self.assertEqual(merkle.returncode, 0, msg=merkle.stderr)
+        proof = self._run_cli(
+            "merkle-proof", "--manifest", str(manifest_csv), "--filename", "driveA/a.jpg", "--out-json", str(proof_json)
+        )
+        self.assertEqual(proof.returncode, 0, msg=proof.stderr)
+        return merkle_json, proof_json
+
+    def test_merkle_verify_rejects_proof_whose_target_was_swapped(self) -> None:
+        """The leaf must be the hash of the row the proof names, or the proof is about some other file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            _, proof_json = self._merkle_and_proof(temp, "manifest")
+            verify_json = temp / "verify.json"
+
+            proof_payload = json.loads(proof_json.read_text(encoding="utf-8"))
+            proof_payload["target"] = {"filename": "driveZ/never_existed.jpg", "bytes": 999, "digest": "ffff", "leaf_index": 0}
+            proof_json.write_text(json.dumps(proof_payload), encoding="utf-8")
+
+            result = self._run_cli("merkle-verify", "--proof-json", str(proof_json), "--out-json", str(verify_json))
+
+            self.assertEqual(result.returncode, 2, msg=result.stdout + result.stderr)
+            report = json.loads(verify_json.read_text(encoding="utf-8"))
+            self.assertFalse(report["verified"])
+            self.assertEqual(report["failures"], ["leaf_not_bound_to_target"])
+
+    def test_merkle_verify_rejects_fabricated_proof_without_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            proof_json = temp / "proof.json"
+            verify_json = temp / "verify.json"
+            proof_json.write_text(json.dumps({"leaf_hex": "00" * 32, "root_hex": "00" * 32, "proof": []}), encoding="utf-8")
+
+            result = self._run_cli("merkle-verify", "--proof-json", str(proof_json), "--out-json", str(verify_json))
+
+            self.assertEqual(result.returncode, 2, msg=result.stdout + result.stderr)
+            self.assertFalse(json.loads(verify_json.read_text(encoding="utf-8"))["verified"])
+
+    def test_merkle_verify_without_anchor_is_reported_as_unanchored(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            _, proof_json = self._merkle_and_proof(temp, "manifest")
+            verify_json = temp / "verify.json"
+
+            result = self._run_cli("merkle-verify", "--proof-json", str(proof_json), "--out-json", str(verify_json))
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("not compared with a trusted Merkle root", result.stderr)
+            report = json.loads(verify_json.read_text(encoding="utf-8"))
+            self.assertTrue(report["verified"])
+            self.assertFalse(report["anchored"])
+
+    def test_merkle_verify_anchors_proof_to_trusted_merkle_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            trusted_merkle_json, genuine_proof = self._merkle_and_proof(temp, "trusted")
+            _, foreign_proof = self._merkle_and_proof(temp, "foreign", digest_suffix="-edited")
+            verify_json = temp / "verify.json"
+
+            genuine = self._run_cli(
+                "merkle-verify",
+                "--proof-json",
+                str(genuine_proof),
+                "--out-json",
+                str(verify_json),
+                "--merkle-json",
+                str(trusted_merkle_json),
+            )
+            self.assertEqual(genuine.returncode, 0, msg=genuine.stdout + genuine.stderr)
+            self.assertEqual(genuine.stderr, "")
+            report = json.loads(verify_json.read_text(encoding="utf-8"))
+            self.assertTrue(report["verified"])
+            self.assertTrue(report["anchored"])
+            self.assertEqual(report["failures"], [])
+
+            # Internally consistent, but it proves membership in a different manifest.
+            foreign = self._run_cli(
+                "merkle-verify",
+                "--proof-json",
+                str(foreign_proof),
+                "--out-json",
+                str(verify_json),
+                "--merkle-json",
+                str(trusted_merkle_json),
+            )
+            self.assertEqual(foreign.returncode, 2, msg=foreign.stdout + foreign.stderr)
+            self.assertEqual(json.loads(verify_json.read_text(encoding="utf-8"))["failures"], ["root_not_trusted"])
+
+    def test_merkle_verify_expected_root_must_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            trusted_merkle_json, proof_json = self._merkle_and_proof(temp, "manifest")
+            verify_json = temp / "verify.json"
+            global_root = json.loads(trusted_merkle_json.read_text(encoding="utf-8"))["global_root"]
+
+            matching = self._run_cli(
+                "merkle-verify",
+                "--proof-json",
+                str(proof_json),
+                "--out-json",
+                str(verify_json),
+                "--expected-root",
+                global_root.upper(),
+            )
+            self.assertEqual(matching.returncode, 0, msg=matching.stdout + matching.stderr)
+            self.assertTrue(json.loads(verify_json.read_text(encoding="utf-8"))["anchored"])
+
+            other = self._run_cli(
+                "merkle-verify",
+                "--proof-json",
+                str(proof_json),
+                "--out-json",
+                str(verify_json),
+                "--expected-root",
+                "0" * 64,
+            )
+            self.assertEqual(other.returncode, 2, msg=other.stdout + other.stderr)
+            self.assertEqual(json.loads(verify_json.read_text(encoding="utf-8"))["failures"], ["root_not_trusted"])
+
+    def test_merkle_verify_rejects_single_node_proof_for_multi_leaf_tree(self) -> None:
+        """An empty proof says "this leaf is the root"; that is only possible in a one-leaf tree."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            trusted_merkle_json, proof_json = self._merkle_and_proof(temp, "manifest")
+            verify_json = temp / "verify.json"
+
+            proof_payload = json.loads(proof_json.read_text(encoding="utf-8"))
+            proof_payload["proof"] = []
+            proof_payload["root_hex"] = proof_payload["leaf_hex"]
+            proof_json.write_text(json.dumps(proof_payload), encoding="utf-8")
+
+            result = self._run_cli(
+                "merkle-verify",
+                "--proof-json",
+                str(proof_json),
+                "--out-json",
+                str(verify_json),
+                "--merkle-json",
+                str(trusted_merkle_json),
+            )
+
+            self.assertEqual(result.returncode, 2, msg=result.stdout + result.stderr)
+            self.assertEqual(
+                json.loads(verify_json.read_text(encoding="utf-8"))["failures"],
+                ["proof_length_mismatch", "root_not_trusted"],
+            )
+
     def test_merkle_proof_fails_on_missing_filename(self) -> None:
         """Verify merkle-proof fails gracefully when filename not in manifest."""
         with tempfile.TemporaryDirectory() as tmpdir:
