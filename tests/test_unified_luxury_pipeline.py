@@ -1085,6 +1085,18 @@ class TestColorGrading:
 
         assert isinstance(result, Image.Image)
 
+    def test_grading_quantises_by_rounding(self, temp_dir):
+        """Regression for L-03: grading truncated ``arr * 255`` to uint8, darkening output by ~0.5 level."""
+        config = UnifiedPipelineConfig(output_dir=temp_dir, enable_depth=False, enable_material_response=False)
+        pipeline = UnifiedLuxuryPipeline(config)
+        rng = np.random.default_rng(3)
+        source = rng.integers(0, 256, (64, 64, 3), dtype=np.uint8)
+
+        params = {"exposure": 0.0, "contrast": 1.0, "saturation": 1.01}
+        result = np.asarray(pipeline._apply_color_grading(Image.fromarray(source, "RGB"), params)).astype(np.float64)
+
+        assert abs(result.mean() - source.mean()) < 0.2
+
 
 class TestMaterialResponse:
     """Test Material Response processing."""

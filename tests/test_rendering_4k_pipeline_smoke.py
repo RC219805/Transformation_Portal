@@ -173,3 +173,24 @@ def test_rendering_4k_batch_same_stem_inputs_keep_separate_deliveries(tmp_path: 
         assert means[0] > means[1] + 100
     finally:
         sys.modules.pop(PIPELINE_MODULE, None)
+
+
+def test_rendering_4k_depth_visualization_rounds_depth_values(tmp_path: Path, monkeypatch) -> None:
+    """Regression for L-03: the depth visualisation truncated ``depth * 255`` (0.5 -> 127, not 128)."""
+    import numpy as np
+
+    pipeline_module = _load_rendering_4k_pipeline_for_preview_smoke(monkeypatch)
+    try:
+        pipeline = pipeline_module.Rendering4KPipeline.from_preset("preview")
+        pipeline.config.output.master_tiff_16bit = False
+        pipeline.config.output.delivery_jpeg = False
+        pipeline.config.output.save_quality_report = False
+        pipeline.config.output.save_depth_visualization = True
+        depth = np.array([[0.5, 0.999], [0.25, 1.0]], dtype=np.float32)
+
+        outputs = pipeline._save_outputs(Image.new("RGB", (2, 2)), depth, None, tmp_path / "in.png", tmp_path / "out")
+
+        with Image.open(outputs["depth_visualization"]) as vis:
+            assert np.asarray(vis).tolist() == [[128, 255], [64, 255]]
+    finally:
+        sys.modules.pop(PIPELINE_MODULE, None)

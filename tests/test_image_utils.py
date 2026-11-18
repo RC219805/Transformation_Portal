@@ -398,3 +398,23 @@ def test_convert_to_rgb_matches_pillow_for_8bit_modes(mode):
     img = base.convert(mode)
 
     assert np.array_equal(np.asarray(convert_to_rgb(img)), np.asarray(img.convert("RGB")))
+
+
+def test_quantize_unit_float_rounds_instead_of_truncating():
+    """Regression for L-03: ``(arr * 255).astype(np.uint8)`` truncated, biasing output half a level dark."""
+    from transformation_portal.utils.image_utils import quantize_unit_float
+
+    arr = np.array([0.0, 0.5, 0.999, 1.0, -0.2, 1.7, 100.6 / 255.0], dtype=np.float32)
+
+    assert quantize_unit_float(arr).tolist() == [0, 128, 255, 255, 0, 255, 101]
+    assert quantize_unit_float(arr).dtype == np.uint8
+    out16 = quantize_unit_float(np.array([0.5, 1.0, 2.0], dtype=np.float32), np.uint16)
+    assert out16.dtype == np.uint16
+    assert out16.tolist() == [32768, 65535, 65535]
+
+
+def test_quantize_unit_float_rejects_unsupported_dtype():
+    from transformation_portal.utils.image_utils import quantize_unit_float
+
+    with pytest.raises(ValueError):
+        quantize_unit_float(np.zeros(3, dtype=np.float32), np.int16)

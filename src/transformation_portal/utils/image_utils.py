@@ -271,6 +271,20 @@ def fit_size_within(size: Tuple[int, int], bounds: Tuple[int, int]) -> Tuple[int
     return min(max_w, max(1, round(width * max_h / height))), max_h
 
 
+def quantize_unit_float(arr: np.ndarray, dtype: type = np.uint8) -> np.ndarray:
+    """Quantise a float array in [0, 1] to ``dtype`` (uint8 or uint16) by rounding.
+
+    ``(arr * 255).astype(np.uint8)`` truncates, which biases every conversion
+    half a level dark; repeated across processing stages the bias accumulates.
+    Values outside [0, 1] are clipped first so they cannot wrap around.
+    """
+    target = np.dtype(dtype)
+    if target not in (np.dtype(np.uint8), np.dtype(np.uint16)):
+        raise ValueError(f"quantize_unit_float supports uint8 and uint16, got {target}")
+    max_value = float(np.iinfo(target).max)
+    return np.rint(np.clip(arr, 0.0, 1.0) * max_value).astype(target)
+
+
 def load_image_rgb(path: Union[str, Path]) -> np.ndarray:
     """Load path into a float32 RGB NumPy array normalized to [0, 1].
 

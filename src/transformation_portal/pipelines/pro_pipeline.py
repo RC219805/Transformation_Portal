@@ -49,6 +49,7 @@ from transformation_portal.utils.image_utils import (
     atomic_output_path,
     convert_to_rgb,
     extract_output_metadata,
+    quantize_unit_float,
 )
 
 # Configure logging
@@ -655,7 +656,7 @@ class ProPipeline:
             detail = img_array - blurred
             enhanced = np.clip(img_array + detail * clarity_boost, 0, 1)
 
-            result = Image.fromarray((enhanced * 255).astype(np.uint8))
+            result = Image.fromarray(quantize_unit_float(enhanced))
 
             elapsed = time.time() - stage_start
             self.stats["stage_times"]["depth"] = self.stats["stage_times"].get("depth", 0) + elapsed
@@ -685,7 +686,7 @@ class ProPipeline:
             # Enhance contrast slightly
             img_array = np.clip((img_array - 0.5) * (1 + strength * 0.2) + 0.5, 0, 1)
 
-            result = Image.fromarray((img_array * 255).astype(np.uint8))
+            result = Image.fromarray(quantize_unit_float(img_array))
 
             elapsed = time.time() - stage_start
             self.stats["stage_times"]["ai"] = self.stats["stage_times"].get("ai", 0) + elapsed
@@ -718,7 +719,7 @@ class ProPipeline:
             detail = img_array - blurred
             enhanced = np.clip(img_array + detail * strength * 0.08, 0, 1)
 
-            result = Image.fromarray((enhanced * 255).astype(np.uint8))
+            result = Image.fromarray(quantize_unit_float(enhanced))
 
             elapsed = time.time() - stage_start
             self.stats["stage_times"]["material"] = self.stats["stage_times"].get("material", 0) + elapsed
@@ -755,7 +756,7 @@ class ProPipeline:
             enhanced = gray + (img_array - gray) * saturation
             enhanced = np.clip(enhanced, 0, 1)
 
-            result = Image.fromarray((enhanced * 255).astype(np.uint8))
+            result = Image.fromarray(quantize_unit_float(enhanced))
 
             elapsed = time.time() - stage_start
             self.stats["stage_times"]["grading"] = self.stats["stage_times"].get("grading", 0) + elapsed
@@ -785,7 +786,7 @@ class ProPipeline:
             sharpened = img_array + (img_array - blurred) * sharpen_amount
             sharpened = np.clip(sharpened, 0, 1)
 
-            result = Image.fromarray((sharpened * 255).astype(np.uint8))
+            result = Image.fromarray(quantize_unit_float(sharpened))
 
             elapsed = time.time() - stage_start
             self.stats["stage_times"]["finishing"] = self.stats["stage_times"].get("finishing", 0) + elapsed
@@ -844,11 +845,11 @@ class ProPipeline:
 
                 # Scale to bit depth
                 if self.config.bit_depth == 16:
-                    output_array = (linear_array * 65535).astype(np.uint16)
+                    output_array = quantize_unit_float(linear_array, np.uint16)
                 elif self.config.bit_depth == 32:
                     output_array = linear_array.astype(np.float32)
                 else:
-                    output_array = (linear_array * 255).astype(np.uint8)
+                    output_array = quantize_unit_float(linear_array)
 
                 # Save with tifffile
                 tiff_kwargs: Dict[str, Any] = {}

@@ -72,6 +72,7 @@ from transformation_portal.utils.image_utils import (
     atomic_output_path,
     convert_to_rgb,
     fit_size_within,
+    quantize_unit_float,
 )
 
 # Optional imports with graceful fallback
@@ -1094,7 +1095,7 @@ class UnifiedLuxuryPipeline:
                     if isinstance(enhanced, np.ndarray):
                         # Convert float32 to uint8 if needed
                         if enhanced.dtype == np.float32 or enhanced.dtype == np.float64:
-                            enhanced = (np.clip(enhanced, 0, 1) * 255).astype(np.uint8)
+                            enhanced = quantize_unit_float(enhanced)
                         return Image.fromarray(enhanced)
                     elif isinstance(enhanced, Image.Image):
                         return enhanced
@@ -1105,7 +1106,7 @@ class UnifiedLuxuryPipeline:
                         if isinstance(val, np.ndarray):
                             # Convert float32 to uint8 if needed
                             if val.dtype == np.float32 or val.dtype == np.float64:
-                                val = (np.clip(val, 0, 1) * 255).astype(np.uint8)
+                                val = quantize_unit_float(val)
                             return Image.fromarray(val)
                         elif isinstance(val, Image.Image):
                             return val
@@ -1114,7 +1115,7 @@ class UnifiedLuxuryPipeline:
             elif isinstance(result, np.ndarray):
                 # Convert float32 to uint8 if needed
                 if result.dtype == np.float32 or result.dtype == np.float64:
-                    result = (np.clip(result, 0, 1) * 255).astype(np.uint8)
+                    result = quantize_unit_float(result)
                 return Image.fromarray(result)
             elif isinstance(result, Image.Image):
                 return result
@@ -1355,7 +1356,7 @@ class UnifiedLuxuryPipeline:
         enhanced = np.clip(enhanced, 0.0, 1.0)
         log.info(f"    Strength: {strength:.2f}, Material Response v2.0")
 
-        return Image.fromarray((enhanced * 255).astype(np.uint8), "RGB")
+        return Image.fromarray(quantize_unit_float(enhanced), "RGB")
 
     def _apply_vfx_effects(self, image: Image.Image, params: Dict[str, Any]) -> Image.Image:
         """
@@ -1428,7 +1429,7 @@ class UnifiedLuxuryPipeline:
 
         arr = np.clip(arr, 0, 1)
 
-        return Image.fromarray((arr * 255).astype(np.uint8), "RGB")
+        return Image.fromarray(quantize_unit_float(arr), "RGB")
 
     def _apply_lut(self, arr: np.ndarray, lut_path: Path, strength: float) -> np.ndarray:
         """
@@ -1589,7 +1590,7 @@ class UnifiedLuxuryPipeline:
 
             # CRITICAL: Always clip to [0,1] before converting to 16-bit
             # This prevents float32 TIFFs with values outside [0,1] range
-            arr_16bit = (np.clip(arr_float, 0.0, 1.0) * 65535).astype(np.uint16)
+            arr_16bit = quantize_unit_float(arr_float, np.uint16)
             height, width = arr_16bit.shape[:2]
 
             # Extract ICC profile if available

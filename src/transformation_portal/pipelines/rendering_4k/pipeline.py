@@ -111,6 +111,7 @@ from ...utils.image_utils import (
     load_image,
     np_to_pil,
     pil_to_np,
+    quantize_unit_float,
 )
 from .quality import GPUMemoryManager, QualityAssessor
 
@@ -970,7 +971,7 @@ class Rendering4KPipeline:
             if self.config.ai_enhancement.use_depth_guidance and depth_map is not None:
                 # Convert depth map directly to RGB image for ControlNet
                 # Use squeeze() to handle both (H, W) and (H, W, 1) shapes
-                depth_uint8 = (depth_map.squeeze() * 255).astype(np.uint8)
+                depth_uint8 = quantize_unit_float(depth_map.squeeze())
                 # Stack grayscale to RGB channels directly
                 depth_rgb = np.stack([depth_uint8, depth_uint8, depth_uint8], axis=-1)
                 depth_pil = Image.fromarray(depth_rgb, mode="RGB").resize(image.size)
@@ -1027,7 +1028,7 @@ class Rendering4KPipeline:
         if self.config.output.master_tiff_16bit and HAS_TIFFFILE:
             tiff_path = output_dir / f"{stem}_MASTER.tiff"
             img_np = pil_to_np(image, to_float=True)
-            img_16bit = (np.clip(img_np, 0, 1) * 65535).astype(np.uint16)
+            img_16bit = quantize_unit_float(img_np, np.uint16)
             tiff_kwargs: Dict[str, Any] = {}
             if "icc_profile" in metadata:
                 tiff_kwargs["iccprofile"] = metadata["icc_profile"]
@@ -1056,7 +1057,7 @@ class Rendering4KPipeline:
         # Depth visualization
         if self.config.output.save_depth_visualization and depth_map is not None:
             depth_path = output_dir / f"{stem}_depth.png"
-            depth_vis = (depth_map * 255).astype(np.uint8)
+            depth_vis = quantize_unit_float(depth_map)
             depth_pil = Image.fromarray(depth_vis, mode="L")
             with atomic_output_path(depth_path) as temp_path:
                 depth_pil.save(temp_path)

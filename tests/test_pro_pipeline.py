@@ -643,6 +643,25 @@ def test_process_image_scales_16bit_greyscale_input(tmp_path):
         assert np.array_equal(np.asarray(out), np.full((8, 8, 3), 128, dtype=np.uint8))
 
 
+def test_five_stage_run_does_not_darken_mid_grey_noise(tmp_path):
+    """Regression for L-03: every stage truncated ``arr * 255`` to uint8, so a 5-stage run
+    on symmetric mid-grey noise lost about two levels of mean brightness (127.57 -> 125.56)."""
+    rng = np.random.default_rng(0)
+    noise = np.clip(rng.normal(127.5, 30, (128, 128, 1)).repeat(3, 2), 0, 255).round().astype(np.uint8)
+    source = tmp_path / "noise.png"
+    Image.fromarray(noise).save(source)
+    config = ProPipelineConfig(
+        input_path=source, output_dir=tmp_path / "out", preset=PipelinePreset.CUSTOM, device="cpu", output_format="png"
+    )
+
+    result = ProPipeline(config).process_image(source)
+
+    assert result is not None
+    with Image.open(result) as out:
+        shift = np.asarray(out).astype(np.float64).mean() - noise.mean()
+    assert abs(shift) < 0.25
+
+
 class TestUnsharpStagesStaySpatial:
     """The clarity / micro-contrast / sharpen stages are unsharp masks over the spatial axes only.
 
