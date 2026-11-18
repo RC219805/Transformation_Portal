@@ -147,7 +147,11 @@ For the opt-in managed V5 request and runtime configuration, see the
 If a broker heartbeat fails, the worker signals cancellation to its executor
 immediately because lease ownership cannot be confirmed. The executor must
 observe that signal and stop its subprocess; the worker waits for executor
-cleanup before releasing the lease. Release failures remain visible in worker
+cleanup before releasing the lease. A job stopped this way is recorded as
+`worker_lost` with `error.code = worker_lost_via_lease_reclaim` and
+`error.retriable = true`, the same classification the reclaim paths use; only
+a cancel that was actually requested is recorded as `canceled`. Release
+failures remain visible in worker
 logs and leave the lease for the existing reclaim sweep. Acquisition failures
 use the normal capped polling backoff so the worker can recover when Redis
 returns; they never trigger execution without a confirmed lease.

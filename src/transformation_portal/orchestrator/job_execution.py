@@ -26,12 +26,13 @@ from transformation_portal.orchestrator.execution_diagnostics import annotate_jo
 from transformation_portal.orchestrator.queue.base import JobEnqueueRequest
 from transformation_portal.orchestrator.storage.base import JobRecord, JobRepository, RepositoryError
 from transformation_portal.orchestrator.storage.operational import DispatchAuthorityLost
-from transformation_portal.orchestrator.worker import RetryableExecutorUnavailable
+from transformation_portal.orchestrator.worker import RetryableExecutorUnavailable, lease_was_lost
 
 LOGGER = logging.getLogger(__name__)
 TERMINAL_JOB_STATES = frozenset({"succeeded", "partial", "failed", "canceled", "worker_lost"})
 _active_plan: ContextVar[bytes | None] = ContextVar("job_execution_plan", default=None)
 _active_bindings: ContextVar[bytes | None] = ContextVar("job_execution_bindings", default=None)
+_active_cancellation: ContextVar[asyncio.Event | None] = ContextVar("job_execution_cancellation", default=None)
 
 
 class ExecutionJob(Protocol):
@@ -115,6 +116,35 @@ def execution_error(
     return result
 
 
+def _lease_lost() -> bool:
+    """True when the worker stopped this run because it could not confirm its lease."""
+    signal = _active_cancellation.get()
+    return signal is not None and lease_was_lost(signal)
+
+
+def _stop_requested(job: ExecutionJob) -> bool:
+    return job.cancel_requested or _lease_lost()
+
+
+def _mark_stopped(job: ExecutionJob) -> None:
+    """Classify a run that was stopped before it could finish.
+
+    Only an orchestrator-requested cancel is ``canceled``. A stop caused by an
+    unconfirmed lease is the worker's own infrastructure abort: it is recorded
+    like the reclaim paths, as ``worker_lost`` with a retriable error, so retry
+    tooling does not mistake it for a decision somebody made.
+    """
+    if job.cancel_requested:
+        job.state = "canceled"
+        return
+    job.state = "worker_lost"
+    job.error = execution_error(
+        "worker_lost_via_lease_reclaim",
+        "Worker could not confirm its lease and stopped the job; job marked worker_lost.",
+        retriable=True,
+    )
+
+
 class JobExecutionService(Generic[_JobT]):
     """The sole coordinator for accepted jobs, independent of the HTTP facade."""
 
@@ -151,7 +181,9 @@ class JobExecutionService(Generic[_JobT]):
             await cancellation_event.wait()
             # Signal the live subprocess immediately: it may be silent while
             # ``_run_job`` is awaiting stdout and never start another iteration.
-            if not job.cancel_requested:
+            # A lost lease stops the child the same way, but nobody asked for a
+            # cancel: ``cancel_requested`` stays reserved for requested cancels.
+            if not job.cancel_requested and not lease_was_lost(cancellation_event):
                 job.cancel_requested = True
             if job.proc is not None and (
                 job.proc.returncode is None or self.runtime.owned_process_group(job.proc) is not None
@@ -163,6 +195,7 @@ class JobExecutionService(Generic[_JobT]):
         execution_output_root = None
         plan_token = None
         bindings_token = None
+        cancellation_token = _active_cancellation.set(cancellation_event)
         try:
             if isinstance(request, DispatchLocator):
                 from transformation_portal.orchestrator.execution_dispatch import (
@@ -232,6 +265,7 @@ class JobExecutionService(Generic[_JobT]):
                 return 0
             await (run_job or self.run)(job, command)
         finally:
+            _active_cancellation.reset(cancellation_token)
             if plan_token is not None:
                 _active_plan.reset(plan_token)
             if bindings_token is not None:
@@ -260,8 +294,12 @@ class JobExecutionService(Generic[_JobT]):
         publishing_success = job.state in {"succeeded", "partial"}
 
         def require_publication_authority() -> None:
-            if job.cancel_requested and (publishing_success or job.state in {"succeeded", "partial"}):
+            if not (publishing_success or job.state in {"succeeded", "partial"}):
+                return
+            if job.cancel_requested:
                 raise DispatchAuthorityLost("publication canceled before generation commit")
+            if _lease_lost():
+                raise DispatchAuthorityLost("publication abandoned after the worker lost its lease")
 
         publisher_type = GenerationPublisher
         if schema == "tp.execution.plan.v5":
@@ -350,8 +388,8 @@ class JobExecutionService(Generic[_JobT]):
         try:
             if job.done_published_at is not None or job.finished_at is not None:
                 return
-            if job.cancel_requested:
-                job.state = "canceled"
+            if _stop_requested(job):
+                _mark_stopped(job)
                 return
             job.state = "running"
             job.started_at = self.runtime.now()
@@ -361,8 +399,8 @@ class JobExecutionService(Generic[_JobT]):
             # not launch native work after either path has withdrawn authority.
             if job.done_published_at is not None or job.finished_at is not None:
                 return
-            if job.cancel_requested:
-                job.state = "canceled"
+            if _stop_requested(job):
+                _mark_stopped(job)
                 return
             # NO SHELL EXECUTION.
             spawn_kwargs: Dict[str, Any] = {
@@ -385,8 +423,8 @@ class JobExecutionService(Generic[_JobT]):
                 except (OSError, RepositoryError, SQLAlchemyError, self.runtime.repository_unavailable) as exc:
                     raise RetryableExecutorUnavailable(job.id) from exc
                 # The authority read yields to the broker cancellation bridge.
-                if job.cancel_requested:
-                    job.state = "canceled"
+                if _stop_requested(job):
+                    _mark_stopped(job)
                     return
             proc = await asyncio.create_subprocess_exec(*argv, **spawn_kwargs)
             if spawn_kwargs.get("start_new_session"):
@@ -400,7 +438,7 @@ class JobExecutionService(Generic[_JobT]):
 
             while True:
                 if (
-                    job.cancel_requested
+                    _stop_requested(job)
                     and (proc.returncode is None or self.runtime.owned_process_group(proc) is not None)
                     and (job.terminate_task is None or job.terminate_task.done())
                 ):
@@ -447,8 +485,8 @@ class JobExecutionService(Generic[_JobT]):
             if job.done_published_at is not None or job.finished_at is not None:
                 return
             job.exit_code = int(rc)
-            if job.cancel_requested:
-                job.state = "canceled"
+            if _stop_requested(job):
+                _mark_stopped(job)
             else:
                 job.state = "succeeded" if rc == 0 else "failed"
                 if rc != 0:
@@ -629,11 +667,11 @@ class JobExecutionService(Generic[_JobT]):
                     await self._publish_fenced_result(job, fence)
                 except DispatchAuthorityLost:
                     LOGGER.warning("job %s publication rejected after authority loss", job.id)
-                    if job.cancel_requested:
-                        job.state = "canceled"
+                    if _stop_requested(job):
+                        _mark_stopped(job)
                         with suppress(DispatchAuthorityLost):
                             await self.runtime.operational_records().finish_dispatch(
-                                fence, state="canceled", exit_code=job.exit_code, error=job.error
+                                fence, state=job.state, exit_code=job.exit_code, error=job.error
                             )
                 except Exception:
                     LOGGER.exception("job %s generation publication failed", job.id)

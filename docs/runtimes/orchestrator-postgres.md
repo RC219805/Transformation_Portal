@@ -263,6 +263,10 @@ can renew the database fence. An independent monotonic deadline signals
 cancellation when either Redis or Postgres stalls; it does not wait for socket
 cancellation to finish. Pending network work prevents another lease acquisition,
 and connection/command timeouts bound cleanup after transport failures.
+A worker that stops its child because the lease could not be confirmed
+terminalizes the attempt as retriable `worker_lost`
+(`worker_lost_via_lease_reclaim`) while its fence is still valid; `canceled`
+is reserved for a requested cancel.
 Database-clock expiration terminalizes the attempt as `worker_lost` and releases its counters once. Expired locators are
 removed from Redis rather than requeued, and tombstones reject duplicate or
 late deliveries. An explicit retry submits a new job. API startup never

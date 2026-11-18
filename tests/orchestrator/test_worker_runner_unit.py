@@ -31,6 +31,7 @@ from transformation_portal.orchestrator.worker import (
     WorkerRunner,
     _config_from_env,
     _default_executor,
+    lease_was_lost,
     main,
     monotonic_now,
     run_worker_forever,
@@ -216,6 +217,32 @@ async def test_step_cancels_executor_when_heartbeat_io_fails() -> None:
     assert observations == ["started", "cancelled"]
     assert broker.released == ["job-1"]
     assert await runner.step() is False
+
+
+@pytest.mark.parametrize(
+    ("heartbeat_result", "expected_lease_lost"),
+    [
+        (LeaseStatus.cancelled, False),
+        (LeaseNotHeldError("w", "job-1"), True),
+        (ConnectionError("broker unavailable"), True),
+        (TimeoutError("timed out"), True),
+    ],
+)
+async def test_step_tells_executor_whether_a_cancel_was_requested_or_the_lease_was_lost(
+    heartbeat_result, expected_lease_lost
+) -> None:
+    broker = FakeBroker(leases=[_lease()], extend_results=[heartbeat_result])
+    observed = []
+
+    async def executor(request, cancel):
+        await asyncio.wait_for(cancel.wait(), timeout=1.0)
+        observed.append(lease_was_lost(cancel))
+        raise CancelledByOrchestrator()
+
+    runner = WorkerRunner(broker=broker, config=_config(heartbeat_interval_seconds=0.0), executor=executor)
+    assert await runner.step() is True
+    assert observed == [expected_lease_lost]
+    assert lease_was_lost(asyncio.Event()) is False  # a plain stop signal carries no reason
 
 
 async def test_step_contains_release_failure_after_executor_stops() -> None:

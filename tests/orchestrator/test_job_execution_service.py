@@ -25,7 +25,7 @@ from transformation_portal.orchestrator.queue.base import JobEnqueueRequest
 from transformation_portal.orchestrator.storage.base import RepositoryError
 from transformation_portal.orchestrator.storage.memory import MemoryJobEventStore, MemoryJobRepository
 from transformation_portal.orchestrator.storage.operational import DispatchAuthorityLost
-from transformation_portal.orchestrator.worker import RetryableExecutorUnavailable
+from transformation_portal.orchestrator.worker import RetryableExecutorUnavailable, WorkerCancellation
 
 pytestmark = pytest.mark.unit
 
@@ -235,7 +235,8 @@ async def test_managed_runner_persists_actionable_known_preprocess_failure(manag
 
 
 @pytest.mark.asyncio
-async def test_silent_managed_subprocess_is_reaped_on_cancellation(managed, monkeypatch):
+@pytest.mark.parametrize("lease_lost", [False, True])
+async def test_silent_managed_subprocess_is_reaped_on_cancellation(managed, monkeypatch, lease_lost):
     service, job, repository, _events, _artifacts, records, fence, _prepared = managed
     await repository.create(job)
     started = asyncio.Event()
@@ -249,11 +250,12 @@ async def test_silent_managed_subprocess_is_reaped_on_cancellation(managed, monk
         return proc
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
-    cancel = asyncio.Event()
+    cancel = WorkerCancellation()
     token = _dispatch_fence.set(fence)
     try:
         task = asyncio.create_task(service.execute(fence.locator, cancel))
         await asyncio.wait_for(started.wait(), timeout=5)
+        cancel.lease_lost = lease_lost
         cancel.set()
         await asyncio.wait_for(task, timeout=5)
     finally:
@@ -261,7 +263,14 @@ async def test_silent_managed_subprocess_is_reaped_on_cancellation(managed, monk
     assert child[0].returncode is not None
     assert not records.commits
     assert len(records.finishes) == 1
-    assert records.finishes[0]["state"] == "canceled"
+    if lease_lost:
+        # The worker's own abort is not a decision anybody made: it stays retriable.
+        assert records.finishes[0]["state"] == "worker_lost"
+        assert records.finishes[0]["error"]["code"] == "worker_lost_via_lease_reclaim"
+        assert records.finishes[0]["error"]["retriable"] is True
+    else:
+        assert records.finishes[0]["state"] == "canceled"
+        assert records.finishes[0]["error"] is None
 
 
 @pytest.mark.asyncio
@@ -520,7 +529,8 @@ async def test_managed_photography_revocation_rejects_pickup_before_spawn(manage
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("boundary", ["verification", "manifest_staging"])
-async def test_observed_cancellation_during_publication_cannot_commit_success(managed, monkeypatch, boundary):
+@pytest.mark.parametrize("lease_lost", [False, True])
+async def test_observed_cancellation_during_publication_cannot_commit_success(managed, monkeypatch, boundary, lease_lost):
     import threading
 
     from transformation_portal.lux_depth_v5.publication import _PublicationProfile
@@ -530,7 +540,7 @@ async def test_observed_cancellation_during_publication_cannot_commit_success(ma
     blocked = asyncio.Event()
     resume_stage = asyncio.Event()
     resume_verification = threading.Event()
-    cancellation = asyncio.Event()
+    cancellation = WorkerCancellation()
     loop = asyncio.get_running_loop()
 
     async def completed_child(*argv, **_kwargs):
@@ -580,6 +590,7 @@ async def test_observed_cancellation_during_publication_cannot_commit_success(ma
     task = asyncio.create_task(service.execute(fence.locator, cancellation))
     try:
         await asyncio.wait_for(blocked.wait(), timeout=5)
+        cancellation.lease_lost = lease_lost
         cancellation.set()
         await asyncio.sleep(0)  # Let the bridge observe loss before releasing publication I/O.
         resume_verification.set()
@@ -594,8 +605,16 @@ async def test_observed_cancellation_during_publication_cannot_commit_success(ma
         _dispatch_fence.reset(token)
     assert not records.commits
     assert len(records.finishes) == 1
-    assert records.finishes[0]["state"] == "canceled"
-    assert (await repository.get(job.id)).state == "canceled"
+    # Neither stop may commit the finished generation; only a requested cancel is ``canceled``.
+    expected_state = "worker_lost" if lease_lost else "canceled"
+    assert records.finishes[0]["state"] == expected_state
+    committed = await repository.get(job.id)
+    assert committed.state == expected_state
+    if lease_lost:
+        assert committed.error["code"] == "worker_lost_via_lease_reclaim"
+        assert committed.error["retriable"] is True
+    else:
+        assert committed.error is None
 
 
 @pytest.mark.asyncio
@@ -656,6 +675,139 @@ async def test_durable_cancellation_during_plan_fetch_is_checked_before_native_s
     assert not records.commits
     assert not records.finishes
     assert (await repository.get(job.id)).state == "canceled"
+
+
+async def _unfenced_service(output_dir, done_events, child_ready):
+    """The default local path: a raw command over the memory repository, no dispatch fence."""
+    from functools import partial
+
+    from transformation_portal.orchestrator import execution_process
+    from transformation_portal.orchestrator.execution_summary import refresh_job_run_summary
+    from transformation_portal.orchestrator.job_execution import ExecutionSettings, JobExecutionRuntime, JobExecutionService
+
+    repository = MemoryJobRepository()
+    job = execution_runtime.WorkerJob(id="job_unfenced", created_at=time.time(), request={"pipeline": "p"})
+    await repository.create(job)
+
+    async def load_job(_job_id):
+        return job
+
+    async def persist_fields(current, _context, **fields):
+        await repository.update(current.id, **fields)
+        return True
+
+    async def publish_event(_job_id, event, payload):
+        if event == "log" and payload["line"] == "ready":
+            child_ready.set()
+        if event == "done":
+            done_events.append(payload)
+
+    async def persist_state(current):
+        await repository.update(
+            current.id,
+            state=current.state,
+            exit_code=current.exit_code,
+            cancel_requested=current.cancel_requested,
+            error=current.error,
+            finished_at=current.finished_at,
+            done_published_at=current.done_published_at,
+        )
+
+    async def noop(*_args, **_kwargs):
+        return None
+
+    def fenced_only(*_args, **_kwargs):
+        pytest.fail("an unfenced run used a fenced publication port")
+
+    runtime = JobExecutionRuntime(
+        load_job=load_job,
+        cache_job=lambda current: current,
+        repository=lambda: repository,
+        repository_unavailable=RuntimeError,
+        persist_fields=persist_fields,
+        publish_event=publish_event,
+        now=time.time,
+        child_environment=lambda: dict(os.environ),
+        owned_process_group=execution_process._owned_process_group_id,
+        terminate_process=partial(execution_process._terminate_process, grace_seconds=1.0),
+        redact_log=execution_process._redact_log_line,
+        extract_progress=execution_process._extract_progress_percent,
+        index_artifacts=lambda _job: [],
+        refresh_summary=lambda current: refresh_job_run_summary(current, output_dir),
+        artifact_store=fenced_only,
+        operational_records=fenced_only,
+        flush_outbox=noop,
+        load_record=noop,
+        job_from_record=fenced_only,
+        mirror_artifacts=noop,
+        persist_state=persist_state,
+        cleanup_jobs=noop,
+        validate_paths=fenced_only,
+        resolve_output_root=fenced_only,
+        allow_legacy_commands=True,
+    )
+    return JobExecutionService(runtime, ExecutionSettings(cancel_grace_seconds=1.0)), repository, job
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stop", "expected_state"),
+    [
+        ("heartbeat_error", "worker_lost"),
+        ("broker_cancel", "canceled"),
+        ("requested_cancel_then_heartbeat_error", "canceled"),
+    ],
+)
+async def test_unconfirmed_lease_is_recorded_as_retriable_worker_lost_not_canceled(tmp_path, stop, expected_state):
+    """One heartbeat I/O error stops a healthy job although nobody asked for a cancel."""
+    from transformation_portal.orchestrator.queue.memory import MemoryQueueBroker
+    from transformation_portal.orchestrator.worker import WorkerConfig, WorkerRunner
+
+    # Run metadata that would promote an unfinished run to ``partial`` must not
+    # relabel either kind of stop.
+    (tmp_path / "manifests").mkdir()
+    (tmp_path / "manifests" / "batch_b1.json").write_text(
+        json.dumps({"batch_id": "b1", "results": [{"status": "ok"}, {"status": "error"}]}), encoding="utf-8"
+    )
+    done_events: list[dict] = []
+    child_ready = asyncio.Event()
+    service, repository, job = await _unfenced_service(tmp_path, done_events, child_ready)
+
+    class Broker(MemoryQueueBroker):
+        async def extend_lease(self, worker_id, job_id, *, lease_seconds):
+            await child_ready.wait()
+            if stop == "broker_cancel":
+                assert await self.cancel(job_id) is True
+                return await super().extend_lease(worker_id, job_id, lease_seconds=lease_seconds)
+            if stop == "requested_cancel_then_heartbeat_error":
+                # The API marks the shared runtime job before the broker can be told.
+                job.cancel_requested = True
+            raise ConnectionResetError("Connection reset by peer")
+
+    broker = Broker()
+    child = [sys.executable, "-c", "import time; print('ready', flush=True); time.sleep(30)"]
+    await broker.enqueue(JobEnqueueRequest(job_id=job.id, argv=child))
+    runner = WorkerRunner(
+        broker=broker,
+        config=WorkerConfig(worker_id="worker", lease_seconds=30.0, heartbeat_interval_seconds=0.01),
+        executor=service.execute,
+    )
+    assert await asyncio.wait_for(runner.step(), timeout=10) is True
+
+    assert job.proc is not None and job.proc.returncode is not None  # stopped and reaped either way
+    assert await broker.leased_job_ids() == []
+    record = await repository.get(job.id)
+    assert record.finished_at is not None
+    assert record.state == expected_state
+    assert [event["state"] for event in done_events] == [expected_state]
+    assert done_events[0]["error"] == record.error
+    if expected_state == "worker_lost":
+        assert record.cancel_requested is False
+        assert record.error["code"] == "worker_lost_via_lease_reclaim"
+        assert record.error["retriable"] is True
+    else:
+        assert record.cancel_requested is True
+        assert record.error is None
 
 
 @pytest.mark.parametrize("name", ["TP_DATABASE_URL", "TP_REDIS_URL", "DATABASE_URL", "REDIS_URL"])

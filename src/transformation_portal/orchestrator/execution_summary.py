@@ -257,7 +257,9 @@ def refresh_job_run_summary(job: ExecutionJob, output_dir: Path | None) -> Dict[
 
     job.run_summary = summary
 
-    if job.state != "canceled" and summary.get("partial"):
+    # A stopped run (requested cancel or lost worker) is never a partial success,
+    # whatever run metadata its output directory holds.
+    if job.state not in {"canceled", "worker_lost"} and summary.get("partial"):
         job.state = "partial"
         existing_code = ""
         if isinstance(job.error, dict):
