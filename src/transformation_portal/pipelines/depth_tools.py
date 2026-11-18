@@ -19,7 +19,9 @@ Modes supported: haze | clarity | dof
 
 Depth maps expected: *_depth16.png (or other high-bit-depth formats)
 Mask files (optional): _mask_sky.png, _mask_building.png, etc.
-Enhanced images: searched recursively for files matching base + priority tags.
+Enhanced images: searched recursively for files matching base + priority tags. The base must be followed by the
+extension, a separator or a priority tag (lot1 never pairs with lot10_enh.jpg). Depth maps that resolve to the
+same source image or output name are reported as errors and not processed.
 
 Designed to be robust for large photography / architectural pipelines.
 """
@@ -32,6 +34,7 @@ import glob
 import logging
 import math
 import os
+import re
 import time
 from collections import OrderedDict
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
@@ -353,6 +356,21 @@ def bilateral_blur_float(
 # ----- file discovery -----
 
 
+def _name_belongs_to_base(name: str, base: str, tags: Tuple[str, ...]) -> bool:
+    """
+    True when file name 'name' (known to start with 'base') belongs to 'base' itself.
+
+    The base must end where the name ends, at a separator (any non-alphanumeric character, which includes the
+    dot of the extension) or directly at a priority tag. A letter or digit there means a longer base that merely
+    shares the prefix: 'lot10_enh.jpg' is not a file of 'lot1'.
+    """
+    rest = name[len(base) :]
+    if not rest or not rest[0].isalnum():
+        return True
+    rest_low = rest.lower()
+    return any(rest_low.startswith(tag.lower()) for tag in tags)
+
+
 def find_file_for_base(
     root: str,
     base: str,
@@ -361,18 +379,21 @@ def find_file_for_base(
     extensions: Optional[Tuple[str, ...]] = None,
 ) -> Optional[str]:
     """
-    Search recursively under root for files starting with 'base' and matching priority tags.
+    Search recursively under root for the files of 'base' and return the one with the best priority tag.
+
+    A file belongs to 'base' when its name is 'base' followed by the extension, a separator or a priority tag
+    (see _name_belongs_to_base); 'base' is matched literally, not as a glob pattern.
     Returns best matching path or None.
     """
     tags = priority_tags or PRIORITY_TAGS
     exts = extensions or SUPPORTED_EXTENSIONS
-    pattern = os.path.join(root, "**", f"{base}{pattern_suffix}")
+    pattern = os.path.join(root, "**", f"{glob.escape(base)}{pattern_suffix}")
     candidates: List[str] = []
     for path in glob.glob(pattern, recursive=True):
         name = os.path.basename(path)
         low = name.lower()
-        if any(low.endswith(ext.lower()) for ext in exts):
-            # Accept all matching files, but prioritize by tag
+        if any(low.endswith(ext.lower()) for ext in exts) and _name_belongs_to_base(name, base, tags):
+            # Accept all files of this base, but prioritize by tag
             candidates.append(path)
     if not candidates:
         return None
@@ -422,10 +443,10 @@ def save_image_rgb(path: str, rgb01: np.ndarray, fmt: str = "tif", quality: int 
     rgb8 = (np.clip(rgb01, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
     stem = str(Path(path).with_suffix(""))
     fmt = fmt.lower()
-    if fmt in ("tif", "ti") and _TIFFFILE_AVAILABLE:
+    if fmt in ("tif", "tiff", "ti") and _TIFFFILE_AVAILABLE:
         out = f"{stem}.tif"
         tiff.imwrite(out, rgb8, compression="deflate", photometric="rgb")
-    elif fmt in ("tif", "ti") and not _TIFFFILE_AVAILABLE:
+    elif fmt in ("tif", "tiff", "ti") and not _TIFFFILE_AVAILABLE:
         _log.debug("tifffile not available - falling back to PNG for %s", path)
         out = f"{stem}.png"
         Image.fromarray(rgb8).save(out, optimize=True)
@@ -722,12 +743,45 @@ class BatchOptions:
     falloff: float = 1.4
 
 
+# The batch globs "*_depth16.*": strip that suffix whatever the extension (.png, .tif, .tiff, ...).
+_DEPTH16_SUFFIX_RE = re.compile(r"_depth16\.[^.]+$")
+
+
+def _depth_map_base(dp: str) -> str:
+    """Base name shared by a depth map and its source image (depth map file name without the _depth16 suffix)."""
+    return _DEPTH16_SUFFIX_RE.sub("", os.path.basename(dp))
+
+
+def _find_pairing_collisions(depth_maps: List[str], opts: BatchOptions) -> Dict[str, str]:
+    """
+    Map every depth map that cannot be paired unambiguously to the error to report for it.
+
+    The output file is named after the source image. Depth maps that resolve to the same source image, or to
+    equally named source images in different folders, would therefore write the same output file: one photograph
+    would receive the depth of another and one output would never be produced. Neither is processed.
+    """
+    claims: Dict[str, List[Tuple[str, str]]] = {}
+    for dp in depth_maps:
+        src = find_file_for_base(opts.images_root, _depth_map_base(dp), pattern_suffix="*")
+        if src is not None:
+            claims.setdefault(os.path.splitext(os.path.basename(src))[0], []).append((dp, src))
+
+    collisions: Dict[str, str] = {}
+    for stem, group in claims.items():
+        if len(group) > 1:
+            pairs = ", ".join(f"{os.path.basename(dp)} -> {src}" for dp, src in group)
+            message = f"Ambiguous pairing: {len(group)} depth maps resolve to the same output name '{stem}' ({pairs})"
+            for dp, _ in group:
+                collisions[dp] = message
+    return collisions
+
+
 def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Optional[str]]:
     """
     Process a single depth map path (dp). Returns tuple (base, out_path or None, error or None).
     This helper is suitable for running in a child process as long as dependencies are available.
     """
-    base = os.path.basename(dp).replace("_depth16.png", "").replace("_depth16.tif", "").replace("_depth16.ti", "")
+    base = _depth_map_base(dp)
     try:
         # find source image
         src = find_file_for_base(opts.images_root, base, pattern_suffix="*")
@@ -823,6 +877,17 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
         opts.mode,
         opts.workers,
     )
+
+    # Fail closed on ambiguous pairings before anything is written
+    collisions = _find_pairing_collisions(depth_maps, opts)
+    for dp, err in collisions.items():
+        base = _depth_map_base(dp)
+        done += 1
+        errors.append((base, err))
+        _log.warning("Base %s failed: %s", base, err)
+        if progress:
+            progress(done, total, base)
+    depth_maps = [dp for dp in depth_maps if dp not in collisions]
 
     if opts.workers > 1:
         # Use multiprocessing
