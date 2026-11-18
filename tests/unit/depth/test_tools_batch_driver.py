@@ -677,3 +677,36 @@ def test_main_maps_clarity_cli_options_to_batch_options(tmp_path, monkeypatch: p
     assert opts.radius == 5
     assert opts.near == pytest.approx(25.0)
     assert opts.far == pytest.approx(75.0)
+
+
+def test_process_batch_does_not_retain_depth_maps_or_masks_in_the_caches(tmp_path) -> None:
+    # Every depth map and mask of a batch is read exactly once, so the per-process LRU caches must not keep
+    # them alive (they would hold up to DEFAULT_CACHE_SIZE full-resolution float32 arrays with a 0 % hit rate).
+    images = tmp_path / "images"
+    depths = tmp_path / "depths"
+    masks = tmp_path / "masks"
+    output = tmp_path / "out"
+    for d in (images, depths, masks, output):
+        d.mkdir()
+    for name in ("villa", "manor"):
+        _write_rgb(images / f"{name}_enh.png")
+        _write_depth(depths / f"{name}_depth16.png")
+        Image.fromarray(np.full((8, 8), 255, dtype=np.uint8), mode="L").save(masks / f"{name}_mask_sky.png")
+        Image.fromarray(np.full((8, 8), 128, dtype=np.uint8), mode="L").save(masks / f"{name}_mask_building.png")
+    tools.clear_all_caches()
+
+    opts = tools.BatchOptions(
+        images_root=str(images),
+        depths_root=str(depths),
+        out_root=str(output),
+        mask_root=str(masks),
+        mode="haze",
+        fmt="png",
+        workers=1,
+    )
+    errors = tools.process_batch(opts)
+
+    assert errors == 0
+    assert sorted(p.name for p in output.iterdir()) == ["manor_enh_depthhaze.png", "villa_enh_depthhaze.png"]
+    assert tools._depth_cache.stats()["size"] == 0
+    assert tools._mask_cache.stats()["size"] == 0

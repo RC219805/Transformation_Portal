@@ -852,13 +852,15 @@ def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Op
 
         img = load_image_rgb(src)
         H, W = img.shape[:2]
-        depth = load_depth_normalized(dp, target_size=(H, W), method="percentile", use_cache=True)
+        # A batch reads every depth map and mask exactly once (one depth map per base, masks named after the base),
+        # so caching them would only keep up to DEFAULT_CACHE_SIZE full-resolution arrays alive per process.
+        depth = load_depth_normalized(dp, target_size=(H, W), method="percentile", use_cache=False)
 
         sky_path = find_mask_for_base(opts.mask_root, base, "sky") if opts.mask_root else None
         building_path = find_mask_for_base(opts.mask_root, base, "building") if opts.mask_root else None
-        sky_mask = load_mask(sky_path, "sky", (H, W), use_cache=True) if sky_path else np.zeros((H, W), dtype=np.float32)
+        sky_mask = load_mask(sky_path, "sky", (H, W), use_cache=False) if sky_path else np.zeros((H, W), dtype=np.float32)
         building_mask = (
-            load_mask(building_path, "building", (H, W), use_cache=True)
+            load_mask(building_path, "building", (H, W), use_cache=False)
             if building_path
             else np.zeros((H, W), dtype=np.float32)
         )
