@@ -819,7 +819,11 @@ class AsyncPipeline:
         Args:
             max_queue_size: Maximum queue size between stages
             worker_pool: Shared worker pool (created if not provided)
-            stop_on_error: Stop pipeline on first error
+            stop_on_error: Stop pipeline on first error. Within an item, any
+                failed stage ends that item; within ``process_batch`` and
+                ``process_streaming``, no further items are started after the
+                first failed item (items already in flight drain and are
+                still yielded).
         """
         self._stages: List[AsyncStage] = []
         self._queues: List[BackpressureQueue] = []
@@ -900,6 +904,11 @@ class AsyncPipeline:
 
         self._active = False
 
+    @staticmethod
+    def _work_item_failed(work_item: WorkItem) -> bool:
+        """Return True when any stage of ``work_item`` failed."""
+        return any(result.failed for result in work_item.stage_results)
+
     async def process_item(self, item: Any) -> WorkItem:
         """Process a single item through all stages.
 
@@ -949,6 +958,7 @@ class AsyncPipeline:
         item_iterator = iter(items)
         pending: Dict[asyncio.Task[WorkItem[Any]], Any] = {}
         shutdown_waiter = asyncio.create_task(self._shutdown_event.wait())
+        stop_scheduling = False
 
         def build_failed_work_item(item: Any, error: Exception) -> WorkItem[Any]:
             work_item = WorkItem(id=str(id(item)), data=item, metadata={"error": str(error)})
@@ -966,7 +976,7 @@ class AsyncPipeline:
             return work_item
 
         def schedule_pending_work() -> None:
-            while len(pending) < max_concurrent and not self._shutdown_event.is_set():
+            while len(pending) < max_concurrent and not stop_scheduling and not self._shutdown_event.is_set():
                 try:
                     item = next(item_iterator)
                 except StopIteration:
@@ -989,9 +999,11 @@ class AsyncPipeline:
                     except asyncio.CancelledError:
                         continue
                     except Exception as e:
-                        yield build_failed_work_item(item, e)
-                    else:
-                        yield work_item
+                        work_item = build_failed_work_item(item, e)
+                    if self._stop_on_error and self._work_item_failed(work_item):
+                        # Stop scheduling new items; in-flight items drain below.
+                        stop_scheduling = True
+                    yield work_item
 
                 if shutdown_waiter in done:
                     for task in pending:
@@ -1037,6 +1049,9 @@ class AsyncPipeline:
 
             work_item = await self.process_item(item)
             yield work_item
+
+            if self._stop_on_error and self._work_item_failed(work_item):
+                break
 
         self._metrics.total_processing_time = time.time() - start_time
         self._metrics.update_throughput()
