@@ -245,3 +245,79 @@ def test_extract_artifacts_ignores_negated_clauses_and_partial_words() -> None:
 
     assert validator._extract_artifacts("ARTIFACTS: None. No halos or noise are visible.") == []
     assert validator._extract_artifacts("ARTIFACTS: no noise, but visible halos around windows.") == ["halo"]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # A verdict menu after the label is not an answer, whatever its separators.
+        ("Rating: PASS, WARNING or FAIL. My answer is FAIL.", ValidationStatus.WARNING),
+        ("Rating: pass or fail? I would say fail.", ValidationStatus.FAIL),
+        ("The result: pass? Hard to say, it fails on geometry.", ValidationStatus.FAIL),
+        # Any "...n't" contraction negates, also a few words before the verdict.
+        ("I don't think this would pass.", ValidationStatus.FAIL),
+        ("This shouldn\u2019t pass review.", ValidationStatus.FAIL),
+        ("It does not really quite pass.", ValidationStatus.FAIL),
+        # A denied failure next to an unnegated pass is a pass.
+        ("Overall: pass, no critical issues. Nothing fails.", ValidationStatus.PASS),
+        ("PASS - no failures detected.", ValidationStatus.PASS),
+        # A conjunction ends the reach of a negation.
+        ("There are no issues so pass.", ValidationStatus.PASS),
+        # A pass qualified by a warning is not a clean pass.
+        ("PASS with a warning about noise in the shadows.", ValidationStatus.WARNING),
+    ],
+)
+def test_quick_verdict_menus_contractions_and_negation_reach(text: str, expected: ValidationStatus) -> None:
+    assert _validator(text)._quick_verdict(text) is expected
+
+
+@pytest.mark.parametrize(
+    ("section", "expected"),
+    [
+        # Inflected forms the substring matcher used to find.
+        ("Slightly blurry edges and some haloing around windows", ["halo", "haloing", "blur"]),
+        ("blurred background, inconsistently lit walls, unnaturally smooth floor", ["blur", "inconsistent", "unnatural"]),
+        ("minor distortions and artifacting", ["distortion", "artifact"]),
+        # ... but not unrelated longer words.
+        ("a noiseless sky lit by halogen lamps", []),
+        # A contrast word or a colon ends a denial.
+        ("No major artifacts, though slight halos remain around the windows", ["halo"]),
+        ("None, except banding in the sky", ["banding"]),
+        ("Not perfect: halos around windows", ["halo"]),
+        # A denied list stays denied; a presence word asserts again.
+        ("No visible halos, color banding, or compression artifacts", []),
+        ("No halos, noticeable noise in the shadows", ["noise"]),
+        ("None visible, there are no halos or noise", []),
+        ("None", []),
+    ],
+)
+def test_extract_artifacts_inflections_and_denied_lists(section: str, expected: list[str]) -> None:
+    validator = _validator(_detailed_response())
+
+    assert validator._extract_artifacts(f"ARTIFACTS: {section}") == expected
+
+
+@pytest.mark.parametrize(
+    ("issues_line", "expected"),
+    [
+        ("There are none", []),
+        ("minor; otherwise none", []),
+        ("No issues", []),
+        ("No significant issues", []),
+        ("N/A", []),
+        ("nonexistent shadows under the table", ["nonexistent shadows under the table"]),
+        ("no door handles on the cabinets", ["no door handles on the cabinets"]),
+    ],
+)
+def test_aspect_issue_line_reporting_no_issue(issues_line: str, expected: list[str]) -> None:
+    text = (
+        f"2. STRUCTURAL ACCURACY: Score: 6/10\nIssues: {issues_line}\n3. MATERIAL CONSISTENCY: Score: 9/10\nIssues: warped\n"
+    )
+
+    assert _validator(_detailed_response())._extract_issues_for_aspect(text, "structural accuracy") == expected
+
+
+def test_aspect_issues_stop_at_a_markdown_heading() -> None:
+    text = "**1. PHOTOGRAPHIC REALISM:** 9/10\n**2. STRUCTURAL ACCURACY:** 3/10\nIssues: warped door frame\n"
+
+    assert _validator(_detailed_response())._extract_issues_for_aspect(text, "photographic realism") == []

@@ -29,6 +29,9 @@ logger = logging.getLogger(__name__)
 _SPACE_TYPE_LINE_RE = re.compile(r"space\s+type\s*:\s*([^\n]*)", re.IGNORECASE)
 # A numbered section heading of the structured analysis ("7. NOTES: ...").
 _NUMBERED_HEADING_RE = re.compile(r"^\s*\d+\.\s+\S")
+# The "LIGHTING:" label at the start of a line ("6. LIGHTING:", "**LIGHTING:**"),
+# as opposed to a mention inside another answer ("accent lighting: warm").
+_LIGHTING_HEADING_RE = re.compile(r"(?m)^[^\w\n]*(?:\d+\W*)?lighting\s*:")
 
 
 def _resolve_llava_processor_class() -> Any:
@@ -207,12 +210,12 @@ Provide your analysis in this exact format with clear sections."""
         """Classify a space type from whole-word keywords."""
         text_lower = text.lower()
 
-        if re.search(r"\b(?:aerial|overhead|drone)\b", text_lower):
+        if re.search(r"\b(?:aerials?|overhead|drones?)\b", text_lower):
             return SpaceType.AERIAL
-        elif re.search(r"\b(?:exterior|outdoors?|facade)\b", text_lower):
+        elif re.search(r"\b(?:exteriors?|outdoors?|facades?)\b", text_lower):
             return SpaceType.EXTERIOR
-        # "room" also matches as a suffix (bedroom, bathroom), as before.
-        elif re.search(r"\b(?:interior|indoors?)\b|room\b", text_lower):
+        # "room" also matches as a suffix (bedroom, bathrooms), as before.
+        elif re.search(r"\b(?:interiors?|indoors?)\b|rooms?\b", text_lower):
             return SpaceType.INTERIOR
 
         return SpaceType.UNKNOWN
@@ -332,8 +335,11 @@ Provide your analysis in this exact format with clear sections."""
         found_features = []
 
         for feature in features:
-            # Whole words (plural allowed): "spa" must not match "space".
-            if re.search(rf"\b{re.escape(feature)}(?:s|es)?\b", text_lower):
+            # A feature starts a word and may carry a suffix (customized, high
+            # ceilings). A short keyword must be the whole word, plural allowed:
+            # "spa" must not match "space" or "spacious".
+            tail = r"(?:s|es)?\b" if len(feature) <= 3 else ""
+            if re.search(rf"\b{re.escape(feature)}{tail}", text_lower):
                 found_features.append(feature)
 
         return found_features
@@ -344,9 +350,15 @@ Provide your analysis in this exact format with clear sections."""
 
         # Look for lighting section
         if "lighting:" in text_lower:
-            # Extract text after the first "lighting:" label; when the label ends its
-            # line ("6. LIGHTING:\nnatural light") the answer is on the next line.
-            after = text_lower.split("lighting:", 1)[1].split("\n")
+            # The answer follows the last "LIGHTING:" label that starts a line: an
+            # echoed prompt precedes the answers, and a later mention inside another
+            # answer ("accent lighting: warm") is not the label. Without such a line
+            # the last "lighting:" anywhere is used, as before. When the label ends
+            # its line ("6. LIGHTING:\nnatural light") the answer is on the next line.
+            headings = list(_LIGHTING_HEADING_RE.finditer(text_lower))
+            tail = text_lower[headings[-1].end() :] if headings else text_lower.split("lighting:")[-1]
+            # Markdown emphasis closing the label ("**LIGHTING:**") is not an answer.
+            after = tail.lstrip("*_").split("\n")
             if after[0].strip():
                 return after[0].strip()
             if len(after) > 1 and after[1].strip() and not _NUMBERED_HEADING_RE.match(after[1]):

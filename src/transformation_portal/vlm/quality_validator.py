@@ -34,22 +34,47 @@ _VERDICT_TOKEN_RE = re.compile(
     re.IGNORECASE,
 )
 # An explicit rating label followed by exactly one verdict ("Rating: FAIL"), but not
-# the prompt's own "PASS / WARNING / FAIL" menu echoed back.
+# a menu of verdicts echoed back ("PASS / WARNING / FAIL", "PASS, WARNING or FAIL")
+# or a question ("Result: pass?"), which leave the decision to the rest of the text.
 _EXPLICIT_VERDICT_RE = re.compile(
-    r"\b(?:rate(?:d)?\s+overall|overall\s+rating|rating|verdict|result)\s*[:\-]\s*\**\s*(pass|warning|fail)\b(?!\s*/)",
+    r"\b(?:rate(?:d)?\s+overall|overall\s+rating|rating|verdict|result)\s*[:\-]\s*\**\s*(pass|warning|fail)\b"
+    r"(?!\s*(?:[/,|?]|or\b))",
     re.IGNORECASE,
 )
-# Negation words that, shortly before a verdict token, reverse it ("would not pass").
+# Negation words that, shortly before a verdict token, reverse it ("would not pass",
+# "I don't think this would pass"). Any "...n't" contraction counts; a conjunction
+# between the negation and the token ends its reach ("no issues so pass").
 _NEGATION_BEFORE_RE = re.compile(
-    r"\b(?:not|never|no|cannot|can't|won't|wouldn't|doesn't|didn't|isn't|unlikely\s+to)\s+(?:\w+\s+){0,2}$",
+    r"(?:\b(?:not|never|no|nor|neither|nothing|cannot|hardly|unlikely\s+to|unable\s+to)|\b\w+n['\u2019]t)\s+"
+    r"(?:(?!(?:but|so|and|yet|though|although|however|still|then)\b)\w+\s+){0,3}$",
     re.IGNORECASE,
 )
-# A line that opens the next section of the detailed assessment.
-_SECTION_HEADING_RE = re.compile(r"^\s*(?:\d+\.\s+\S|artifacts\s*:|recommendations\s*:|overall\s+assessment)", re.IGNORECASE)
+# A line that opens the next section of the detailed assessment (markdown emphasis
+# or heading marks may precede the number).
+_SECTION_HEADING_RE = re.compile(
+    r"^[\s*#]*(?:\d+\.\s+\S|artifacts\s*:|recommendations\s*:|overall\s+assessment)", re.IGNORECASE
+)
 # Artifact clauses that deny the artifact ("No halos or noise are visible", "None").
 _NEGATED_CLAUSE_RE = re.compile(r"^\W*(?:no|none|not|n/a|without|free\s+of|nothing)\b", re.IGNORECASE)
-_CLAUSE_SPLIT_RE = re.compile(r"[.;!?\n]|\bbut\b|\bhowever\b", re.IGNORECASE)
-_NO_ISSUES_RE = re.compile(r"^\W*(?:none|n/?a|no\s+issues?)\b", re.IGNORECASE)
+# Clause boundaries: a contrast word starts a new clause, so the artifact asserted
+# after a denial is kept ("No major artifacts, though slight halos remain").
+_CLAUSE_SPLIT_RE = re.compile(
+    r"[.;:!?\n]|\b(?:but|however|though|although|except|yet|apart\s+from|aside\s+from|other\s+than)\b",
+    re.IGNORECASE,
+)
+# Inside a denied list ("no halos, banding or noise") an item that opens with a
+# presence word asserts again ("no halos, some noise in the shadows").
+_PRESENCE_START_RE = re.compile(
+    r"^\s*(?:and\s+)?(?:some|slight(?:ly)?|minor|mild|moderate|noticeable|visible|obvious|significant|severe|heavy"
+    r"|strong|faint|subtle|a\s+(?:bit|few|little|lot))\b",
+    re.IGNORECASE,
+)
+# Inflected forms of an artifact keyword that still name it (blurry, blurred,
+# haloing, inconsistently, artifacts); other longer words do not (noiseless).
+_ARTIFACT_SUFFIX = r"(?:s|es|y|ry|ed|red|ing|ring|ly)?"
+# An issues line that reports no issue: "none" / "n/a" anywhere ("there are none"),
+# or an opening "no issues" / "no significant issues" / "nothing".
+_NO_ISSUES_RE = re.compile(r"\bnone\b|\bn/a\b|^\W*(?:na\b|nothing\b|no\s+(?:\w+\s+){0,2}issues?\b)", re.IGNORECASE)
 
 
 def _resolve_llava_processor_class() -> Any:
@@ -484,7 +509,7 @@ List any critical issues found."""
         if "issues:" in section:
             issues_text = section.split("issues:", 1)[1].split("\n")[0]
             # Clean and split
-            if not issues_text.strip() or _NO_ISSUES_RE.match(issues_text):
+            if not issues_text.strip() or _NO_ISSUES_RE.search(issues_text):
                 return []
             return [issues_text.strip()]
 
@@ -520,14 +545,27 @@ List any critical issues found."""
 
             # Only clauses that assert an artifact count: "No halos or noise are
             # visible" denies both keywords it contains.
-            asserted = " | ".join(
-                clause for clause in _CLAUSE_SPLIT_RE.split(artifacts_section) if not _NEGATED_CLAUSE_RE.match(clause)
-            )
+            asserted = " | ".join(self._asserted_text(clause) for clause in _CLAUSE_SPLIT_RE.split(artifacts_section))
             for keyword in artifact_keywords:
-                if re.search(rf"\b{re.escape(keyword)}s?\b", asserted):
+                if re.search(rf"\b{re.escape(keyword)}{_ARTIFACT_SUFFIX}\b", asserted):
                     artifacts.append(keyword)
 
         return artifacts
+
+    @staticmethod
+    def _asserted_text(clause: str) -> str:
+        """Return the part of an artifact clause that asserts artifacts.
+
+        A clause that opens with a denial denies the whole comma list after it,
+        up to the first item that opens with a presence word.
+        """
+        if not _NEGATED_CLAUSE_RE.match(clause):
+            return clause
+        items = clause.split(",")
+        for index, item in enumerate(items[1:], start=1):
+            if _PRESENCE_START_RE.match(item):
+                return ",".join(items[index:])
+        return ""
 
     def _extract_issues_quick(self, text: str) -> List[str]:
         """Extract issues from quick assessment."""
