@@ -28,10 +28,13 @@ Example:
 from __future__ import annotations
 
 import logging
+import math
+import os
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import PurePath
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
@@ -103,6 +106,55 @@ class SchedulingDecision:
 
 class SchedulerError(RuntimeError):
     """Raised for scheduler errors."""
+
+
+def _wire_value(value: Any, where: str) -> Any:
+    """Return ``value`` as JSON-native data, or raise :class:`SchedulerError`.
+
+    Paths become strings; tuples become lists. Anything else that a JSON
+    transport cannot carry (classes, objects, NaN, non-string keys) fails
+    closed before the task leaves the scheduler.
+    """
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise SchedulerError(f"Task field {where} is not a finite number")
+        return value
+    if isinstance(value, PurePath):
+        return os.fspath(value)
+    if isinstance(value, (list, tuple)):
+        return [_wire_value(item, f"{where}[{index}]") for index, item in enumerate(value)]
+    if isinstance(value, dict):
+        wire: Dict[str, Any] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise SchedulerError(f"Task field {where} has a non-string key: {key!r}")
+            wire[key] = _wire_value(item, f"{where}.{key}")
+        return wire
+    raise SchedulerError(f"Task field {where} is not wire-serializable: {type(value).__name__}")
+
+
+def task_to_wire(task: "ProcessTask") -> Dict[str, Any]:
+    """Build the explicit wire payload sent to a remote worker for ``task``.
+
+    ``node_cls`` is sent as its importable ``"module:qualname"`` reference;
+    the remaining fields must be JSON-native (paths are sent as strings).
+
+    Raises:
+        SchedulerError: If the task cannot be represented on the wire.
+    """
+    node_cls = task.node_cls
+    module = getattr(node_cls, "__module__", None)
+    qualname = getattr(node_cls, "__qualname__", None)
+    if not isinstance(node_cls, type) or not module or not qualname or "<locals>" in qualname:
+        raise SchedulerError(f"Task node_cls is not an importable class: {node_cls!r}")
+    return {
+        "node_cls": f"{module}:{qualname}",
+        "node_kwargs": _wire_value(task.node_kwargs, "node_kwargs"),
+        "inputs": _wire_value(task.inputs, "inputs"),
+        "sandbox_config": _wire_value(task.sandbox_config, "sandbox_config"),
+    }
 
 
 class ClusterAutoscheduler:
@@ -200,13 +252,18 @@ class ClusterAutoscheduler:
     def heartbeat(self, worker_id: str) -> None:
         """Update worker heartbeat timestamp.
 
+        A heartbeat brings an ``OFFLINE`` worker back ``ONLINE``; it never
+        overrides an operator-set ``DRAINING`` or ``BUSY`` status.
+
         Args:
             worker_id: Worker identifier
         """
         with self._lock:
             if worker_id in self._workers:
-                self._workers[worker_id].last_heartbeat = time.time()
-                self._workers[worker_id].status = WorkerStatus.ONLINE
+                state = self._workers[worker_id]
+                state.last_heartbeat = time.time()
+                if state.status == WorkerStatus.OFFLINE:
+                    state.status = WorkerStatus.ONLINE
 
     def update_cas_index(
         self,
@@ -387,14 +444,17 @@ class ClusterAutoscheduler:
             required_memory_gb: Required memory
             input_shas: Input CAS hashes for locality
             required_capabilities: Required capabilities
-            send_fn: Function to send task (default: distributed_client.send_task)
+            send_fn: Function to send task (default: distributed_client.send_task);
+                it receives the :func:`task_to_wire` payload
 
         Returns:
             Task outputs
 
         Raises:
-            SchedulerError: If dispatch fails
+            SchedulerError: If dispatch fails or the task cannot be serialized
         """
+        payload = task_to_wire(task)
+
         # Select worker
         decision = self.select_worker(
             requires_gpu=requires_gpu,
@@ -424,7 +484,7 @@ class ClusterAutoscheduler:
 
                 send_fn = send_task
 
-            result = send_fn(worker.host, worker.port, task.__dict__)
+            result = send_fn(worker.host, worker.port, payload)
 
             if result.get("error"):
                 raise SchedulerError(f"Task failed: {result['error']}")
@@ -454,12 +514,13 @@ class ClusterAutoscheduler:
     def scale_check(self) -> None:
         """Check if scaling is needed.
 
-        Calls scale_up if all workers busy, scale_down if many idle.
+        Calls scale_up if no worker is available or every available worker
+        has active tasks (load > 0), scale_down if many idle.
         """
         with self._lock:
             available = [w for w in self._workers.values() if w.is_available()]
 
-            if not available and self._scale_up_callback:
+            if all(w.load > 0 for w in available) and self._scale_up_callback:
                 logger.info("All workers busy, triggering scale-up")
                 self._scale_up_callback()
                 return
