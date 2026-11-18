@@ -18,7 +18,9 @@ the repo and tests stay isolated.
 
 from __future__ import annotations
 
+import math
 import sqlite3
+import threading
 
 import pytest
 
@@ -116,6 +118,63 @@ def test_log_metrics_on_missing_run_is_noop(db) -> None:
     assert experiment_api.get_run(123) is None
 
 
+@pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf])
+def test_log_metrics_rejects_non_finite_values_without_writing(db, bad: float) -> None:
+    # D3: a NaN/Infinity metric used to be stored as a bare JSON literal that
+    # JSONResponse (allow_nan=False) cannot render, poisoning every read
+    # endpoint of the experiment. It is now rejected before anything is written.
+    exp_id = experiment_api.create_experiment("nonfinite")
+    run_id = experiment_api.create_run(exp_id)
+    experiment_api.log_metrics(run_id, {"acc": 0.5})
+
+    with pytest.raises(ValueError, match="JSON compliant"):
+        experiment_api.log_metrics(run_id, {"loss": bad, "nested": {"x": 1.0}})
+
+    assert experiment_api.get_run(run_id).metrics == {"acc": 0.5}
+
+
+def test_log_metrics_concurrent_writer_does_not_lose_keys(db, monkeypatch: pytest.MonkeyPatch) -> None:
+    # D4: the SELECT-merge-UPDATE in log_metrics was not one write
+    # transaction, so a second writer interleaving between the read and the
+    # write had its keys overwritten. Force exactly that interleaving: while
+    # the first call is between its read and its write, a second thread logs
+    # another key. With the write lock taken before the read, the second
+    # writer waits and then merges on top of the first one.
+    exp_id = experiment_api.create_experiment("race")
+    run_id = experiment_api.create_run(exp_id)
+
+    real_loads = experiment_api.json.loads
+    errors: list[BaseException] = []
+    other: list[threading.Thread] = []
+
+    def other_writer() -> None:
+        try:
+            experiment_api.log_metrics(run_id, {"from_other": 2})
+        except BaseException as exc:  # surfaced by the assertion below
+            errors.append(exc)
+
+    def interleaving_loads(*args, **kwargs):
+        if not other and threading.current_thread() is threading.main_thread():
+            thread = threading.Thread(target=other_writer)
+            other.append(thread)
+            thread.start()
+            # Let the other writer run to completion if this call's read is
+            # not protected by a write lock.
+            thread.join(timeout=0.5)
+        return real_loads(*args, **kwargs)
+
+    monkeypatch.setattr(experiment_api.json, "loads", interleaving_loads)
+    try:
+        experiment_api.log_metrics(run_id, {"from_first": 1})
+        other[0].join(timeout=10)
+    finally:
+        monkeypatch.undo()
+
+    assert not other[0].is_alive()
+    assert errors == []
+    assert experiment_api.get_run(run_id).metrics == {"from_first": 1, "from_other": 2}
+
+
 # --------------------------------------------------------------------------- #
 # Router
 # --------------------------------------------------------------------------- #
@@ -171,6 +230,54 @@ def test_api_log_metrics_success_and_404(client: TestClient) -> None:
     assert experiment_api.get_run(run_id).metrics == {"acc": 0.9}
 
     assert client.post("/api/experiments/runs/999/metrics", json={"acc": 1}).status_code == 404
+
+
+def test_api_log_metrics_nan_is_422_and_reads_stay_200(client: TestClient) -> None:
+    # D3: ``{"loss": NaN}`` is accepted by the JSON body parser; it used to be
+    # stored and turn GET /{id} and GET /{id}/runs into permanent 500s.
+    exp_id = client.post("/api/experiments/", params={"name": "nan"}).json()["id"]
+    run_id = client.post(f"/api/experiments/{exp_id}/runs", json={}).json()["id"]
+
+    resp = client.post(
+        f"/api/experiments/runs/{run_id}/metrics",
+        content=b'{"loss": NaN}',
+        headers={"content-type": "application/json"},
+    )
+    assert resp.status_code == 422
+
+    assert client.get(f"/api/experiments/{exp_id}").status_code == 200
+    runs = client.get(f"/api/experiments/{exp_id}/runs")
+    assert runs.status_code == 200
+    assert runs.json()["runs"][0]["metrics"] == {}
+
+
+def test_api_reads_sanitize_legacy_non_finite_metrics(client: TestClient) -> None:
+    # D3: rows written before the rejection may already hold NaN/Infinity
+    # literals; reads map them to null instead of failing with a 500.
+    exp_id = client.post("/api/experiments/", params={"name": "legacy"}).json()["id"]
+    run_id = client.post(f"/api/experiments/{exp_id}/runs", json={}).json()["id"]
+    conn = sqlite3.connect(str(experiment_api._db_path))
+    try:
+        conn.execute(
+            "UPDATE runs SET metrics = ? WHERE id = ?",
+            ('{"loss": NaN, "hi": Infinity, "lo": -Infinity, "acc": 0.5}', run_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    expected = {"loss": None, "hi": None, "lo": None, "acc": 0.5}
+    detail = client.get(f"/api/experiments/{exp_id}")
+    assert detail.status_code == 200
+    assert detail.json()["runs"][0]["metrics"] == expected
+    runs = client.get(f"/api/experiments/{exp_id}/runs")
+    assert runs.status_code == 200
+    assert runs.json()["runs"][0]["metrics"] == expected
+
+    # A later finite update merges on top of the sanitized values.
+    ok = client.post(f"/api/experiments/runs/{run_id}/metrics", json={"acc": 0.75})
+    assert ok.status_code == 200
+    assert experiment_api.get_run(run_id).metrics == {**expected, "acc": 0.75}
 
 
 def test_api_complete_run_success_and_404(client: TestClient) -> None:

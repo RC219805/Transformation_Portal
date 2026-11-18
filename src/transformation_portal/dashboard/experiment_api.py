@@ -42,6 +42,22 @@ def set_db_path(path: Path) -> None:
     _db_path = path
 
 
+def _non_finite_to_none(_constant: str) -> None:
+    """Decode the non-standard ``NaN`` / ``Infinity`` / ``-Infinity`` literals as ``None``."""
+    return None
+
+
+def _loads_json(text: Optional[str], default: str) -> Any:
+    """Decode a stored JSON column, mapping non-finite floats to ``None``.
+
+    Rows written before non-finite metrics were rejected may hold bare ``NaN``
+    / ``Infinity`` literals; ``JSONResponse`` renders with ``allow_nan=False``,
+    so decoding them as floats would turn every read endpoint of the
+    experiment into a 500.
+    """
+    return json.loads(text or default, parse_constant=_non_finite_to_none)
+
+
 @contextmanager
 def get_db() -> Generator[sqlite3.Connection, None, None]:
     """Get database connection context manager."""
@@ -164,7 +180,7 @@ def get_experiment(experiment_id: int) -> Optional[Experiment]:
             id=row["id"],
             name=row["name"],
             description=row["description"],
-            tags=json.loads(row["tags"] or "[]"),
+            tags=_loads_json(row["tags"], "[]"),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
@@ -181,7 +197,7 @@ def list_experiments() -> list[Experiment]:
                 id=row["id"],
                 name=row["name"],
                 description=row["description"],
-                tags=json.loads(row["tags"] or "[]"),
+                tags=_loads_json(row["tags"], "[]"),
                 created_at=row["created_at"],
                 updated_at=row["updated_at"],
             )
@@ -228,25 +244,43 @@ def create_run(
 def log_metrics(run_id: int, metrics: dict[str, Any]) -> None:
     """Log metrics for a run.
 
+    Metrics are merged into the run's stored metrics. The read-merge-write
+    runs inside one ``BEGIN IMMEDIATE`` transaction so concurrent writers
+    (other threads or processes sharing the database) serialize instead of
+    overwriting each other's keys.
+
     Args:
         run_id: Run ID
         metrics: Metrics dictionary
+
+    Raises:
+        ValueError: If a metric value is a non-finite float (NaN or
+            +/-Infinity); such values are not valid JSON and are rejected
+            before anything is written.
     """
+    # Fail closed before touching the database: a non-finite float would be
+    # stored as a bare NaN/Infinity literal that no JSON response can render.
+    json.dumps(metrics, allow_nan=False)
+
     with get_db() as conn:
-        # Get existing metrics
-        row = conn.execute(
-            "SELECT metrics FROM runs WHERE id = ?",
-            (run_id,),
-        ).fetchone()
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            row = conn.execute(
+                "SELECT metrics FROM runs WHERE id = ?",
+                (run_id,),
+            ).fetchone()
 
-        existing = json.loads(row["metrics"] or "{}") if row else {}
-        existing.update(metrics)
+            existing = _loads_json(row["metrics"], "{}") if row else {}
+            existing.update(metrics)
 
-        conn.execute(
-            "UPDATE runs SET metrics = ? WHERE id = ?",
-            (json.dumps(existing), run_id),
-        )
-        conn.commit()
+            conn.execute(
+                "UPDATE runs SET metrics = ? WHERE id = ?",
+                (json.dumps(existing, allow_nan=False), run_id),
+            )
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
 
 
 def complete_run(run_id: int, status: str = "completed") -> None:
@@ -282,10 +316,10 @@ def get_run(run_id: int) -> Optional[Run]:
             experiment_id=row["experiment_id"],
             name=row["name"],
             status=row["status"],
-            config=json.loads(row["config"] or "{}"),
-            params=json.loads(row["params"] or "{}"),
-            metrics=json.loads(row["metrics"] or "{}"),
-            artifacts=json.loads(row["artifacts"] or "[]"),
+            config=_loads_json(row["config"], "{}"),
+            params=_loads_json(row["params"], "{}"),
+            metrics=_loads_json(row["metrics"], "{}"),
+            artifacts=_loads_json(row["artifacts"], "[]"),
             start_time=row["start_time"],
             end_time=row["end_time"],
             created_at=row["created_at"],
@@ -306,10 +340,10 @@ def list_runs(experiment_id: int) -> list[Run]:
                 experiment_id=row["experiment_id"],
                 name=row["name"],
                 status=row["status"],
-                config=json.loads(row["config"] or "{}"),
-                params=json.loads(row["params"] or "{}"),
-                metrics=json.loads(row["metrics"] or "{}"),
-                artifacts=json.loads(row["artifacts"] or "[]"),
+                config=_loads_json(row["config"], "{}"),
+                params=_loads_json(row["params"], "{}"),
+                metrics=_loads_json(row["metrics"], "{}"),
+                artifacts=_loads_json(row["artifacts"], "[]"),
                 start_time=row["start_time"],
                 end_time=row["end_time"],
                 created_at=row["created_at"],
@@ -446,7 +480,13 @@ def create_experiment_router() -> "APIRouter":
         if run is None:
             raise HTTPException(status_code=404, detail="Run not found")
 
-        log_metrics(run_id, metrics)
+        try:
+            log_metrics(run_id, metrics)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="Metric values must be finite JSON numbers (NaN and Infinity are not allowed)",
+            ) from exc
         return JSONResponse({"status": "ok"})
 
     @router.post("/runs/{run_id}/complete")
