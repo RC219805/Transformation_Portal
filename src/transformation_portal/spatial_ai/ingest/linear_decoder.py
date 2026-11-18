@@ -70,6 +70,7 @@ def _png_stores_16bit_multichannel(path: Path) -> bool:
 
 
 # TIFF PhotometricInterpretation (tag 262) and Compression (tag 259) codes.
+_TIFF_TAG_PHOTOMETRIC = 262
 _TIFF_PHOTOMETRIC_MINISWHITE = 0
 _TIFF_PHOTOMETRIC_MINISBLACK = 1
 _TIFF_PHOTOMETRIC_RGB = 2
@@ -86,6 +87,11 @@ def _read_tiff_image(tifffile_module: Any, path: Path) -> np.ndarray:
     exactly) are accepted; everything else fails closed instead of being read
     as wrong pixels.
 
+    A file without a PhotometricInterpretation tag is read as stored (grey
+    with black as the minimum, or RGB), which is what libtiff assumes for such
+    files; tifffile reports them with a MinIsWhite placeholder that must not
+    be mistaken for a stored interpretation.
+
     Raises:
         ValueError: For a multi-page image series or an unsupported photometric
             interpretation (palette, CMYK, CIELab, uncompressed YCbCr, ...).
@@ -94,13 +100,19 @@ def _read_tiff_image(tifffile_module: Any, path: Path) -> np.ndarray:
         if not tif.series:
             raise ValueError(f"TIFF {path.name} contains no image")
         series = tif.series[0]
-        page_count = len(series.pages)
+        page = series.keyframe
+        # A stack can also be stored as several planes behind one IFD (truncated
+        # ImageJ / tifffile series), so the page list alone does not show it.
+        samples_per_image = int(np.prod(page.shape, dtype=np.int64))
+        planes = int(np.prod(series.shape, dtype=np.int64)) // samples_per_image if samples_per_image else 1
+        page_count = max(len(series.pages), planes)
         if page_count > 1:
             raise ValueError(
                 f"TIFF {path.name} stores {page_count} pages in one image series (shape {series.shape}, "
                 f"axes {series.axes}); multi-page TIFF is not supported. Refusing to read the page stack as one image."
             )
-        page = series.keyframe
+        if page.tags.get(_TIFF_TAG_PHOTOMETRIC) is None:
+            return tif.asarray()
         photometric = int(page.photometric)
         compression = int(page.compression)
         samples_per_pixel = int(page.samplesperpixel)

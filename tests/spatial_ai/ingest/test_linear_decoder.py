@@ -543,6 +543,47 @@ class TestLinearOutputRangeValidation:
             decoder.decode(raw_path)
 
 
+def _write_tiff_without_photometric(path: Path, samples: np.ndarray) -> None:
+    """Write an uncompressed little-endian uint16 TIFF that omits PhotometricInterpretation (tag 262).
+
+    ``samples`` is (H, W) or (H, W, C) uint16. tifffile always writes the tag,
+    so the single IFD is assembled by hand.
+    """
+    height, width = samples.shape[:2]
+    channels = 1 if samples.ndim == 2 else samples.shape[2]
+    pixels = samples.astype("<u2").tobytes()
+    entry_count = 8
+    bits_offset = 8 + 2 + 12 * entry_count + 4
+    pixel_offset = bits_offset + 2 * channels
+
+    def short(tag: int, value: int) -> bytes:
+        return struct.pack("<HHIHH", tag, 3, 1, value, 0)
+
+    def long(tag: int, value: int) -> bytes:
+        return struct.pack("<HHII", tag, 4, 1, value)
+
+    bits_per_sample = short(258, 16) if channels == 1 else struct.pack("<HHII", 258, 3, channels, bits_offset)
+    entries = (
+        long(256, width)
+        + long(257, height)
+        + bits_per_sample
+        + short(259, 1)  # no compression
+        + long(273, pixel_offset)  # strip offset
+        + short(277, channels)  # samples per pixel
+        + long(278, height)  # rows per strip
+        + long(279, len(pixels))  # strip byte count
+    )
+    path.write_bytes(
+        b"II"
+        + struct.pack("<HI", 42, 8)
+        + struct.pack("<H", entry_count)
+        + entries
+        + struct.pack("<I", 0)
+        + struct.pack(f"<{channels}H", *([16] * channels))
+        + pixels
+    )
+
+
 class TestStoredSampleInterpretation:
     """Palette, MinIsWhite, CMYK and multi-page inputs decode correctly or fail (finding I-3)."""
 
@@ -615,6 +656,34 @@ class TestStoredSampleInterpretation:
         tifffile.imwrite(str(tiff_path), indices, photometric="palette", colormap=colormap)
 
         with pytest.raises(RuntimeError, match="unsupported photometric interpretation PALETTE"):
+            decode(tiff_path)
+
+    @pytest.mark.parametrize("channels", [1, 3], ids=["gray", "rgb"])
+    def test_tiff_without_photometric_tag_is_read_as_stored(self, tmp_path: Path, channels: int) -> None:
+        """A missing PhotometricInterpretation tag is not MinIsWhite: samples are neither inverted nor rejected."""
+        shape = (4, 5) if channels == 1 else (4, 5, 3)
+        stored = np.random.default_rng(262).integers(0, 65536, size=shape, dtype=np.uint16)
+        tiff_path = tmp_path / "no_photometric.tif"
+        _write_tiff_without_photometric(tiff_path, stored)
+        with tifffile.TiffFile(str(tiff_path)) as tif:
+            assert tif.pages[0].tags.get(262) is None
+
+        result = decode(tiff_path, strict_ingest=True)
+
+        intensity = stored.astype(np.float32) / 65535.0
+        expected = np.stack([intensity] * 3, axis=-1) if channels == 1 else intensity
+        assert np.array_equal(result.linear_rgb, expected)
+
+    def test_planes_behind_one_ifd_fail_closed_as_multi_page(self, tmp_path: Path) -> None:
+        """A stack stored as contiguous planes behind a single IFD is still a multi-page file."""
+        planes = np.arange(5 * 6 * 3, dtype=np.uint16).reshape(5, 6, 3)
+        tiff_path = tmp_path / "planes.tif"
+        tifffile.imwrite(str(tiff_path), planes, photometric="minisblack", truncate=True)
+        with tifffile.TiffFile(str(tiff_path)) as tif:
+            assert len(tif.pages) == 1
+            assert tif.series[0].shape == (5, 6, 3)
+
+        with pytest.raises(RuntimeError, match="stores 5 pages in one image series"):
             decode(tiff_path)
 
 
