@@ -34,9 +34,11 @@ Example:
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import platform
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Optional
@@ -338,6 +340,18 @@ def _normalize_pip_freeze(freeze_output: str) -> str:
     return "\n".join(packages)
 
 
+def _interpreter_pip_command(*arguments: str) -> list[str]:
+    """Build a pip invocation for the interpreter that is running this code.
+
+    A bare ``pip`` is whichever one comes first on PATH, which describes a
+    different environment whenever the interpreter was started without
+    activating its virtualenv. ``-P`` keeps the working directory off
+    ``sys.path`` so a project checkout there is not reported as installed.
+    """
+    return [sys.executable, "-P", "-m", "pip", *arguments]
+
+
+@functools.lru_cache(maxsize=1)
 def get_env_fingerprint() -> str:
     """Compute SHA256 fingerprint of the current pip environment.
 
@@ -350,14 +364,20 @@ def get_env_fingerprint() -> str:
     invalidating cached artifacts.
 
     Note:
-        Uses normalized `pip freeze` output for cross-platform consistency.
+        Uses normalized `pip freeze` output for cross-platform consistency,
+        taken from the running interpreter's own pip.
         Normalization excludes editable installs and sorts packages
         to ensure identical environments produce identical fingerprints.
         If pip is unavailable, returns a placeholder fingerprint.
+
+        The result is computed once per process: identity code asks for it
+        for every stage and again for every cache hit.
     """
+    if not sys.executable:
+        return "sha256:unknown-pip-unavailable"
     try:
         result = subprocess.run(
-            ["pip", "freeze"],
+            _interpreter_pip_command("freeze"),
             capture_output=True,
             text=True,
             timeout=30,
@@ -385,9 +405,11 @@ def get_pip_version() -> str:
     Returns:
         Pip version string, or "unknown" if unavailable.
     """
+    if not sys.executable:
+        return "unknown"
     try:
         result = subprocess.run(
-            ["pip", "--version"],
+            _interpreter_pip_command("--version"),
             capture_output=True,
             text=True,
             timeout=10,
@@ -466,8 +488,6 @@ def get_platform_fingerprint(
     Returns:
         Dictionary with complete platform identity for CAS.
     """
-    import sys
-
     matrix = PlatformMatrix.detect(accel)
 
     fingerprint: Dict[str, Any] = {
