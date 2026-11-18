@@ -133,6 +133,10 @@ test("RedisSessionStore live contract persists sessions and throttle state", asy
     assert.ok((await client.pttl(`${keyPrefix}login:operator`)) > 0);
     await store.resetLoginAttempts("operator");
 
+    // Redis relies on key TTLs, so the sweep must leave a live session intact.
+    await store.pruneExpiredSessions(Date.now());
+    assert.ok(await store.getRawSessionRow(sessionId), "sweep must not drop a live session");
+
     await store.deleteSession(sessionId);
     assert.equal(await store.getRawSessionRow(sessionId), null);
     await store.deleteSession(sessionId);
