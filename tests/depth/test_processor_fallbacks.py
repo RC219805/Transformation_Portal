@@ -224,10 +224,10 @@ def test_rgba_input_processes_rgb_and_passes_alpha_through(
     monkeypatch: pytest.MonkeyPatch, processor_type, opencv: bool
 ) -> None:
     """D-26: RGBA crashed AtmosphericEffects/DepthAwareDenoise and ZoneToneMapping tone-mapped alpha."""
-    if opencv:
-        if not _DENOISE_HAS_OPENCV:
-            pytest.skip("OpenCV not installed")
-        monkeypatch.setattr(depth_aware_denoise, "CV2_AVAILABLE", True)
+    if opencv and not _DENOISE_HAS_OPENCV:
+        pytest.skip("OpenCV not installed")
+    # opencv=False forces the SciPy fallback even on hosts that have OpenCV.
+    monkeypatch.setattr(depth_aware_denoise, "CV2_AVAILABLE", opencv)
     depth = _depth_gradient()
     rgb = np.random.default_rng(3).random((*depth.shape, 3)).astype(np.float32)
     alpha = np.linspace(0.1, 0.9, rgb.shape[0] * rgb.shape[1], dtype=np.float32).reshape(*depth.shape, 1)
