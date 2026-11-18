@@ -4931,6 +4931,11 @@ function _finalizeBootstrapRetry(outcome, details = null) {
     state.bootstrap.retry.deadlineAt = 0;
     state.bootstrap.lastRateLimitHint = null;
     _recordBootstrapRetryEvent(outcome, details);
+    // A recovered incident must not consume the retry budget of the next one:
+    // the attempt counter is reported with the success event, then reset.
+    if (outcome === 'succeeded') {
+        state.bootstrap.retry.attempt = 0;
+    }
 }
 
 function _bootstrapFailureDetails(reason = '', httpStatus = 0, message = '', rateLimitHint = null) {
@@ -5039,6 +5044,13 @@ function _scheduleBootstrapRetry(reason = '', httpStatus = 0, rateLimitHint = nu
 
     const now = Date.now();
     if (!state.bootstrap.retry.deadlineAt || state.bootstrap.retry.deadlineAt <= now) {
+        if (!state.bootstrap.retry.deadlineAt) {
+            // No open window means the previous incident was finalized
+            // (succeeded or terminal), so this failure starts a new incident
+            // with a fresh BOOTSTRAP_RETRY_MAX_ATTEMPTS budget. A window that
+            // merely elapsed inside a running retry chain keeps its count.
+            state.bootstrap.retry.attempt = 0;
+        }
         state.bootstrap.retry.deadlineAt = now + BOOTSTRAP_RETRY_MAX_WINDOW_MS;
     }
 
