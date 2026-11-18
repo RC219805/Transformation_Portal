@@ -52,6 +52,37 @@ def test_task_verifier_accepts_a_signer_only_after_its_key_is_authorized() -> No
     assert verifier.verify(signed) is True
 
 
+@pytest.mark.parametrize("reserved_key", ["_ts", "_nonce", "_metadata"])
+def test_task_signer_rejects_payload_using_a_reserved_envelope_key(reserved_key: str) -> None:
+    """A payload key named like an envelope field would not be covered by the signature."""
+    private_key, _ = generate_ed25519_keypair()
+    signer = TaskSigner(CertificateSigner(private_key))
+
+    with pytest.raises(TaskSigningError, match="reserved signing keys"):
+        signer.sign({"node_cls": "ProcessNode", reserved_key: "caller-value"})
+
+    assert signer.sign_count == 0
+
+
+def test_task_verifier_rejects_metadata_moved_into_the_payload() -> None:
+    """Envelope fields cannot change role without invalidating the task."""
+    private_key, _ = generate_ed25519_keypair()
+    signer = TaskSigner(CertificateSigner(private_key))
+    signed = signer.sign({"node_cls": "ProcessNode"}, metadata={"tenant": "alice", "priority": "low"})
+    tampered = SignedTask(
+        payload={"node_cls": "ProcessNode", "_metadata": {"tenant": "alice", "priority": "low"}},
+        signature=signed.signature,
+        public_key=signed.public_key,
+        timestamp=signed.timestamp,
+        nonce=signed.nonce,
+        metadata=None,
+    )
+    verifier = TaskVerifier(authorized_keys={signed.public_key})
+
+    assert verifier.verify(tampered) is False
+    assert verifier.verify(signed) is True
+
+
 def test_task_signer_requires_crypto_backed_signer() -> None:
     class BrokenSigner:
         pass

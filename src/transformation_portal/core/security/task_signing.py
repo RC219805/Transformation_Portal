@@ -33,6 +33,10 @@ class TaskSigningError(RuntimeError):
     """Raised for task signing/verification errors."""
 
 
+# Envelope fields that are signed in the same object as the task payload.
+_RESERVED_PAYLOAD_KEYS = frozenset({"_ts", "_nonce", "_metadata"})
+
+
 def _build_sign_payload(
     payload: Dict[str, Any],
     *,
@@ -40,7 +44,20 @@ def _build_sign_payload(
     nonce: str,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Build the canonical task payload used for signing and verification."""
+    """Build the canonical task payload used for signing and verification.
+
+    The envelope fields sit next to the payload's own keys, so a payload may
+    not use their names: such a key would be overwritten here and left outside
+    the signature, and an envelope field could be moved into the payload
+    without changing the signed bytes.
+
+    Raises:
+        TaskSigningError: If the payload uses a reserved envelope key
+    """
+    reserved = sorted(_RESERVED_PAYLOAD_KEYS.intersection(payload))
+    if reserved:
+        raise TaskSigningError(f"Task payload uses reserved signing keys: {', '.join(reserved)}")
+
     sign_payload = {
         **payload,
         "_ts": timestamp,
@@ -183,11 +200,15 @@ class TaskSigner:
         """Sign a task payload.
 
         Args:
-            payload: Task payload
+            payload: Task payload. The keys ``_ts``, ``_nonce`` and
+                ``_metadata`` are reserved for the signing envelope.
             metadata: Additional metadata (included in signature)
 
         Returns:
             SignedTask with all fields needed for verification
+
+        Raises:
+            TaskSigningError: If the payload uses a reserved key or signing fails
         """
         import secrets
 
@@ -405,7 +426,7 @@ class TaskVerifier:
             return True
 
         except TaskSigningError as exc:
-            logger.warning("Task signature verification unavailable: %s", exc)
+            logger.warning("Task signature could not be verified: %s", exc)
             return False
         except Exception as e:
             logger.debug("Signature verification failed: %s", e)
