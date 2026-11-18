@@ -819,3 +819,30 @@ def test_native_child_does_not_inherit_operational_credentials(monkeypatch, name
     child = _sanitized_child_env()
     assert name not in child
     assert child["TRANSFORMATION_PORTAL_DA3_PYTHON"] == "/trusted/runtime/bin/python"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("port", ["index_artifacts", "mirror_artifacts", "refresh_summary"])
+async def test_artifact_recording_failure_still_finishes_unfenced_job(tmp_path, port):
+    """ORCH-04: a raising post-run port must not leave a row that never finishes."""
+
+    def raise_permission(*_args, **_kwargs):
+        raise PermissionError(13, "Permission denied", str(tmp_path / "depth"))
+
+    async def raise_connection(*_args, **_kwargs):
+        raise ConnectionError("artifact store unavailable")
+
+    done_events: list[dict] = []
+    service, repository, job = await _unfenced_service(tmp_path, done_events, asyncio.Event())
+    failing = raise_connection if port == "mirror_artifacts" else raise_permission
+    service = type(service)(replace(service.runtime, **{port: failing}), service.settings)
+
+    await asyncio.wait_for(service.run(job, [sys.executable, "-c", "print('ok')"]), timeout=10)
+
+    record = await repository.get(job.id)
+    assert record.finished_at is not None
+    assert record.done_published_at is not None
+    assert record.state == "failed"
+    assert record.error["code"] == "ARTIFACT_STORE_UNAVAILABLE"
+    assert [event["state"] for event in done_events] == ["failed"]
+    assert done_events[0]["error"] == record.error

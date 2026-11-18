@@ -702,9 +702,21 @@ class JobExecutionService(Generic[_JobT]):
             # safely synthesize a 'done' from job state. Indexing also computes
             # bounded SHA-256 fingerprints, so run it in a worker thread to keep
             # the event loop responsive while large jobs are wrapping up.
-            indexed_artifacts = await asyncio.to_thread(self.runtime.index_artifacts, job)
-            await self.runtime.mirror_artifacts(job)
-            self.runtime.refresh_summary(job)
+            # A failure here must still finish the job: without the ``done``
+            # event and ``finished_at`` the row stays non-terminal for SSE
+            # clients and retention forever. A successful run whose outputs
+            # could not be recorded is not reported as a success, matching
+            # the managed publication branch above.
+            indexed_artifacts: list[dict[str, Any]] = []
+            try:
+                indexed_artifacts = await asyncio.to_thread(self.runtime.index_artifacts, job)
+                await self.runtime.mirror_artifacts(job)
+                self.runtime.refresh_summary(job)
+            except Exception:
+                LOGGER.exception("job %s artifact recording failed", job.id)
+                if job.state in {"succeeded", "partial"}:
+                    job.state = "failed"
+                    job.error = execution_error("ARTIFACT_STORE_UNAVAILABLE", "Job artifacts could not be recorded.")
             for artifact in indexed_artifacts:
                 await self.runtime.publish_event(
                     job.id,
