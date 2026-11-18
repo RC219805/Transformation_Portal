@@ -165,7 +165,9 @@ class TiledProcessor:
         # Return in original format
         if is_numpy:
             output_array = output_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
-            return (output_array * 255).clip(0, 255).astype(np.uint8)
+            # Round to the nearest code value. Truncating turns the float
+            # error of a /255, *255 round trip into a level that is one too low.
+            return np.rint(output_array * 255).clip(0, 255).astype(np.uint8)
 
         return output_tensor
 
@@ -187,17 +189,23 @@ class TiledProcessor:
             return linear_2d.view(1, 1, size, size)
 
         # Gaussian window
-        # Create 1D gaussian
+        # Create 1D gaussian, centred on the tile
         sigma = size / 4  # Adjust falloff
         x = torch.arange(size, device=device).float()
-        gaussian_1d = torch.exp(-((x - size / 2) ** 2) / (2 * sigma**2))
+        gaussian_1d = torch.exp(-((x - (size - 1) / 2) ** 2) / (2 * sigma**2))
+
+        # Normalize each axis to 0-1 so the window reaches zero at the tile
+        # border. Normalizing the 2D product by its corner value left every
+        # edge with a sizeable weight, and a tile's contribution then stopped
+        # abruptly one pixel past its border: a visible seam.
+        span = gaussian_1d.max() - gaussian_1d.min()
+        if span > 0:
+            gaussian_1d = (gaussian_1d - gaussian_1d.min()) / span
+        else:
+            gaussian_1d = torch.ones_like(gaussian_1d)
 
         # Outer product to make 2D
         gaussian_2d = gaussian_1d.unsqueeze(1) * gaussian_1d.unsqueeze(0)
-
-        # Normalize to 0-1 range
-        gaussian_2d -= gaussian_2d.min()
-        gaussian_2d /= gaussian_2d.max()
         gaussian_2d = gaussian_2d.clamp_min(min_weight)
 
         return gaussian_2d.view(1, 1, size, size)
