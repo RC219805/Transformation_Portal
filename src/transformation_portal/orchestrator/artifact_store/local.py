@@ -282,6 +282,10 @@ class LocalArtifactStore(ArtifactStore):
                     fingerprint_status=status,
                 )
             )
+        # The contract orders by the ``relative_path`` string, as S3 lists
+        # keys. Sorting ``Path`` objects compares components instead, which
+        # puts ``scene/depth.png`` before ``scene.json``.
+        results.sort(key=lambda meta: meta.relative_path)
         return results
 
     async def write_bytes(

@@ -497,6 +497,15 @@ async def test_list_for_job_sorts_by_relative_path(store: ArtifactStore) -> None
     ]
 
 
+async def test_list_for_job_orders_by_relative_path_string_not_path_components(store: ArtifactStore) -> None:
+    """ORCH-05: ``scene/`` beside ``scene.json`` must list in string order on every backend."""
+    for relative_path in ("scene/depth.png", "scene.json", "scene-preview.png", "scene 2/x.png"):
+        await store.write_bytes("job-order", relative_path, b"x")
+
+    listed = [item.relative_path for item in await store.list_for_job("job-order")]
+    assert listed == ["scene 2/x.png", "scene-preview.png", "scene.json", "scene/depth.png"]
+
+
 async def test_list_for_job_empty_when_no_writes(store: ArtifactStore) -> None:
     assert await store.list_for_job("ghost-job") == []
 
@@ -548,6 +557,28 @@ async def test_s3_bulk_delete_raises_on_per_key_errors() -> None:
     store = S3ArtifactStore(bucket="bucket", prefix="tp/test", client=ErroringBulkDeleteClient())
     with pytest.raises(ArtifactStoreError, match="S3 delete_objects failed"):
         await store.delete("job-bulk")
+
+
+async def test_s3_bulk_delete_wraps_listing_failure_in_artifact_store_error() -> None:
+    """ORCH-06: a failing listing inside bulk delete raises the store's own error, as list_for_job does."""
+    from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
+
+    class ListingFailure(Exception):
+        pass
+
+    class FailingListClient:
+        def list_objects_v2(self, **_kwargs):
+            raise ListingFailure("NoSuchBucket")
+
+        def delete_objects(self, **_kwargs):
+            pytest.fail("nothing may be deleted when the listing failed")
+
+    store = S3ArtifactStore(bucket="bucket", prefix="tp/test", client=FailingListClient())
+    with pytest.raises(ArtifactStoreError, match="S3 list_objects_v2 failed") as caught:
+        await store.delete("job-bulk")
+    assert isinstance(caught.value.__cause__, ListingFailure)
+    with pytest.raises(ArtifactStoreError, match="S3 list_objects_v2 failed"):
+        await store.list_for_job("job-bulk")
 
 
 async def test_s3_bulk_delete_counts_confirmed_deletions() -> None:

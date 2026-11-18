@@ -946,7 +946,10 @@ class S3ArtifactStore(ArtifactStore):
                 kwargs = {"Bucket": self._bucket, "Prefix": prefix}
                 if continuation:
                     kwargs["ContinuationToken"] = continuation
-                response = await asyncio.to_thread(client.list_objects_v2, **kwargs)
+                try:
+                    response = await asyncio.to_thread(client.list_objects_v2, **kwargs)
+                except Exception as exc:  # noqa: BLE001 - boto3 ClientError
+                    raise ArtifactStoreError(f"S3 list_objects_v2 failed for {prefix}") from exc
                 keys = [{"Key": entry["Key"]} for entry in (response.get("Contents", []) or [])]
                 if keys:
                     # ``delete_objects`` accepts up to 1000 keys per call.
