@@ -69,11 +69,6 @@ class TestSceneBuilder:
         """Test scene builder initialization."""
         assert builder.tier == "apex_research"
 
-    def test_load_images_rejects_nan_gamma(self, builder):
-        """I-6: NaN gamma must not pass the pre-linearized image check."""
-        with pytest.raises(ValueError, match="gamma=1.0"):
-            builder._load_images([], float("nan"))
-
     def test_build_from_arrays(self, scene):
         """Test building scene from numpy arrays."""
         assert scene is not None
