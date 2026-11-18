@@ -674,34 +674,55 @@ def timeout(seconds: int):
 
     started = time.monotonic()
     own_deadline = started + seconds if seconds > 0 else None
+    # outer_state: "none" (no enclosing alarm), "pending" (still to fire),
+    # "delivered" (fired, enclosing handler ran) or "undelivered" (fired while
+    # the enclosing disposition was SIG_DFL/SIG_IGN; re-raised on exit).
+    outer_state = ["none"]
+
+    def _arm_next() -> None:
+        deadlines = [d for d in (own_deadline, outer_deadline if outer_state[0] == "pending" else None) if d is not None]
+        if deadlines:
+            signal.setitimer(signal.ITIMER_REAL, max(min(deadlines) - time.monotonic(), 1e-3))
 
     def timeout_handler(signum, frame):
-        if own_deadline is not None and time.monotonic() >= own_deadline:
+        now = time.monotonic()
+        if own_deadline is not None and now >= own_deadline:
             raise TimeoutError(f"Operation exceeded {seconds}s timeout")
-        # The alarm belongs to an enclosing timeout() whose deadline is earlier
-        # than ours: let its handler decide.
-        if callable(old_handler):
-            old_handler(signum, frame)
+        if outer_state[0] == "pending" and now >= outer_deadline:
+            # The alarm belongs to an enclosing timeout()/alarm whose deadline is
+            # earlier than ours: let its handler decide (it normally raises).
+            if callable(old_handler):
+                outer_state[0] = "delivered"
+                old_handler(signum, frame)
+            else:
+                outer_state[0] = "undelivered"
+        # Early wake-up, an enclosing handler that returned, or a stray
+        # SIGALRM: our own deadline must stay armed (fail closed).
+        _arm_next()
 
-    # Set signal handler. setitimer shares the ITIMER_REAL timer with
-    # signal.alarm and returns the remaining time of an enclosing alarm, which
-    # must not be cancelled by a nested timeout().
-    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+    # setitimer shares the ITIMER_REAL timer with signal.alarm and returns the
+    # remaining time of an enclosing alarm, which must not be cancelled by a
+    # nested timeout(). Pause it before installing our handler so it cannot
+    # fire in between, then arm the earlier of the two deadlines.
     outer_remaining, _ = signal.setitimer(signal.ITIMER_REAL, 0)
-    outer_deadline = started + outer_remaining if outer_remaining > 0 else None
-    arm = [d for d in (own_deadline, outer_deadline) if d is not None]
-    if arm:
-        signal.setitimer(signal.ITIMER_REAL, max(min(arm) - time.monotonic(), 1e-3))
+    outer_deadline = started + outer_remaining
+    if outer_remaining > 0:
+        outer_state[0] = "pending"
+    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+    _arm_next()
 
     try:
         yield
     finally:
         # Cancel our alarm, restore the old handler, then re-arm the enclosing
-        # alarm with its remaining time (fire it promptly if already overdue).
+        # alarm with its remaining time (fire it promptly if already overdue or
+        # if it fired while only its default disposition could handle it).
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, old_handler)
-        if outer_deadline is not None:
+        if outer_state[0] == "pending":
             signal.setitimer(signal.ITIMER_REAL, max(outer_deadline - time.monotonic(), 1e-3))
+        elif outer_state[0] == "undelivered":
+            signal.setitimer(signal.ITIMER_REAL, 1e-3)
 
 
 # Deprecated alias for backwards compatibility

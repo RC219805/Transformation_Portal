@@ -872,6 +872,29 @@ class TestTimeout:
         assert time.monotonic() - started < 2.5
         assert signal.alarm(0) == 0
 
+    @pytest.mark.skipif(
+        not hasattr(signal, "SIGALRM"),
+        reason="SIGALRM not available on this platform (Windows)",
+    )
+    def test_inner_deadline_survives_enclosing_handler_that_returns(self) -> None:
+        """L-11 follow-up: an earlier enclosing alarm whose handler returns must not disarm timeout()."""
+        import time
+
+        calls = []
+        previous = signal.signal(signal.SIGALRM, lambda signum, frame: calls.append(signum))
+        try:
+            signal.setitimer(signal.ITIMER_REAL, 0.3)
+            started = time.monotonic()
+            with pytest.raises(SecurityTimeoutError, match="exceeded 1s timeout"):
+                with timeout(1):
+                    time.sleep(3)
+            assert time.monotonic() - started < 2.0
+            time.sleep(0.05)
+            assert calls == [signal.SIGALRM]  # delivered once, not re-armed on exit
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous)
+
 
 # =============================================================================
 # Test: Deprecated Functions
