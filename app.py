@@ -9490,6 +9490,28 @@ async def security_layer(
 
     _install_stream_body_limit(request)
 
+    # Throttle before authenticating: failed API-key attempts must consume the
+    # per-client budget, otherwise key guessing is never rate limited.
+    client_ip = _extract_client_ip(request)
+    rate_decision = _is_rate_limited(client_ip, _now())
+    if rate_decision.limited:
+        rate_headers = _rate_limit_response_headers(
+            limit=RATE_LIMIT_PER_MINUTE,
+            remaining=0,
+            retry_after=rate_decision.retry_after_seconds,
+            reset_epoch=rate_decision.reset_epoch_seconds,
+        )
+        response = _error_response(
+            429,
+            code="RATE_LIMITED",
+            message="rate limit exceeded",
+            details={"client_ip": client_ip},
+            headers=rate_headers,
+        )
+        if should_echo_traceparent:
+            response.headers.setdefault("traceparent", request.state.trace_context.traceparent)
+        return response
+
     if _is_protected_api_key_endpoint(request.url.path) and _job_api_key_enforced():
         if not API_KEY_SECRET:
             response = _error_response(
@@ -9511,26 +9533,6 @@ async def security_layer(
             if should_echo_traceparent:
                 response.headers.setdefault("traceparent", request.state.trace_context.traceparent)
             return response
-
-    client_ip = _extract_client_ip(request)
-    rate_decision = _is_rate_limited(client_ip, _now())
-    if rate_decision.limited:
-        rate_headers = _rate_limit_response_headers(
-            limit=RATE_LIMIT_PER_MINUTE,
-            remaining=0,
-            retry_after=rate_decision.retry_after_seconds,
-            reset_epoch=rate_decision.reset_epoch_seconds,
-        )
-        response = _error_response(
-            429,
-            code="RATE_LIMITED",
-            message="rate limit exceeded",
-            details={"client_ip": client_ip},
-            headers=rate_headers,
-        )
-        if should_echo_traceparent:
-            response.headers.setdefault("traceparent", request.state.trace_context.traceparent)
-        return response
 
     response = await call_next(request)
     for name, value in SECURITY_HEADERS.items():

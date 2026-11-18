@@ -216,6 +216,28 @@ class TestRateLimitRejection:
         assert "rate limit exceeded" in error.get("message", "").lower()
         assert "client_ip" in (error.get("details") or {})
 
+    def test_failed_api_key_attempts_are_rate_limited(self, anon_client):
+        """Wrong-key guesses must consume the per-client budget (fail closed):
+        once it is spent, further guesses get the documented 429 envelope with
+        Retry-After instead of an unlimited stream of 401s.
+        """
+        orchestrator_app.RATE_LIMIT_PER_MINUTE = 3
+        statuses = [anon_client.get("/v1/jobs", headers={"x-api-key": f"guess-{index}"}).status_code for index in range(3)]
+        assert statuses == [401, 401, 401]
+
+        response = anon_client.get("/v1/jobs", headers={"x-api-key": "guess-final"})
+        assert response.status_code == 429
+        body = response.json()
+        assert body.get("schema") == "tp.orchestrator.error.v1"
+        assert (body.get("error") or {}).get("code") == "RATE_LIMITED"
+        assert int(response.headers["Retry-After"]) >= 1
+        assert int(response.headers["X-RateLimit-Limit"]) == 3
+
+        # The budget is per client, so a valid key from the same client is
+        # throttled too until the window frees a slot.
+        valid = anon_client.get("/v1/jobs", headers={"x-api-key": "rejection-secret"})
+        assert valid.status_code == 429
+
     def test_non_429_responses_do_not_emit_ratelimit_headers(self, auth_client):
         """The contract is additive only on rejection. Successful liveness
         responses must not advertise rate-limit headers, since that would
