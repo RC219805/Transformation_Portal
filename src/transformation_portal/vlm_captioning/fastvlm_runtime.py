@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import codecs
+import locale
 import os
 import shutil
 import subprocess
@@ -270,6 +272,20 @@ def _failure_result(
     )
 
 
+def _captured_output_encoding() -> str:
+    """Return the encoding of the child's pipes: the one text-mode pipes used.
+
+    The child inherits this process's locale (its ``PYTHON*`` overrides are
+    stripped), so output that decoded before keeps decoding to the same text.
+    """
+    encoding = locale.getpreferredencoding(False) or "utf-8"
+    try:
+        codecs.lookup(encoding)
+    except LookupError:
+        return "utf-8"
+    return encoding
+
+
 def _captured_text(raw: bytes | str | None) -> str:
     """Decode captured child output to bounded text without ever raising.
 
@@ -279,7 +295,7 @@ def _captured_text(raw: bytes | str | None) -> str:
     """
     if raw is None:
         return ""
-    text = raw if isinstance(raw, str) else raw.decode("utf-8", errors="replace")
+    text = raw if isinstance(raw, str) else raw.decode(_captured_output_encoding(), errors="replace")
     # Same newline handling as the text-mode pipes this replaces.
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     if len(text) <= MAX_CAPTURED_OUTPUT_CHARS:

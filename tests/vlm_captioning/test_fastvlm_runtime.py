@@ -357,8 +357,9 @@ def test_runtime_timeout_keeps_partial_output(tmp_path: Path) -> None:
     assert "loading weights..." in result.raw_stderr
 
 
-def test_runtime_undecodable_output_returns_structured_result(tmp_path: Path) -> None:
+def test_runtime_undecodable_output_returns_structured_result(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # D-07: a non-UTF-8 byte must not escape as UnicodeDecodeError when strict is off.
+    monkeypatch.setattr("locale.getpreferredencoding", lambda do_setlocale=True: "utf-8")
     runtime_dir = tmp_path / "runtime"
     _write_fake_mlx_module(
         runtime_dir,
@@ -375,6 +376,27 @@ def test_runtime_undecodable_output_returns_structured_result(tmp_path: Path) ->
     assert result.raw_stdout == "SCENE=living room; MATERIALS=wood �\n"
     assert result.raw_stderr == "warn �\n"
     assert result.caption_parse.caption["scene"] == "living room"
+
+
+@pytest.mark.parametrize(
+    ("encoding", "expected"),
+    [("iso8859-1", "SCENE=caf\u00e9 terrace\n"), ("no-such-codec", "SCENE=caf\ufffd terrace\n")],
+)
+def test_runtime_decodes_output_with_the_locale_encoding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, encoding: str, expected: str
+) -> None:
+    # The child inherits the locale, and text-mode pipes decoded with it: output that
+    # decoded before D-07 must keep decoding to the same text. An unknown codec name
+    # falls back to UTF-8 instead of raising.
+    monkeypatch.setattr("locale.getpreferredencoding", lambda do_setlocale=True: encoding)
+    runtime_dir = tmp_path / "runtime"
+    _write_fake_mlx_module(runtime_dir, "import sys\nsys.stdout.buffer.write(b'SCENE=caf\\xe9 terrace\\n')\n")
+    config, image = _config(tmp_path, runtime_dir)
+
+    result = run_fastvlm_caption(config, image)
+
+    assert result.status == "ok"
+    assert result.raw_stdout == expected
 
 
 def test_runtime_unstartable_argv_returns_structured_result(tmp_path: Path) -> None:
