@@ -333,6 +333,30 @@ def test_verify_fails_on_timestamp_target_path_coupling(tmp_path: Path) -> None:
     assert "timestamp_path must be 'merkle_roots.tsr'" in verify_result.stdout
 
 
+@pytest.mark.parametrize("timestamp_target", [["signature"], {"target": "signature"}, 7, None])
+def test_verify_reports_non_string_timestamp_target_as_malformed(tmp_path: Path, timestamp_target: object) -> None:
+    artifacts = _write_bundle_artifacts(tmp_path, timestamp_target="signature")
+    generate_result = _generate_manifest(
+        roots_path=artifacts["roots"],
+        hash_manifest_path=artifacts["hash_manifest"],
+        hash_summary_path=artifacts["hash_summary"],
+        signature_path=artifacts["signature"],
+        timestamp_path=artifacts["timestamp"],
+        timestamp_target="signature",
+        out_path=artifacts["out"],
+    )
+    assert generate_result.returncode == 0, generate_result.stderr
+
+    manifest = _load_manifest(artifacts["out"])
+    manifest["timestamp_target"] = timestamp_target
+    artifacts["out"].write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    verify_result = _verify_manifest(artifacts["out"], tmp_path)
+    assert verify_result.returncode == 12, verify_result.stdout + verify_result.stderr
+    assert "Malformed manifest: timestamp_target must be 'roots' or 'signature'" in verify_result.stdout
+    assert "Traceback (most recent call last):" not in verify_result.stderr
+
+
 def test_verify_fails_on_manifest_missing_required_field(tmp_path: Path) -> None:
     artifacts = _write_bundle_artifacts(tmp_path, timestamp_target="signature")
     generate_result = _generate_manifest(

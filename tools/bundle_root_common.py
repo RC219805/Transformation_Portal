@@ -170,9 +170,10 @@ def validate_manifest_structure(manifest: dict[str, object], *, strict: bool = T
         raise ValueError(f"signature_path must be {EXPECTED_SIGNATURE_FILENAME!r}")
 
     timestamp_target = manifest["timestamp_target"]
-    if timestamp_target not in TIMESTAMP_FILENAME_BY_TARGET:
+    # The isinstance check keeps an unhashable JSON value (list, object) a ValueError for callers.
+    if not isinstance(timestamp_target, str) or timestamp_target not in TIMESTAMP_FILENAME_BY_TARGET:
         raise ValueError("timestamp_target must be 'roots' or 'signature'")
-    expected_timestamp_path = TIMESTAMP_FILENAME_BY_TARGET[str(timestamp_target)]
+    expected_timestamp_path = TIMESTAMP_FILENAME_BY_TARGET[timestamp_target]
     if manifest["timestamp_path"] != expected_timestamp_path:
         raise ValueError(f"timestamp_path must be {expected_timestamp_path!r} for timestamp_target={timestamp_target!r}")
 

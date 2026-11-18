@@ -188,6 +188,24 @@ def test_compute_bundle_root_strict_mode_rejects_unknown_fields(tmp_path: Path) 
     assert "unexpected field(s): extra" in compute_result.stdout
 
 
+@pytest.mark.parametrize("timestamp_target", [["signature"], {"target": "signature"}, 7, None])
+def test_compute_bundle_root_reports_non_string_timestamp_target_as_malformed(
+    tmp_path: Path, timestamp_target: object
+) -> None:
+    artifacts = _write_bundle_artifacts(tmp_path / "bundle")
+    generated = _generate_manifest(artifacts, timestamp_target="signature")
+    assert generated.returncode == 0, generated.stderr
+
+    manifest = _load_manifest(artifacts["out"])
+    manifest["timestamp_target"] = timestamp_target
+    _write_manifest(artifacts["out"], manifest)
+
+    compute_result = _compute_root(artifacts["out"])
+    assert compute_result.returncode == 21, compute_result.stdout + compute_result.stderr
+    assert "timestamp_target must be 'roots' or 'signature'" in compute_result.stdout
+    assert "Traceback (most recent call last):" not in compute_result.stderr
+
+
 def test_compute_bundle_root_returns_mismatch_when_existing_root_is_stale(tmp_path: Path) -> None:
     artifacts = _write_bundle_artifacts(tmp_path / "bundle")
     generated = _generate_manifest(artifacts, timestamp_target="signature")
