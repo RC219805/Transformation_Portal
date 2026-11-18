@@ -289,6 +289,103 @@ class TestExifSubIfdExtraction:
         assert camera.iso is None
         assert camera.gps_latitude is None
 
+    @staticmethod
+    def _write_jpeg(path: Path, exif_ifd: dict, gps_ifd: dict | None = None) -> None:
+        exif = Image.Exif()
+        exif[0x010F] = "ACME"  # Make (IFD0)
+        exif.get_ifd(0x8769).update(exif_ifd)
+        if gps_ifd:
+            exif.get_ifd(0x8825).update(gps_ifd)
+        Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(path, exif=exif)
+
+    def test_shutter_speed_is_reported_as_a_fraction(self, tmp_path: Path):
+        from PIL.TiffImagePlugin import IFDRational
+
+        img_path = tmp_path / "shutter.jpg"
+        self._write_jpeg(img_path, {0x829A: IFDRational(1, 250)})  # ExposureTime
+
+        assert ProvenanceCapture()._extract_exif(img_path).shutter_speed == "1/250"
+
+    def test_unknown_zero_over_zero_rationals_do_not_break_the_sidecar(self, tmp_path: Path):
+        """0/0 "unknown" rationals become None, so the strict-JSON sidecar can still be written."""
+        from PIL.TiffImagePlugin import IFDRational
+
+        unknown = IFDRational(0, 0)
+        img_path = tmp_path / "unknown.jpg"
+        self._write_jpeg(
+            img_path,
+            {0x829A: unknown, 0x829D: unknown, 0x920A: unknown, 0xA434: "Manual lens"},
+            {1: "N", 2: (unknown, unknown, unknown), 3: "E", 4: (unknown, unknown, unknown), 6: unknown},
+        )
+        capture = ProvenanceCapture()
+
+        camera = capture._extract_exif(img_path)
+
+        assert camera.lens_model == "Manual lens"
+        assert camera.focal_length is None
+        assert camera.aperture is None
+        assert camera.shutter_speed is None
+        assert camera.gps_latitude is None
+        assert camera.gps_longitude is None
+        assert camera.gps_altitude is None
+
+        prov = capture.capture(
+            source_path=img_path,
+            tensor=np.zeros((8, 8, 3), dtype=np.float32),
+            gamma=1.0,
+            bit_depth=32,
+            dtype="float32",
+        )
+        sidecar_path = tmp_path / "unknown.provenance.json"
+        capture.write_sidecar(prov, sidecar_path)
+
+        assert json.loads(sidecar_path.read_text(encoding="utf-8"))["camera"] == {
+            "make": "ACME",
+            "lens_model": "Manual lens",
+        }
+
+    def test_multi_valued_iso_does_not_drop_later_tags_or_gps(self, tmp_path: Path):
+        from PIL.TiffImagePlugin import IFDRational
+
+        img_path = tmp_path / "iso_pair.jpg"
+        self._write_jpeg(
+            img_path,
+            {0x8827: (100, 200), 0xA434: "Lens 35mm"},  # ISOSpeedRatings with two values, LensModel
+            {
+                1: "N",
+                2: (IFDRational(48), IFDRational(30), IFDRational(0)),
+                3: "W",
+                4: (IFDRational(2), IFDRational(15), IFDRational(0)),
+            },
+        )
+
+        camera = ProvenanceCapture()._extract_exif(img_path)
+
+        assert camera.iso == 100
+        assert camera.lens_model == "Lens 35mm"
+        assert camera.gps_latitude == pytest.approx(48.5)
+        assert camera.gps_longitude == pytest.approx(-2.25)
+
+    @pytest.mark.parametrize(("altitude_ref", "expected"), [(b"\x00", 430.0), (b"\x01", -430.0)])
+    def test_gps_altitude_honours_the_sea_level_reference(self, tmp_path: Path, altitude_ref: bytes, expected: float):
+        from PIL.TiffImagePlugin import IFDRational
+
+        img_path = tmp_path / "altitude.jpg"
+        self._write_jpeg(
+            img_path,
+            {0x8827: 100},
+            {
+                1: "N",
+                2: (IFDRational(31), IFDRational(30), IFDRational(0)),
+                3: "E",
+                4: (IFDRational(35), IFDRational(28), IFDRational(0)),
+                5: altitude_ref,  # GPSAltitudeRef
+                6: IFDRational(430, 1),  # GPSAltitude
+            },
+        )
+
+        assert ProvenanceCapture()._extract_exif(img_path).gps_altitude == pytest.approx(expected)
+
 
 class TestValueRangeCapture:
     """Test value range capture in output metadata."""

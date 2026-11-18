@@ -16,8 +16,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from numbers import Rational
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -354,13 +356,13 @@ class ProvenanceCapture:
                     elif tag_name == "FocalLength":
                         camera.focal_length = self._parse_focal_length(value)
                     elif tag_name == "FocalLengthIn35mmFilm":
-                        camera.focal_length_35mm = int(value) if value else None
+                        camera.focal_length_35mm = self._parse_int(value)
                     elif tag_name == "FNumber":
                         camera.aperture = self._parse_aperture(value)
                     elif tag_name == "ExposureTime":
                         camera.shutter_speed = self._parse_shutter_speed(value)
                     elif tag_name == "ISOSpeedRatings" or tag_name == "PhotographicSensitivity":
-                        camera.iso = int(value) if value else None
+                        camera.iso = self._parse_int(value)
                     elif tag_name == "Flash":
                         camera.flash = str(value)
                     elif tag_name == "ExposureBiasValue":
@@ -378,7 +380,7 @@ class ProvenanceCapture:
 
                     # Orientation
                     elif tag_name == "Orientation":
-                        camera.orientation = int(value) if value else None
+                        camera.orientation = self._parse_int(value)
 
                     # Datetime
                     elif tag_name == "DateTimeOriginal":
@@ -440,36 +442,64 @@ class ProvenanceCapture:
     # EXIF parsing helpers
 
     @staticmethod
-    def _parse_focal_length(value: Any) -> Optional[float]:
-        """Parse focal length from EXIF value."""
+    def _parse_rational(value: Any) -> Optional[float]:
+        """Parse a RATIONAL EXIF value to a finite float.
+
+        Cameras write 0/0 for "unknown" (a lens without electronic contacts,
+        GPS without a fix). That is None here, never NaN or Inf: the
+        provenance sidecar is strict JSON and cannot hold them.
+        """
         try:
             if isinstance(value, tuple) and len(value) == 2:
-                return float(value[0]) / float(value[1])
-            return float(value)
-        except (ValueError, TypeError, ZeroDivisionError):
+                parsed = float(value[0]) / float(value[1])
+            else:
+                parsed = float(value)
+        except (ValueError, TypeError, ZeroDivisionError, OverflowError):
             return None
+        return parsed if math.isfinite(parsed) else None
+
+    @staticmethod
+    def _parse_int(value: Any) -> Optional[int]:
+        """Parse an integer EXIF value (None for 0, as before, and for unparseable values).
+
+        A multi-valued tag (ISOSpeedRatings may hold several values) uses its
+        first value instead of aborting the extraction of every later tag.
+        """
+        try:
+            if isinstance(value, tuple):
+                value = value[0]
+            return int(value) if value else None
+        except (ValueError, TypeError, IndexError, OverflowError):
+            return None
+
+    @staticmethod
+    def _parse_focal_length(value: Any) -> Optional[float]:
+        """Parse focal length from EXIF value."""
+        return ProvenanceCapture._parse_rational(value)
 
     @staticmethod
     def _parse_aperture(value: Any) -> Optional[float]:
         """Parse aperture (f-number) from EXIF value."""
-        try:
-            if isinstance(value, tuple) and len(value) == 2:
-                return float(value[0]) / float(value[1])
-            return float(value)
-        except (ValueError, TypeError, ZeroDivisionError):
-            return None
+        return ProvenanceCapture._parse_rational(value)
 
     @staticmethod
     def _parse_shutter_speed(value: Any) -> Optional[str]:
-        """Parse shutter speed from EXIF value."""
+        """Parse shutter speed from EXIF value as "numerator/denominator" (e.g. "1/250")."""
         try:
             if isinstance(value, tuple) and len(value) == 2:
                 num, denom = value
-                if num == 1:
-                    return f"1/{denom}"
-                else:
-                    return f"{num}/{denom}"
-            return str(value)
+            elif isinstance(value, Rational) and not isinstance(value, int):
+                # Pillow returns RATIONAL tags as IFDRational, not as a tuple.
+                num, denom = value.numerator, value.denominator
+                if not isinstance(num, int) or not isinstance(denom, int):
+                    return str(value)
+            else:
+                return str(value)
+            if not denom:
+                return None  # x/0: exposure time unknown
+            if num == 1:
+                return f"1/{denom}"
+            return f"{num}/{denom}"
         except (ValueError, TypeError):
             return None
 
@@ -566,6 +596,7 @@ class ProvenanceCapture:
             lon = gps_info.get(4)  # GPSLongitude
             lon_ref = gps_info.get(3)  # GPSLongitudeRef
             alt = gps_info.get(6)  # GPSAltitude
+            alt_ref = gps_info.get(5)  # GPSAltitudeRef: 1 = below sea level
 
             if not lat or not lon:
                 return None
@@ -577,6 +608,8 @@ class ProvenanceCapture:
                     min = float(dms[1][0]) / float(dms[1][1]) if isinstance(dms[1], tuple) else float(dms[1])
                     sec = float(dms[2][0]) / float(dms[2][1]) if isinstance(dms[2], tuple) else float(dms[2])
                     decimal = deg + (min / 60.0) + (sec / 3600.0)
+                    if not math.isfinite(decimal):
+                        return None  # 0/0 rationals: no GPS fix
                     if ref in ["S", "W"]:
                         decimal = -decimal
                     return decimal
@@ -585,12 +618,11 @@ class ProvenanceCapture:
             latitude = dms_to_decimal(lat, lat_ref)
             longitude = dms_to_decimal(lon, lon_ref)
 
-            altitude = None
-            if alt:
-                if isinstance(alt, tuple) and len(alt) == 2:
-                    altitude = float(alt[0]) / float(alt[1])
-                else:
-                    altitude = float(alt)
+            altitude = ProvenanceCapture._parse_rational(alt) if alt else None
+            if isinstance(alt_ref, (bytes, bytearray)):
+                alt_ref = alt_ref[0] if alt_ref else 0
+            if altitude is not None and alt_ref == 1:
+                altitude = -altitude
 
             return {
                 "latitude": latitude,
