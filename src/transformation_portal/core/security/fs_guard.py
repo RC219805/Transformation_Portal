@@ -312,7 +312,7 @@ class FSGuard:
         self._log("write", path, {"size": len(data)})
 
         if atomic:
-            self._write_atomic(path, data, encoding)
+            self._write_atomic(path, data, encoding=encoding, binary=False)
         else:
             path.write_text(data, encoding=encoding)
 
@@ -328,12 +328,12 @@ class FSGuard:
         self._log("write", path, {"size": len(data)})
 
         if atomic:
-            self._write_atomic(path, data, None)
+            self._write_atomic(path, data, encoding=None, binary=True)
         else:
             path.write_bytes(data)
 
     @staticmethod
-    def _write_atomic(path: Path, data: Union[str, bytes], encoding: Optional[str]) -> None:
+    def _write_atomic(path: Path, data: Union[str, bytes], *, encoding: Optional[str], binary: bool) -> None:
         """Stage ``data`` next to ``path``, flush it to disk, then rename it into place.
 
         Every call stages through its own exclusively created file. A staging
@@ -342,8 +342,10 @@ class FSGuard:
 
         Args:
             path: Destination path
-            data: Text (with ``encoding``) or bytes (``encoding`` is None)
-            encoding: Text encoding, or None for binary content
+            data: Text or bytes content
+            encoding: Text encoding; None selects the locale default, as
+                ``Path.write_text`` does. Ignored for binary content.
+            binary: Whether ``data`` is written in binary mode
         """
         staging_path = path.with_name(f".fsguard-{secrets.token_hex(8)}.tmp")
         descriptor = os.open(
@@ -352,7 +354,7 @@ class FSGuard:
             0o666,
         )
         try:
-            with os.fdopen(descriptor, "wb" if encoding is None else "w", encoding=encoding) as handle:
+            with os.fdopen(descriptor, "wb" if binary else "w", encoding=None if binary else encoding) as handle:
                 handle.write(data)
                 handle.flush()
                 os.fsync(handle.fileno())

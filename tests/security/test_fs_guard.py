@@ -472,6 +472,17 @@ class TestFSGuardAtomicWrite:
         assert path.read_text() == "previous"
         assert [entry.name for entry in tmp_path.iterdir()] == ["manifest.json"]
 
+    def test_atomic_text_write_with_default_encoding_matches_non_atomic(self, tmp_path: Path) -> None:
+        """``encoding=None`` selects the locale default for text, as ``Path.write_text`` does."""
+        fs = FSGuard()
+        atomic_path = tmp_path / "atomic.txt"
+        direct_path = tmp_path / "direct.txt"
+
+        fs.write_text(atomic_path, "line\n", encoding=None)  # type: ignore[arg-type]
+        fs.write_text(direct_path, "line\n", encoding=None, atomic=False)  # type: ignore[arg-type]
+
+        assert atomic_path.read_bytes() == direct_path.read_bytes()
+
     def test_atomic_write_creates_files_with_the_process_default_mode(self, tmp_path: Path) -> None:
         """Staging through a private file must not turn outputs owner-only."""
         path = tmp_path / "shared.json"
