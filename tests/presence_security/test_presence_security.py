@@ -260,3 +260,55 @@ def test_presence_cli_watermark_lsb_refuses_lossy_output_formats(tmp_path: Path,
     assert result.returncode != 0
     assert "lossless output format" in result.stderr
     assert not out.exists()
+
+
+def _lsb_allowlisted_extensions() -> list[str]:
+    from transformation_portal.presence_security.cli import _LSB_LOSSLESS_FORMATS
+
+    Image.init()
+    return sorted(ext for ext, fmt in Image.registered_extensions().items() if fmt in _LSB_LOSSLESS_FORMATS)
+
+
+@pytest.mark.parametrize("suffix", _lsb_allowlisted_extensions())
+def test_presence_cli_watermark_lsb_round_trips_every_allowlisted_format(tmp_path: Path, suffix: str) -> None:
+    """T-18: every output format LSB mode accepts must really preserve the payload (and lossless ones stay accepted)."""
+    from PIL import features
+
+    from transformation_portal.presence_security.cli import main
+
+    if Image.registered_extensions()[suffix] == "JPEG2000" and not features.check_codec("jpg_2000"):
+        pytest.skip("OpenJPEG codec not available")
+    source = tmp_path / "source.png"
+    out = tmp_path / f"watermarked{suffix}"
+    rng = np.random.default_rng(18)
+    Image.fromarray(rng.integers(0, 256, size=(24, 20, 3), dtype=np.uint8), mode="RGB").save(source)
+
+    exit_code = main(
+        [
+            "watermark",
+            "--image",
+            str(source),
+            "--manifest",
+            str(MANIFEST_EXAMPLE_PATH),
+            "--session",
+            "demo-session",
+            "--mode",
+            "lsb",
+            "--out",
+            str(out),
+        ]
+    )
+
+    assert exit_code == 0
+    with Image.open(out) as written:
+        manifest_hash16, session_id16 = manifest_session_from_lsb(written)
+    assert manifest_hash16 == hashlib.sha3_256(MANIFEST_EXAMPLE_PATH.read_bytes()).digest()[:16]
+    assert session_id16 == hashlib.sha256(b"demo-session").digest()[:16]
+
+
+def test_presence_cli_lsb_allowlist_keeps_lossless_render_formats() -> None:
+    """T-18 follow-up: lossless formats that carried a recoverable LSB watermark before must not be refused."""
+    extensions = set(_lsb_allowlisted_extensions())
+
+    assert {".png", ".bmp", ".dib", ".tif", ".tiff", ".ppm", ".tga", ".pcx", ".sgi"} <= extensions
+    assert not {".jpg", ".jpeg", ".webp", ".gif", ".ico"} & extensions

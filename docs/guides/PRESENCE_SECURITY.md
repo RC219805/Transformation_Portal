@@ -45,8 +45,9 @@ watermarking, and anchor payload generation.
 - Watermark helpers preserve the original LSB and DCT embedding behavior.
   Both fail closed instead of embedding a truncated payload: DCT mode needs at
   least 256 full 8x8 blocks (for example 128x128 pixels), and `watermark --mode
-  lsb` refuses output formats other than PNG, BMP, TIFF or PPM because lossy or
-  palettised encoders (JPEG, WebP, GIF) destroy the LSB payload.
+  lsb` only writes formats that store 8-bit RGB exactly (PNG, BMP/DIB, TIFF,
+  PPM, TGA, PCX, SGI, IM, QOI, DDS, JPEG 2000) because lossy or palettised
+  encoders (JPEG, WebP, GIF, ICO) destroy the LSB payload.
 - The Solidity contract is a reference skeleton with an owner-gated license
   setter; production deployment still requires the target auth and treasury
   model.
