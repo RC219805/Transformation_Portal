@@ -8194,9 +8194,11 @@ class EnhanceOrchestrator:
                         img.path,
                         e,
                     )
+                    # Same row shape as the enhancement error rows: batch
+                    # manifest, run-card inputs and result_summary key on "image".
                     results[index] = {
                         "status": "error",
-                        "image_input": img,
+                        "image": str(img.path),
                         "error": str(e),
                     }
 

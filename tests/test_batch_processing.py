@@ -1102,6 +1102,67 @@ class TestEnhanceBatch:
                     },
                 }
 
+    def test_parallel_preprocess_error_row_names_the_failed_image(self, batch_temp_workspace):
+        """Regression (audit F17): a preprocessing failure in the parallel path must
+        emit the same ``image`` key as the enhancement error rows, so the batch
+        manifest and run card can attribute the failure to its input."""
+        config = EnhanceConfig(
+            model_variant=ModelVariant.METRIC_LARGE,
+            enable_v2=False,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as mock_registry_class:
+                mock_backend = Mock()
+                mock_backend.ensure_available.return_value = None
+                mock_backend.name = "da3"
+
+                mock_registry = Mock()
+                mock_registry.get_backend.return_value = mock_backend
+                mock_registry_class.return_value = mock_registry
+
+                orchestrator = EnhanceOrchestrator(
+                    config=config,
+                    output_root=tmpdir_path,
+                )
+                orchestrator._use_parallel = True
+
+                input_dir = batch_temp_workspace["input_dir"]
+                fake_inputs = [ImageInput(path=input_dir / f"test_{i}.jpg") for i in range(4)]
+                failing = fake_inputs[2].path
+
+                def _preprocess(image_input, input_root):
+                    if image_input.path == failing:
+                        raise OSError("simulated stat failure")
+                    return {
+                        "status": "ok",
+                        "image_input": image_input,
+                        "output_key": Path(image_input.path.stem),
+                        "depth_path": tmpdir_path / "depth" / f"{image_input.path.stem}_depth.png",
+                        "manifest_path": tmpdir_path / "manifests" / f"{image_input.path.stem}_combined.json",
+                        "should_skip": False,
+                    }
+
+                def _enhance(image_input, input_root, _precomputed_paths=None):
+                    return {"status": "ok", "image": str(image_input.path)}
+
+                with (
+                    patch.object(orchestrator, "_preprocess_single", side_effect=_preprocess),
+                    patch.object(orchestrator, "enhance_image", side_effect=_enhance),
+                ):
+                    results = orchestrator.enhance_batch_parallel(fake_inputs, input_root=input_dir)
+
+                assert [row["image"] for row in results] == [str(item.path) for item in fake_inputs]
+                error_row = results[2]
+                assert error_row["status"] == "error"
+                assert error_row["image"] == str(failing)
+                assert error_row["error"] == "simulated stat failure"
+                assert "image_input" not in error_row
+                assert EnhanceOrchestrator._execution_result_input_path(error_row) == failing
+                json.dumps(error_row)
+
     def test_enhance_batch_sequential_enriches_apex_gate_error_payload(self, batch_temp_workspace):
         """Sequential batch path should emit structured ApexStrictGateError fields."""
         config = EnhanceConfig(
