@@ -402,7 +402,7 @@ def test_cleanup_never_touches_receiptless_directories_it_did_not_create(tmp_pat
     kept = {
         # Not a generated batch id.
         "upload_123": ("input", "_portal"),
-        "upload_1700000000_0A1B2C3D": ("input", "_portal"),
+        "upload_1700000000_2A3B4C5D": ("input", "_portal"),
         "manual_batch": ("input", "_portal"),
         # Generated-looking id without the managed layout.
         "upload_1700000000_0a1b2c3d": ("input",),
