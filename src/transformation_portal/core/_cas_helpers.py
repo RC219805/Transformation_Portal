@@ -14,7 +14,7 @@ import platform
 import re
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from transformation_portal.determinism.jcs import dumpb as jcs_dumpb
 from transformation_portal.ingest.canonical_json import dump_json
@@ -36,8 +36,12 @@ def sanitize_cas_id_for_filename(cas_id: str) -> str:
     return cas_id
 
 
-def atomic_write_json(path: Path, data: dict[str, Any]) -> None:
-    """Atomically write JSON data to a file."""
+def atomic_write_json(path: Path, data: dict[str, Any], *, max_bytes: Optional[int] = None) -> None:
+    """Atomically write JSON data to a file.
+
+    With ``max_bytes`` the file is published only if the bytes written for it
+    fit the limit; otherwise ``ValueError`` is raised and ``path`` is untouched.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
 
     fd, tmp_path_str = tempfile.mkstemp(
@@ -51,6 +55,8 @@ def atomic_write_json(path: Path, data: dict[str, Any]) -> None:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             dump_json(data, handle, indent=2, sort_keys=True)
             handle.flush()
+            if max_bytes is not None and os.fstat(handle.fileno()).st_size > max_bytes:
+                raise ValueError(f"JSON document exceeds byte limit of {max_bytes}")
             os.fsync(handle.fileno())
 
         os.replace(tmp_path, path)

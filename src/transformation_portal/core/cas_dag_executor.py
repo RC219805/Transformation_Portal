@@ -490,7 +490,12 @@ class CASDAGExecutor:
                             check(stage_name, "after_compute")
                             if cache_enabled and result.is_success():
                                 check(stage_name, "before_store")
-                                self._store_cache(identity, result)
+                                try:
+                                    self._store_cache(identity, result)
+                                except (CASError, OSError, TypeError, ValueError, RecursionError) as exc:
+                                    # The stage succeeded. A result the cache cannot
+                                    # hold is computed again next time, not failed now.
+                                    logger.warning("Result of stage %s was not cached: %s", stage_name, exc)
                 if result.cache_hit:
                     cache_hits += 1
                 stage_results[stage_name] = result
@@ -622,9 +627,9 @@ class CASDAGExecutor:
             "cached_at": datetime.now(timezone.utc).isoformat(),
         }
         data["payload_sha256"] = hashlib.sha256(jcs_dumpb(data)).hexdigest()
-        if len(jcs_dumpb(data)) > _MAX_CACHE_MANIFEST_BYTES:
-            raise ValueError("Cache manifest exceeds byte limit")
-        _atomic_write_json(cache_path, data)
+        # One limit for both directions: the reader bounds the file as written,
+        # which is larger than its canonical form.
+        _atomic_write_json(cache_path, data, max_bytes=_MAX_CACHE_MANIFEST_BYTES)
 
     def _cache_path(self, cas_id: str) -> Path:
         """Get cache file path for a CAS ID."""

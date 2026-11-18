@@ -26,9 +26,11 @@ import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import List
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 
 from transformation_portal.core.cas_dag_executor import (
@@ -36,6 +38,7 @@ from transformation_portal.core.cas_dag_executor import (
     CASDAGExecutor,
 )
 from transformation_portal.core.execution_wrapper import FileLock
+from transformation_portal.determinism.jcs import dumpb as jcs_dumpb
 from transformation_portal.stage_graph.graph import StageGraph
 from transformation_portal.stage_graph.stage import (
     Stage,
@@ -455,6 +458,100 @@ def test_cache_path_is_partitioned_by_id_prefix(tmp_path):
     # non-empty and short.
     assert len(path.parent.name) == 2
     assert path.suffix == ".json"
+
+
+# ---------------------------------------------------------------------------
+# Results the cache cannot hold
+# ---------------------------------------------------------------------------
+
+
+class _FixedResultStage(_RecordingStage):
+    """Successful stage that returns the given artifacts and result metadata."""
+
+    def __init__(self, name: str, *, artifacts: dict, metadata: dict | None = None):
+        super().__init__(name)
+        self._artifacts = artifacts
+        self._metadata = metadata or {}
+
+    def compute(self, context: StageContext) -> StageResult:
+        self.calls += 1
+        return StageResult(
+            stage_name=self.name,
+            stage_version=self.version,
+            status=StageStatus.COMPLETED,
+            artifacts=dict(self._artifacts),
+            metadata=dict(self._metadata),
+        )
+
+
+def _manifests(executor: CASDAGExecutor) -> list:
+    return sorted((executor.cache_dir / "dag_cache").rglob("*.json"))
+
+
+@pytest.mark.parametrize(
+    "artifact",
+    [np.float32(0.5), b"raw-bytes", Path("output.png"), {1: "non-string key"}, float("nan")],
+    ids=["numpy-float32", "bytes", "path", "non-string-key", "nan"],
+)
+def test_result_that_cannot_be_cached_does_not_fail_the_stage(make_executor, artifact):
+    """A cache write is an optimisation: the stage succeeded either way."""
+    executor = make_executor()
+    graph = StageGraph("uncacheable")
+    stage = _FixedResultStage("stats", artifacts={"stats.value": artifact})
+    graph.add_stage(stage)
+
+    first = executor.execute(graph, StageContext())
+    second = executor.execute(graph, StageContext())
+
+    assert first.success is True and first.error is None
+    assert first.stage_results["stats"].artifacts["stats.value"] is artifact
+    assert (first.cache_misses, second.cache_misses, second.cache_hits) == (1, 1, 0)
+    assert stage.calls == 2
+    assert _manifests(executor) == []
+
+
+def test_numpy_float_in_result_metadata_reads_back_from_cache(make_executor):
+    """The manifest digest is computed over the number that is written, so the entry verifies."""
+    executor = make_executor()
+    graph = StageGraph("float-metadata")
+    stage = _FixedResultStage(
+        "stats", artifacts={"stats.mean": 1.0}, metadata={"mean": np.float64(0.5), "tiny": np.float64(1e-5)}
+    )
+    graph.add_stage(stage)
+
+    first = executor.execute(graph, StageContext())
+    second = executor.execute(graph, StageContext())
+
+    assert first.success and second.success
+    assert (second.cache_hits, second.cache_misses) == (1, 0)
+    assert stage.calls == 1
+    assert second.stage_results["stats"].metadata == {"mean": 0.5, "tiny": 1e-5}
+
+
+def test_manifest_larger_than_the_read_limit_is_not_published(make_executor, monkeypatch):
+    """Store and read apply one size limit, to the manifest bytes on disk."""
+    from transformation_portal.core import cas_dag_executor
+
+    executor = make_executor()
+    graph = StageGraph("large-manifest")
+    stage = _FixedResultStage("big", artifacts={"big.values": list(range(400))})
+    graph.add_stage(stage)
+
+    assert executor.execute(graph, StageContext()).success
+    (manifest_path,) = _manifests(executor)
+    written_size = manifest_path.stat().st_size
+    canonical_size = len(jcs_dumpb(json.loads(manifest_path.read_text())))
+    assert canonical_size < written_size
+    manifest_path.unlink()
+
+    # A limit the canonical form fits but the file on disk does not.
+    monkeypatch.setattr(cas_dag_executor, "_MAX_CACHE_MANIFEST_BYTES", (canonical_size + written_size) // 2)
+    result = executor.execute(graph, StageContext())
+
+    assert result.success is True
+    assert (result.cache_hits, result.cache_misses) == (0, 1)
+    assert _manifests(executor) == []
+    assert [path.name for path in manifest_path.parent.iterdir()] == []
 
 
 # ---------------------------------------------------------------------------
