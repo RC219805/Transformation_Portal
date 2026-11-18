@@ -11,6 +11,8 @@ This module tests:
 from __future__ import annotations
 
 import multiprocessing as mp
+import threading
+import time
 from pathlib import Path
 from typing import Any, Dict
 from unittest.mock import MagicMock, patch
@@ -205,11 +207,15 @@ class TestProcessExecutorTimeout:
 
         with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(executor.ctx, "Process") as mock_process:
             mock_proc = MagicMock()
-            # Simulate process still running after join
-            mock_proc.is_alive.side_effect = [True, True, False]  # First check, after terminate, after kill
+            # Simulate a process that ignores terminate() and only dies on kill()
+            alive = {"value": True}
+            mock_proc.is_alive.side_effect = lambda: alive["value"]
+            mock_proc.kill.side_effect = lambda: alive.update(value=False)
             mock_process.return_value = mock_proc
 
-            mock_queue.return_value = MagicMock()
+            q = MagicMock()
+            q.empty.return_value = True  # The child never produces a result
+            mock_queue.return_value = q
 
             task = ProcessTask(
                 node_cls=SlowNode,
@@ -336,6 +342,83 @@ class TestProcessExecutorErrorHandling:
 
             # terminate should have been called in finally block
             mock_proc.terminate.assert_called()
+
+
+class LargeOutputNode:
+    """Node that finishes instantly with an output far larger than a pipe buffer."""
+
+    def __init__(self, size: int = 1_000_000):
+        self.size = size
+
+    def run(self, *, sandbox, **inputs) -> Dict[str, Any]:
+        return {"blob": "x" * self.size}
+
+
+def _run_with_watchdog(executor: ProcessExecutor, task: ProcessTask, watchdog_s: float) -> ProcessResult:
+    """Run ``executor.run`` in a thread and fail (rather than hang) if it never returns."""
+    box: Dict[str, Any] = {}
+    done = threading.Event()
+
+    def _target() -> None:
+        try:
+            box["result"] = executor.run(task)
+        finally:
+            done.set()
+
+    thread = threading.Thread(target=_target, daemon=True)
+    thread.start()
+    if not done.wait(watchdog_s):
+        for child in mp.active_children():  # do not leave a deadlocked child behind
+            child.kill()
+        thread.join(timeout=5)
+        pytest.fail(f"ProcessExecutor.run did not return within {watchdog_s}s")
+    return box["result"]
+
+
+class TestProcessExecutorRealChild:
+    """Real spawned children (T-05): results larger than the pipe buffer must not deadlock."""
+
+    @pytest.mark.parametrize("size", [70_000, 1_000_000])
+    def test_large_result_is_received_without_timeout(self, tmp_path: Path, size: int) -> None:
+        executor = ProcessExecutor(timeout=20.0)
+        task = ProcessTask(
+            node_cls=LargeOutputNode,
+            node_kwargs={"size": size},
+            inputs={},
+            sandbox_config={
+                "node_id": f"large_{size}",
+                "workspace_root": tmp_path / "ws",
+                "cas_root": tmp_path / "cas",
+            },
+        )
+
+        started = time.monotonic()
+        result = _run_with_watchdog(executor, task, watchdog_s=30.0)
+        elapsed = time.monotonic() - started
+
+        assert result.error is None, result.error
+        assert result.outputs["blob"] == "x" * size
+        # Without draining before join, the run only ends via the 20s executor timeout.
+        assert elapsed < 15.0
+
+    def test_no_timeout_large_result_returns(self, tmp_path: Path) -> None:
+        """With the default timeout=None the old join-first flow hung forever."""
+        executor = ProcessExecutor()
+        task = ProcessTask(
+            node_cls=LargeOutputNode,
+            node_kwargs={"size": 500_000},
+            inputs={},
+            sandbox_config={
+                "node_id": "large_no_timeout",
+                "workspace_root": tmp_path / "ws",
+                "cas_root": tmp_path / "cas",
+            },
+        )
+
+        result = _run_with_watchdog(executor, task, watchdog_s=20.0)
+
+        assert result.success is True
+        assert len(result.outputs["blob"]) == 500_000
 
 
 class TestProcessExecutorBatch:
