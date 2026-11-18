@@ -293,6 +293,44 @@ class TestArrayDigestCache:
         with pytest.raises(ValueError):
             ArrayDigestCache(maxsize=0)
 
+    def test_reused_id_of_freed_array_is_not_a_hit(self) -> None:
+        """S-6: a new array that inherits a freed array's id gets its own digest."""
+        cache = ArrayDigestCache()
+        for value in range(20):
+            first = np.full((16, 16, 3), float(value), dtype=np.float32)
+            cache.get_or_compute(first)
+            del first
+            # Allocated right after ``first`` was freed: CPython usually hands
+            # it the same id, shape and dtype, i.e. the same cache key.
+            second = np.full((16, 16, 3), float(value) + 0.5, dtype=np.float32)
+            assert cache.get_or_compute(second) == compute_array_sha256(second)
+            del second
+
+    def test_colliding_key_of_live_array_is_not_a_hit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """S-6: the key collision is resolved by identity, not by id() alone."""
+        import transformation_portal.spatial_ai.segmentation._content_digest as content_digest
+
+        monkeypatch.setattr(content_digest, "id", lambda _obj: 7, raising=False)
+        cache = ArrayDigestCache()
+        a = np.zeros((8, 8, 3), dtype=np.float32)
+        b = np.ones((8, 8, 3), dtype=np.float32)
+
+        assert cache.get_or_compute(a) == compute_array_sha256(a)
+        assert cache.get_or_compute(b) == compute_array_sha256(b)
+        assert cache.get_or_compute(a) == compute_array_sha256(a)
+
+    def test_override_is_bound_to_its_array(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import transformation_portal.spatial_ai.segmentation._content_digest as content_digest
+
+        monkeypatch.setattr(content_digest, "id", lambda _obj: 7, raising=False)
+        cache = ArrayDigestCache()
+        a = np.zeros((8, 8, 3), dtype=np.float32)
+        b = np.ones((8, 8, 3), dtype=np.float32)
+        override = "ab" * 32
+
+        assert cache.get_or_compute(a, override=override) == override
+        assert cache.get_or_compute(b) == compute_array_sha256(b)
+
 
 class TestLegacyFormulaPreserved:
     """Bit-identical output guards segmentation cache keys from drift."""
