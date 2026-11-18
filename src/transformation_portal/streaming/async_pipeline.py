@@ -626,7 +626,8 @@ class StreamingImageLoader:
 
     Features:
     - Async loading with prefetch buffer
-    - Memory management to prevent OOM
+    - Memory management: a garbage-collection pass once the images loaded
+      since the last pass reach 90% of ``max_memory_mb``
     - Support for multiple image formats
     - Optional thumbnail generation during load
 
@@ -651,7 +652,10 @@ class StreamingImageLoader:
 
         Args:
             prefetch_size: Number of images to prefetch
-            max_memory_mb: Maximum memory usage in MB
+            max_memory_mb: Memory budget in MB for loaded image arrays; once
+                the arrays yielded since the last collection reach 90% of it,
+                a garbage-collection pass runs. This is a soft trigger, not a
+                hard cap on resident memory.
             worker_pool: Optional shared worker pool
         """
         self._prefetch_size = prefetch_size
@@ -704,6 +708,18 @@ class StreamingImageLoader:
             metadata["memory_mb"] = memory_mb
 
             return image_array, metadata
+
+    @staticmethod
+    def _loaded_memory_mb(image: Any, metadata: Any) -> float:
+        """Size in MB of a loaded image, from its metadata or array size."""
+        if isinstance(metadata, dict):
+            value = metadata.get("memory_mb")
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+                return float(value)
+        nbytes = getattr(image, "nbytes", None)
+        if isinstance(nbytes, int) and nbytes >= 0:
+            return nbytes / (1024 * 1024)
+        return 0.0
 
     async def load_image(self, path: Path) -> Tuple[Any, Dict[str, Any]]:
         """Async load a single image.
@@ -762,6 +778,7 @@ class StreamingImageLoader:
 
                 try:
                     image, metadata = await task
+                    self._current_memory_mb += self._loaded_memory_mb(image, metadata)
                     yield image, path, None
                 except Exception as e:
                     if yield_on_error:
