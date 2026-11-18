@@ -770,6 +770,65 @@ async def test_postgres_delete_job_cascades_events(
     assert remaining == []
 
 
+async def test_event_store_purge_releases_history_and_counter(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    """``purge`` is how the owner of job deletion releases replay history.
+
+    Memory's ``repo.delete`` does not cascade (see above), so without an
+    explicit per-job purge every deleted job's events stayed for the life of
+    the process. Both backends must end in the state a Postgres repository
+    delete leaves behind: no events and a restarted sequence.
+    """
+    _, events = repository_and_events
+    await events.append("job-purged", "state", {"v": 1}, created_at=1.0)
+    await events.append("job-purged", "log", {"v": 2}, created_at=2.0)
+    await events.append("job-kept", "state", {"v": 3}, created_at=3.0)
+
+    await events.purge("job-purged")
+    await events.purge("job-purged")  # idempotent, as after a cascading delete
+    await events.purge("job-never-seen")
+
+    assert [event async for event in events.events_since("job-purged")] == []
+    assert await events.replay_batch("job-purged", after_seq=0) == []
+    assert [event.payload async for event in events.events_since("job-kept")] == [{"v": 3}]
+    restarted = await events.append("job-purged", "state", {"v": 4}, created_at=4.0)
+    assert restarted.seq == 1
+
+
+async def test_retention_cleanup_purges_event_history_of_deleted_jobs(
+    repository_and_events: RepoAndEvents,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deleting an expired job row must not leave its replay history behind."""
+    import app as orchestrator_app
+
+    repo, events = repository_and_events
+    monkeypatch.setattr(orchestrator_app, "_job_repository", lambda: repo)
+    monkeypatch.setattr(orchestrator_app, "_job_event_store", lambda: events)
+    monkeypatch.setattr(orchestrator_app, "JOBS", {})
+    monkeypatch.setattr(orchestrator_app, "EVENT_SUBSCRIBERS", {})
+    monkeypatch.delenv("TP_ORCHESTRATOR_QUEUE_BACKEND", raising=False)
+    now = orchestrator_app._now()
+    expired_at = now - orchestrator_app.JOB_RETENTION_SECONDS - 10
+
+    def finished(job_id: str, finished_at: float) -> JobRecord:
+        return JobRecord(id=job_id, created_at=finished_at - 60, state="succeeded", finished_at=finished_at)
+
+    await repo.create(finished("job-expired", expired_at))
+    await repo.create(finished("job-retained", now - 30))
+    for job_id in ("job-expired", "job-retained"):
+        await events.append(job_id, "log", {"id": job_id, "line": "stage 1"}, created_at=now)
+        await events.append(job_id, "done", {"id": job_id, "state": "succeeded"}, created_at=now)
+
+    await orchestrator_app._cleanup_expired_jobs(now)
+
+    assert await repo.get("job-expired") is None
+    assert [event async for event in events.events_since("job-expired")] == []
+    assert await repo.get("job-retained") is not None
+    assert [event.event_type async for event in events.events_since("job-retained")] == ["log", "done"]
+
+
 def _is_postgres_backend(repo: JobRepository) -> bool:
     """Return True iff ``repo`` is the Postgres backend.
 
@@ -841,3 +900,39 @@ async def test_memory_event_store_reset_clears_events_and_restarts_seq() -> None
 
     assert replay_after_reset == []
     assert next_event.seq == 1
+
+
+async def test_memory_event_store_purge_leaves_no_per_job_state() -> None:
+    """Deleted jobs must not pin events and counters for the life of the process."""
+    from transformation_portal.orchestrator.storage.memory import MemoryJobEventStore
+
+    events = MemoryJobEventStore()
+    job_ids = [f"job-{index}" for index in range(25)]
+    for job_id in job_ids:
+        await events.append(job_id, "log", {"id": job_id, "line": "x" * 100}, created_at=1.0)
+
+    for job_id in job_ids:
+        await events.purge(job_id)
+        # Replay of a purged id must not quietly re-create its bookkeeping.
+        assert [event async for event in events.events_since(job_id)] == []
+
+    assert dict(events._events) == {}
+    assert dict(events._next_seq) == {}
+
+
+async def test_default_purge_keeps_older_event_stores_compatible() -> None:
+    """``purge`` is additive: an event store written before it still works."""
+
+    class _LegacyEventStore(JobEventStore):
+        async def append(self, job_id: str, event_type: str, payload: dict[str, Any], *, created_at: float) -> Any:
+            raise AssertionError("not used")
+
+        def events_since(self, job_id: str, *, after_seq: int | None = None) -> Any:
+            raise AssertionError("not used")
+
+        async def reset(self) -> None:
+            return None
+
+    store = _LegacyEventStore()
+    await store.purge("job-legacy")
+    assert "purge" not in JobEventStore.__abstractmethods__

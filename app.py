@@ -3618,6 +3618,12 @@ async def _cleanup_expired_jobs(
             JOBS.pop(job.id, None)
             EVENT_SUBSCRIBERS.pop(job.id, None)
             _LAST_EVENT_PERSISTED_AT.pop(job.id, None)
+            try:
+                # Replay history must not outlive its job: the memory
+                # repository's delete does not cascade to the event store.
+                await _job_event_store().purge(job.id)
+            except Exception:  # noqa: BLE001 - one failed cleanup must not block others
+                LOGGER.exception("job event purge failed for %s", job.id)
 
 
 def _job_has_undeleted_artifacts(job: "Job") -> bool:
