@@ -181,28 +181,6 @@ class ExifMetadata(BaseModel):
     gps_latitude: Optional[float] = None
     gps_longitude: Optional[float] = None
 
-    @field_validator(
-        "camera_make",
-        "camera_model",
-        "lens_model",
-        "shutter_speed",
-        "white_balance",
-        "color_space",
-        "datetime_original",
-        mode="before",
-    )
-    @classmethod
-    def coerce_numeric_text(cls, value: Any) -> Any:
-        """Accept exiftool JSON numbers for text fields (e.g. a camera model named "6300").
-
-        exiftool writes numeric-looking string values as JSON numbers, which
-        pydantic would otherwise reject for ``Optional[str]``. Booleans are not
-        coerced.
-        """
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            return str(value)
-        return value
-
     @field_validator("focal_length", mode="before")
     @classmethod
     def normalize_focal_length(cls, value: Any) -> Any:

@@ -11,6 +11,7 @@ import pytest
 
 from transformation_portal.ingest import provenance as ingest_provenance
 from transformation_portal.ingest.provenance import _capture_toolchain_versions
+from transformation_portal.ingest.schemas import ExifMetadata
 
 pytestmark = pytest.mark.unit
 
@@ -96,3 +97,60 @@ def test_extract_exif_never_passes_a_dash_prefixed_file_argument(monkeypatch, fi
     assert ingest_provenance._extract_exif_with_exiftool(file_path) == {"SourceFile": "x"}
     assert calls[0][-1] == expected_argument
     assert not any(argument.startswith("-") and argument.endswith(".jpg") for argument in calls[0])
+
+
+def test_parse_exif_fields_restores_text_for_numeric_exiftool_values() -> None:
+    """D-14: exiftool JSON prints numeric-looking strings as numbers (a model named "6300").
+
+    The text form is restored where the exiftool payload is parsed, so the
+    extract no longer fails, while ``all_tags`` keeps the raw values and the
+    parsed fields satisfy the strict sidecar schema.
+    """
+    tags = {
+        "EXIF:Make": 1234,
+        "EXIF:Model": 6300,
+        "EXIF:LensModel": 50,
+        "EXIF:ShutterSpeed": 0.004,
+        "EXIF:WhiteBalance": 0,
+        "EXIF:ColorSpace": 1,
+        "EXIF:DateTimeOriginal": 2026,
+    }
+
+    exif = ingest_provenance._parse_exif_fields(dict(tags))
+
+    assert (
+        exif.camera_make,
+        exif.camera_model,
+        exif.lens_model,
+        exif.shutter_speed,
+        exif.white_balance,
+        exif.color_space,
+        exif.datetime_original,
+    ) == ("1234", "6300", "50", "0.004", "0", "1", "2026")
+    assert exif.all_tags == tags
+    assert type(exif.all_tags["EXIF:Model"]) is int
+    assert ExifMetadata(**exif.model_dump()) == exif
+
+
+def test_parse_exif_fields_keeps_text_values_and_rejects_booleans() -> None:
+    tags = {
+        "EXIF:Make": "Canon",
+        "EXIF:Model": "Canon EOS R5",
+        "EXIF:ShutterSpeed": "1/250",
+        "EXIF:DateTimeOriginal": "2026:01:02 03:04:05",
+    }
+
+    exif = ingest_provenance._parse_exif_fields(dict(tags))
+
+    assert (
+        exif.model_dump()
+        == ExifMetadata(
+            all_tags=tags,
+            camera_make="Canon",
+            camera_model="Canon EOS R5",
+            shutter_speed="1/250",
+            datetime_original="2026:01:02 03:04:05",
+        ).model_dump()
+    )
+    with pytest.raises(ValueError, match="valid string"):
+        ingest_provenance._parse_exif_fields({"EXIF:Model": True})

@@ -160,31 +160,31 @@ class TestExifMetadata:
         )
         assert metadata.bit_depth == 8
 
-    def test_numeric_exiftool_values_are_accepted_for_text_fields(self):
-        """D-14: exiftool JSON emits numeric-looking strings as numbers (a model named "6300")."""
-        metadata = ExifMetadata(
-            all_tags={"EXIF:Make": 1234, "EXIF:Model": 6300, "EXIF:ShutterSpeed": 0.004},
-            camera_make=1234,
-            camera_model=6300,
-            lens_model=50,
-            shutter_speed=0.004,
-            white_balance=0,
-            color_space=1,
-            datetime_original=2026,
-        )
-        assert metadata.camera_make == "1234"
-        assert metadata.camera_model == "6300"
-        assert metadata.lens_model == "50"
-        assert metadata.shutter_speed == "0.004"
-        assert metadata.white_balance == "0"
-        assert metadata.color_space == "1"
-        assert metadata.datetime_original == "2026"
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "camera_make",
+            "camera_model",
+            "lens_model",
+            "shutter_speed",
+            "white_balance",
+            "color_space",
+            "datetime_original",
+        ],
+    )
+    @pytest.mark.parametrize("value", [6300, 0.004, True])
+    def test_text_fields_stay_strict_in_the_sidecar_schema(self, field, value):
+        """D-14: the schema that validates sidecar files must keep rejecting numbers in text fields.
 
-    def test_text_fields_keep_string_values_and_reject_booleans(self):
+        exiftool's numeric-looking values are turned into text where the
+        exiftool payload is parsed (``_parse_exif_fields``), not here.
+        """
+        with pytest.raises(ValueError, match="valid string"):
+            ExifMetadata(all_tags={}, **{field: value})
+
+    def test_text_fields_keep_string_values(self):
         metadata = ExifMetadata(all_tags={}, camera_model="Canon EOS R5", shutter_speed="1/250")
         assert (metadata.camera_model, metadata.shutter_speed) == ("Canon EOS R5", "1/250")
-        with pytest.raises(ValueError):
-            ExifMetadata(all_tags={}, camera_model=True)
 
     def test_invalid_focal_length_string_still_rejected(self):
         """Test malformed focal length strings fail validation."""
