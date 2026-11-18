@@ -870,6 +870,59 @@ class TestCLI:
         assert result.exit_code == 1, result.output
         assert "all 2 images failed" in (result.stdout or "") + (result.stderr or "")
 
+    @pytest.mark.parametrize("command", ["process", "batch"])
+    def test_format_short_flag_is_dash_f(self, tmp_path, command):
+        """Regression for L-04: ``--format`` had the bare ``-`` as its short flag, so ``-f png`` exited 2."""
+        from typer.testing import CliRunner
+
+        from transformation_portal.pipelines.pro_pipeline import app
+
+        source = tmp_path / "in"
+        source.mkdir()
+        Image.new("RGB", (8, 8), color=(10, 20, 30)).save(source / "a.png")
+        target = source / "a.png" if command == "process" else source
+        out = tmp_path / "out"
+
+        result = CliRunner().invoke(
+            app, [command, str(target), "--out", str(out), "-f", "png", "--preset", "custom", "--no-ai", "--no-depth"]
+        )
+
+        assert result.exit_code == 0, result.output
+        assert sorted(p.suffix for p in out.iterdir()) == [".png"]
+
+    def test_batch_honours_pattern(self, tmp_path, monkeypatch):
+        """Regression for L-04: ``batch --pattern`` was accepted but ignored (every image was processed)."""
+        from typer.testing import CliRunner
+
+        from transformation_portal.pipelines import pro_pipeline
+
+        source = tmp_path / "in"
+        source.mkdir()
+        for name in ("a.png", "b.tif", "c.TIFF", "d.jpg"):
+            Image.new("RGB", (4, 4)).save(source / name)
+        seen = []
+        monkeypatch.setattr(
+            pro_pipeline.ProPipeline,
+            "batch_process",
+            lambda self, paths: seen.extend(sorted(p.name for p in paths)) or {"processed": len(paths), "failed": 0},
+        )
+
+        result = CliRunner().invoke(
+            pro_pipeline.app, ["batch", str(source), "--out", str(tmp_path / "out"), "--pattern", "*.{tif,TIFF}"]
+        )
+
+        assert result.exit_code == 0, result.output
+        assert seen == ["b.tif", "c.TIFF"]
+
+    def test_batch_default_pattern_keeps_historical_discovery(self, tmp_path):
+        from transformation_portal.pipelines.pro_pipeline import _DEFAULT_BATCH_PATTERN, _discover_batch_inputs
+
+        for name in ("a.png", "b.JPG", "c.tiff", "d.webp", "e.txt"):
+            (tmp_path / name).write_bytes(b"x")
+        (tmp_path / "dir.png").mkdir()
+
+        assert sorted(p.name for p in _discover_batch_inputs(tmp_path, _DEFAULT_BATCH_PATTERN)) == ["a.png", "b.JPG", "c.tiff"]
+
     def test_preset_enum_values(self):
         """Test that preset enum has expected values."""
         assert PipelinePreset.ARCHITECTURAL_HERO.value == "architectural-hero"

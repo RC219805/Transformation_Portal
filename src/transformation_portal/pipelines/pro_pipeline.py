@@ -86,6 +86,42 @@ _OUTPUT_FORMAT_ALIASES: Dict[str, str] = {
     "tif": "tif",
     "tiff": "tif",
 }
+_DEFAULT_BATCH_PATTERN = "*.{jpg,jpeg,png,tiff,tif}"
+_DEFAULT_BATCH_EXTENSIONS = ("jpg", "jpeg", "png", "tif", "tiff")
+
+
+def _expand_braces(pattern: str) -> List[str]:
+    """Expand ``{a,b}`` alternations in a glob pattern (``pathlib`` globs do not support them)."""
+    start = pattern.find("{")
+    end = pattern.find("}", start + 1) if start != -1 else -1
+    if start == -1 or end == -1:
+        return [pattern]
+    head, body, tail = pattern[:start], pattern[start + 1 : end], pattern[end + 1 :]
+    expanded: List[str] = []
+    for alternative in body.split(","):
+        expanded.extend(_expand_braces(head + alternative + tail))
+    return expanded
+
+
+def _discover_batch_inputs(input_dir: Path, pattern: str = _DEFAULT_BATCH_PATTERN) -> List[Path]:
+    """Return the files in ``input_dir`` matching ``pattern`` (``{a,b}`` alternations allowed).
+
+    The default pattern keeps the historical discovery: the five image extensions
+    in both lower and upper case.
+    """
+    if pattern == _DEFAULT_BATCH_PATTERN:
+        globs = [f"*.{ext}" for ext in _DEFAULT_BATCH_EXTENSIONS]
+        globs += [f"*.{ext.upper()}" for ext in _DEFAULT_BATCH_EXTENSIONS]
+    else:
+        globs = _expand_braces(pattern)
+    found: List[Path] = []
+    seen = set()
+    for glob_pattern in globs:
+        for path in input_dir.glob(glob_pattern):
+            if path.is_file() and path not in seen:
+                seen.add(path)
+                found.append(path)
+    return found
 
 
 def _parse_yaml_bool(value: Any, *, field: str) -> bool:
@@ -993,7 +1029,7 @@ def process(
     color_grading: bool = typer.Option(True, "--color-grading/--no-grading", help="Enable color grading"),
     finishing: bool = typer.Option(True, "--finishing/--no-finishing", help="Enable finishing"),
     # Output options
-    output_format: str = typer.Option("tif", "--format", "-", help="Output format (jpg, png, tiff)"),
+    output_format: str = typer.Option("tif", "--format", "-f", help="Output format (jpg, png, tiff)"),
     bit_depth: int = typer.Option(16, "--bits", help="Bit depth for TIFF (8, 16, 32)"),
     linear_output: bool = typer.Option(True, "--linear/--gamma", help="Save in linear colorspace (recommended)"),
     # Performance
@@ -1064,19 +1100,23 @@ def batch(
         "--config",
         help="YAML config file (e.g. config/pro_pipeline_config.yaml). CLI flags override YAML when explicitly set.",
     ),
-    pattern: str = typer.Option("*.{jpg,jpeg,png,tiff,tif}", "--pattern", help="File pattern to match"),
+    pattern: str = typer.Option(
+        _DEFAULT_BATCH_PATTERN, "--pattern", help="File pattern to match in INPUT_DIR ({a,b} alternations allowed)"
+    ),
     # Same options as process command
     depth_aware: bool = typer.Option(True, "--depth-aware/--no-depth"),
     ai_enhance: bool = typer.Option(True, "--ai-enhance/--no-ai"),
     material_response: bool = typer.Option(True, "--material-response/--no-material"),
     color_grading: bool = typer.Option(True, "--color-grading/--no-grading"),
     finishing: bool = typer.Option(True, "--finishing/--no-finishing"),
-    output_format: str = typer.Option("tif", "--format", "-"),
+    output_format: str = typer.Option("tif", "--format", "-f"),
     bit_depth: int = typer.Option(16, "--bits"),
     linear_output: bool = typer.Option(True, "--linear/--gamma"),
     device: str = typer.Option("auto", "--device"),
     quality: str = typer.Option("high", "--quality", "-q"),
-    num_workers: int = typer.Option(4, "--workers", "-w", help="Number of parallel workers"),
+    num_workers: int = typer.Option(
+        4, "--workers", "-w", help="Recorded in the config only: batch images are currently processed sequentially"
+    ),
     keep_intermediates: bool = typer.Option(False, "--keep-intermediates"),
     dry_run: bool = typer.Option(False, "--dry-run"),
 ):
@@ -1088,13 +1128,10 @@ def batch(
         python -m transformation_portal.pipelines.pro_pipeline batch ./renders --config config/pro_pipeline_config.yaml
     """
     # Find input images
-    input_paths = []
-    for ext in ["jpg", "jpeg", "png", "tif", "tiff"]:
-        input_paths.extend(input_dir.glob(f"*.{ext}"))
-        input_paths.extend(input_dir.glob(f"*.{ext.upper()}"))
+    input_paths = _discover_batch_inputs(input_dir, pattern)
 
     if not input_paths:
-        typer.echo(f"No images found in {input_dir}", err=True)
+        typer.echo(f"No images matching {pattern!r} found in {input_dir}", err=True)
         raise typer.Exit(code=1)
 
     config = _build_config_with_yaml_overrides(
