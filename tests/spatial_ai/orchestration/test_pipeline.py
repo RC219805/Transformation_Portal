@@ -1138,6 +1138,12 @@ class TestSpatialAIPipelineE2E:
         mock_ingest.input_size = (128, 128)
         mock_ingest.linear_rgb = np.random.rand(128, 128, 3).astype(np.float32)
         mock_ingest.gamma = 1.0
+        # Materials provenance records these two fields. Left as spec'd
+        # auto-attributes they are MagicMocks, which JSON canonicalisation
+        # chases through to_dict() until RecursionError (20s, 3 GB), after which
+        # the pipeline logs a warning and silently skips provenance.json.
+        mock_ingest.input_path = input_path
+        mock_ingest.content_hash = "sha256:" + "0" * 64
 
         mock_seg = MagicMock(spec=SegmentationResult)
         mock_seg.masks = [np.ones((128, 128), dtype=bool)]
@@ -1188,6 +1194,16 @@ class TestSpatialAIPipelineE2E:
         assert result.stages_completed == ["ingest", "segmentation", "materials"]
         assert result.materials is not None
         assert len(result.materials) == 1
+
+        # save_intermediates=True must leave the per-segment evidence on disk.
+        provenance_files = list(output_dir.rglob("provenance.json"))
+        diagnostics_files = list(output_dir.rglob("diagnostics.json"))
+        assert len(provenance_files) == 1
+        assert len(diagnostics_files) == 1
+        provenance = json.loads(provenance_files[0].read_text(encoding="utf-8"))
+        assert provenance["input_content_hash"] == "sha256:" + "0" * 64
+        assert provenance["input_path"] == str(input_path)
+        assert provenance["input_size"] == [128, 128]
 
     def test_process_saves_summary(self, tmp_path):
         """Test pipeline saves summary when save_intermediates=True."""
