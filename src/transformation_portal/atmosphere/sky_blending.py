@@ -49,6 +49,7 @@ class CorrectionSuggestion:
     confidence: float
     suggested_params: SkyParameters
     message: str
+    conflict: bool = False  # True when the request violates the source shadows
 
 
 class MuLawToneMapper:
@@ -128,6 +129,7 @@ class SunConsistencyGuard:
             confidence=existing_light.confidence,
             suggested_params=suggested,
             message=msg,
+            conflict=not is_valid,
         )
 
     def _estimate_dominant_light_source(self, img: np.ndarray, depth: np.ndarray) -> LightingProfile:
@@ -152,6 +154,9 @@ class SunConsistencyGuard:
         # 3. Solve via weighted correlation
         # We want the normal direction that correlates highest with brightness
         weights = gray**2
+        if not np.any(weights > 0):
+            # All-black frame: no lit surface to correlate against.
+            return LightingProfile(azimuth=0.0, elevation=45.0, confidence=0.0)
         avg_nx = np.average(nx, weights=weights)
         avg_ny = np.average(ny, weights=weights)
 
@@ -212,12 +217,14 @@ class SkyBlender:
         # 2. DECISION LOGIC
         active_params = sky_params
 
-        if auto_correct and suggestion.measured_source_azimuth != sky_params.sun_azimuth:
-            if suggestion.confidence > 0.4:
+        if auto_correct:
+            # Replace the request only when the guard reports a conflict; a
+            # request inside the tolerance (or ambiguous lighting) is honoured.
+            if suggestion.conflict:
                 logger.info(f"Auto-Correcting: {suggestion.message}")
                 active_params = suggestion.suggested_params
             else:
-                logger.info("Lighting ambiguous, proceeding with requested params.")
+                logger.info("No physics conflict, proceeding with requested params.")
 
         elif strict_physics and not auto_correct:
             # Check deviation for strict mode

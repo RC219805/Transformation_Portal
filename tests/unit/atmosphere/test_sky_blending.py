@@ -204,3 +204,85 @@ class TestSkyBlenderSmartRender:
             random_seed=1,
         )
         assert rendered.dtype == np.uint8
+
+
+# ---------------------------------------------------------------------------
+# M-29 regressions: auto-correct honours the guard, all-black frames
+# ---------------------------------------------------------------------------
+
+
+class _RecordingSky:
+    def __init__(self):
+        self.azimuths = []
+
+    def generate_sky(self, params, resolution, output_format, random_seed):
+        self.azimuths.append(params.sun_azimuth)
+        w, h = resolution
+        return np.full((h, w, 3), 0.8, np.float32)
+
+
+class _PassthroughAtmosphere:
+    def apply_aerial_perspective(self, scene, depth, params):
+        return scene
+
+
+def _gradient_image() -> np.ndarray:
+    return np.tile(np.linspace(20, 235, 64, dtype=np.uint8)[None, :, None], (64, 1, 3))
+
+
+class TestSmartRenderAutoCorrect:
+    def _blender(self, monkeypatch):
+        from transformation_portal.atmosphere.sky_blending import SkyBlender
+
+        sky = _RecordingSky()
+        blender = SkyBlender(skygan=sky, atmosphere=_PassthroughAtmosphere(), device="cpu")
+        monkeypatch.setattr(blender, "_estimate_depth", _luma_depth)
+        return blender, sky
+
+    def _measured(self, blender, image):
+        from transformation_portal.atmosphere.skygan_generator import SkyParameters
+
+        return blender.guardrail.analyze_and_suggest(image, blender._estimate_depth(image), SkyParameters())
+
+    def test_request_inside_tolerance_is_not_replaced(self, monkeypatch):
+        from transformation_portal.atmosphere.atmospheric_model import AtmosphericParameters
+        from transformation_portal.atmosphere.skygan_generator import SkyParameters
+
+        blender, sky = self._blender(monkeypatch)
+        image = _gradient_image()
+        probe = self._measured(blender, image)
+        assert probe.confidence > 0.4
+        requested = (probe.measured_source_azimuth + 10.0) % 360
+        _, suggestion = blender.smart_render(
+            image, SkyParameters(sun_azimuth=requested), AtmosphericParameters(), auto_correct=True
+        )
+        assert suggestion.conflict is False
+        assert suggestion.message.startswith("Physics OK")
+        assert sky.azimuths[-1] == pytest.approx(requested)
+
+    def test_conflicting_request_is_corrected(self, monkeypatch):
+        from transformation_portal.atmosphere.atmospheric_model import AtmosphericParameters
+        from transformation_portal.atmosphere.skygan_generator import SkyParameters
+
+        blender, sky = self._blender(monkeypatch)
+        image = _gradient_image()
+        measured = self._measured(blender, image).measured_source_azimuth
+        requested = (measured + 180.0) % 360
+        _, suggestion = blender.smart_render(
+            image, SkyParameters(sun_azimuth=requested), AtmosphericParameters(), auto_correct=True
+        )
+        assert suggestion.conflict is True
+        assert sky.azimuths[-1] == pytest.approx(measured)
+
+    def test_all_black_frame_renders_with_zero_confidence(self, monkeypatch):
+        from transformation_portal.atmosphere.atmospheric_model import AtmosphericParameters
+        from transformation_portal.atmosphere.skygan_generator import SkyParameters
+
+        blender, sky = self._blender(monkeypatch)
+        rendered, suggestion = blender.smart_render(
+            np.zeros((32, 32, 3), np.uint8), SkyParameters(sun_azimuth=200.0), AtmosphericParameters()
+        )
+        assert rendered.shape == (32, 32, 3)
+        assert suggestion.confidence == 0.0
+        assert suggestion.conflict is False
+        assert sky.azimuths[-1] == pytest.approx(200.0)
