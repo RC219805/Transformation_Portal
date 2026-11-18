@@ -119,6 +119,19 @@ def test_worker_error_reply_stays_readable_by_the_parent(monkeypatch, capsys):
     assert len(reply["error"]) <= worker.MAX_WORKER_ERROR_CHARS + len(" [truncated]")
 
 
+@pytest.mark.parametrize("character", ["写", "😀"])
+def test_worker_error_reply_bounds_escaped_non_ascii_errors(character):
+    # LN-10: the parent's decoder counts escaped JSON text, so a non-ASCII error
+    # within the character budget (e.g. naming a CJK path) was still masked.
+    message = "cannot read 写真.tif: " + character * 3000
+    reply = decode_bounded_json_object(worker.error_reply(ValueError(message)))
+    assert reply["ok"] is False
+    assert reply["error"].endswith(" [truncated]")
+    assert message.startswith(reply["error"][: -len(" [truncated]")])
+    short = decode_bounded_json_object(worker.error_reply(ValueError("cannot read 写真.tif")))
+    assert short["error"] == "cannot read 写真.tif"
+
+
 def test_close_terminates_descendants_after_leader_exit_and_is_idempotent(tmp_path):
     psutil = pytest.importorskip("psutil", reason="Native process supervision requires the optional ML-core profile")
     pid_file = tmp_path / "child.pid"
