@@ -8,7 +8,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
-import numpy as np
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 ProxyFormat = Literal["png", "jpeg"]
@@ -69,6 +68,9 @@ def _to_rgb(image: Image.Image) -> Image.Image:
     unsigned with a 65535 full scale, which maps exactly onto 0..255.
     """
     if image.mode.startswith("I;16"):
+        # Lazy: readiness and metadata paths import this module and must stay free of numerical runtimes.
+        import numpy as np
+
         samples = np.asarray(image).astype(np.uint32)
         scaled = ((samples * 255 + 32767) // 65535).astype(np.uint8)
         return Image.fromarray(scaled).convert("RGB")
