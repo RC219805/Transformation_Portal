@@ -186,8 +186,9 @@ class IngestStage:
 
         Key components:
         - Stage version
-        - Input file content hash (first 4KB + size)
+        - Input file content hash (full-file SHA256)
         - Strict ingest flag
+        - When sidecars are written: EXR/provenance flags, output directory, input stem
 
         Args:
             inputs: Stage inputs.
@@ -224,6 +225,8 @@ class IngestStage:
         # Config components
         config = context.config if hasattr(context, "config") else {}
         strict = config.get("strict_ingest", self._config.strict_ingest)
+        emit_exr = config.get("emit_exr", self._config.emit_exr)
+        emit_prov = config.get("emit_provenance", self._config.emit_provenance)
 
         # Combine components
         components = [
@@ -231,6 +234,21 @@ class IngestStage:
             f"file:{file_hash}",
             f"strict:{strict}",
         ]
+
+        # Sidecars (<stem>_linear.exr, <stem>_provenance.json) are side effects of
+        # execute() that a cache hit does not reproduce, so a run that writes them
+        # must not share a key with a run that does not, or with a run writing them
+        # under another name or directory. Runs without sidecars keep their key.
+        output_dir = getattr(context, "output_dir", None)
+        if output_dir and (emit_exr or emit_prov):
+            components.extend(
+                [
+                    f"exr:{bool(emit_exr)}",
+                    f"provenance:{bool(emit_prov)}",
+                    f"out:{Path(output_dir).resolve()}",
+                    f"stem:{input_path.stem}",
+                ]
+            )
         combined = "|".join(components)
         return hashlib.sha256(combined.encode()).hexdigest()
 
@@ -369,6 +387,7 @@ class SegmentationStage:
         Key components:
         - Stage version
         - Input RGB content hash
+        - Input RGB shape and dtype
         - Model size
         - Material classification flag
 
@@ -394,10 +413,16 @@ class SegmentationStage:
             self._enable_material_classification,
         )
 
+        # Raw bytes alone collide across shapes (4x8 vs 8x4) and dtypes with the
+        # same byte content, so the array layout is part of the identity.
+        rgb_array = np.asarray(linear_rgb)
+        rgb_layout = f"{'x'.join(str(d) for d in rgb_array.shape)}:{rgb_array.dtype.str}"
+
         # Combine components
         components = [
             f"v{self.metadata.version}",
             f"rgb:{rgb_hash}",
+            f"layout:{rgb_layout}",
             f"model:{model_size}",
             f"material:{enable_material}",
         ]
