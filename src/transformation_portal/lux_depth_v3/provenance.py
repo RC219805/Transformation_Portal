@@ -33,13 +33,15 @@ import functools
 import hashlib
 import json
 import logging
+import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from ..ingest.canonical_json import dumps_json
 from .io_atomic import atomic_write_bytes
@@ -74,12 +76,35 @@ class _ToolProbeUnavailable(Exception):
     """
 
 
+_ToolIdentity = Optional[Tuple[str, int, int, int, int]]
+
+
+def _resolved_tool_identity(name: str) -> _ToolIdentity:
+    """Return the identity of the executable ``name`` resolves to on PATH.
+
+    The memoised probes are keyed on it. A tool that is installed, upgraded,
+    replaced or removed while the process lives (or a changed PATH) therefore
+    gets a fresh probe, so a long-lived process never records the version, or
+    the availability, it saw for a different executable. ``None`` means PATH
+    resolves nothing; the probe itself still decides availability.
+    """
+    try:
+        resolved = shutil.which(name)
+        if resolved is None:
+            return None
+        file_stat = os.stat(resolved)
+    except (OSError, ValueError):
+        return None
+    return (resolved, file_stat.st_dev, file_stat.st_ino, file_stat.st_size, file_stat.st_mtime_ns)
+
+
 @functools.lru_cache(maxsize=1)
-def _probe_exiftool_version() -> str:
-    """Run ``exiftool -ver`` once per process and return its stripped output.
+def _probe_exiftool_version(tool_identity: _ToolIdentity) -> str:
+    """Run ``exiftool -ver`` once per resolved executable and return its stripped output.
 
     The installed exiftool is invariant for a batch, so a successful probe is
     memoised instead of spawning a Perl interpreter several times per image.
+    ``tool_identity`` (:func:`_resolved_tool_identity`) is only the memo key.
     Failures are not cached. Use :func:`clear_tool_probe_caches` to re-probe.
     """
     try:
@@ -98,8 +123,8 @@ def _probe_exiftool_version() -> str:
 
 
 @functools.lru_cache(maxsize=1)
-def _probe_imagemagick_version() -> Optional[str]:
-    """Run ``convert -version`` once per process (successful probes only)."""
+def _probe_imagemagick_version(tool_identity: _ToolIdentity) -> Optional[str]:
+    """Run ``convert -version`` once per resolved executable (successful probes only)."""
     try:
         result = subprocess.run(
             ["convert", "-version"],
@@ -132,7 +157,7 @@ def _check_exiftool_available() -> bool:
         True if exiftool is available, False otherwise
     """
     try:
-        _probe_exiftool_version()
+        _probe_exiftool_version(_resolved_tool_identity("exiftool"))
     except _ToolProbeUnavailable:
         return False
     return True
@@ -145,7 +170,7 @@ def get_exiftool_version() -> Optional[str]:
         Version string or None if not available
     """
     try:
-        return _probe_exiftool_version()
+        return _probe_exiftool_version(_resolved_tool_identity("exiftool"))
     except _ToolProbeUnavailable as e:
         logger.debug(f"Failed to get exiftool version: {e}")
     return None
@@ -309,7 +334,7 @@ def get_toolchain_versions() -> Dict[str, Optional[str]]:
 
     # Try to get ImageMagick version (optional - used in some pipelines)
     try:
-        versions["imagemagick_version"] = _probe_imagemagick_version()
+        versions["imagemagick_version"] = _probe_imagemagick_version(_resolved_tool_identity("convert"))
     except _ToolProbeUnavailable:
         versions["imagemagick_version"] = None
 

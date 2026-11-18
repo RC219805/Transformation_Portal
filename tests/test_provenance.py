@@ -7,6 +7,7 @@ ensuring deterministic, versioned sidecar generation with complete metadata.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -208,6 +209,45 @@ class TestExiftoolAvailability:
             assert provenance_module._check_exiftool_available() is True
             assert get_exiftool_version() == "12.76"
             mock_run.assert_called_once()
+
+    @pytest.mark.skipif(os.name != "posix", reason="the fake tools are POSIX shell scripts")
+    def test_replaced_or_removed_tools_are_probed_again(self, tmp_path: Path, monkeypatch):
+        """A long-lived process must not report the version of an executable that is gone."""
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        spawn_log = tmp_path / "spawns.log"
+        spawn_log.write_text("", encoding="utf-8")
+
+        def install(tool: str, output: str) -> None:
+            # A package upgrade publishes a new file over the old name.
+            staged = bin_dir / f"{tool}.staged"
+            staged.write_text(f'#!/bin/sh\necho "{tool}" >> "{spawn_log}"\necho "{output}"\n', encoding="utf-8")
+            staged.chmod(0o755)
+            os.replace(staged, bin_dir / tool)
+
+        monkeypatch.setenv("PATH", str(bin_dir))
+        install("exiftool", "12.76")
+        install("convert", "Version: ImageMagick 7.1.1-0")
+        for _ in range(3):
+            assert provenance_module._check_exiftool_available() is True
+            toolchain = get_toolchain_versions()
+            assert toolchain["exiftool_version"] == "12.76"
+            assert toolchain["imagemagick_version"] == "ImageMagick 7.1.1-0"
+        # Unchanged executables are still probed only once.
+        assert sorted(spawn_log.read_text(encoding="utf-8").split()) == ["convert", "exiftool"]
+
+        install("exiftool", "13.10")
+        install("convert", "Version: ImageMagick 7.1.2-3")
+        toolchain = get_toolchain_versions()
+        assert toolchain["exiftool_version"] == "13.10"
+        assert toolchain["imagemagick_version"] == "ImageMagick 7.1.2-3"
+
+        (bin_dir / "exiftool").unlink()
+        (bin_dir / "convert").unlink()
+        assert provenance_module._check_exiftool_available() is False
+        toolchain = get_toolchain_versions()
+        assert toolchain["exiftool_version"] is None
+        assert toolchain["imagemagick_version"] is None
 
     def test_get_exiftool_version_when_available(self):
         """Test exiftool version retrieval when exiftool is available."""
