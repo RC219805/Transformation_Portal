@@ -138,6 +138,13 @@ PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth_v6 \
   --input-dir "$TP_V6_ORIGINALS" --output-dir "$TP_V6_DEPTH_PRO_OUTPUT" --verify
 ```
 
+Depth Pro admits each original only when `pixels * 512 + file_bytes + 8 GiB`
+fits within `--memory-mib` and `pixels` is within `--max-pixels`; the header
+geometry is checked before pixels are decoded. With the default 16 GiB budget this
+admits roughly 16.7 million pixels, so a 24-megapixel original needs about
+`--memory-mib 20480`. A refusal from the memory reserve reports the required
+`--memory-mib`; a refusal from `--max-pixels` says `max_pixels`.
+
 Use `--device cpu` when an accelerator is unavailable. The input-color modes are
 `auto` (default), `auto_assume_srgb`, `srgb`, and `linear_srgb`. Auto modes convert
 supported embedded profiles; the assumption mode only falls back for genuinely

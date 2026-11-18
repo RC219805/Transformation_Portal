@@ -196,6 +196,23 @@ def test_native_bounded_admission(native_case, limits):
     assert not native_case.output_dir.exists()
 
 
+def test_native_working_memory_refusal_names_the_memory_budget(native_case):
+    # LN-9: the default 16 GiB budget admits under 16.8 MP; the refusal must name --memory-mib, not max_pixels.
+    (native_case.input_dir / "kitchen.png").unlink()
+    Image.new("RGB", (64, 40), (80, 110, 145)).save(native_case.input_dir / "kitchen.png")
+    raw_bytes = (native_case.input_dir / "kitchen.png").stat().st_size
+    required_mib = -(-(64 * 40 * 512 + raw_bytes + 8 * 1024**3) // 1024**2)
+    with pytest.raises(ValueError, match="pixel/working-memory admission") as excinfo:
+        native.prepare(replace(native_case, source_limits=SourceLimits(memory_mib=8193)))
+    assert f"--memory-mib >= {required_mib}" in str(excinfo.value)
+    assert "max_pixels" not in str(excinfo.value)
+    assert not native_case.output_dir.exists()
+    # The reported budget is sufficient, and the explicit max_pixels refusal is unchanged.
+    native.prepare(replace(native_case, source_limits=SourceLimits(memory_mib=required_mib)))
+    with pytest.raises(ValueError, match="exceed max_pixels"):
+        native.prepare(replace(native_case, source_limits=SourceLimits(max_pixels=10)))
+
+
 def test_native_output_reserve_and_tighter_replay_budget(native_case):
     with pytest.raises(ValueError, match="output byte admission"):
         native.prepare(replace(native_case, output_limits=OutputLimits(max_output_bytes=100)))

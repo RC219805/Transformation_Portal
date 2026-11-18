@@ -35,6 +35,15 @@ RAW_SUFFIXES = frozenset({".arw", ".cr2", ".cr3", ".dng", ".nef", ".nrw", ".orf"
 RawDecoder = Callable[[bytes, str], tuple[np.ndarray, Mapping[str, Any]]]
 
 
+class DecodedPixelLimitError(ValueError):
+    """Header geometry exceeds the caller's ``max_pixels`` before pixels are allocated."""
+
+    def __init__(self, height: int, width: int) -> None:
+        super().__init__("Decoded image dimensions exceed max_pixels")
+        self.height = height
+        self.width = width
+
+
 def _orient(array: np.ndarray, orientation: int) -> np.ndarray:
     if orientation == 1:
         return array
@@ -351,7 +360,7 @@ def decode_master(
 
     def check_dimensions(height: int, width: int) -> None:
         if height <= 0 or width <= 0 or height * width > max_pixels:
-            raise ValueError("Decoded image dimensions exceed max_pixels")
+            raise DecodedPixelLimitError(height, width)
 
     source_sha256 = hashlib.sha256(source_bytes).hexdigest()
     if Path(source_name).suffix.lower() in RAW_SUFFIXES:
