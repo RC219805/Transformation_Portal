@@ -151,6 +151,10 @@ def _standard_color_metadata(
     return profile, declared_color, exif_color
 
 
+_PNG_BASE_CHUNK_BUDGET = 8192
+_PNG_MIN_AVERAGE_CHUNK_BYTES = 1024
+
+
 def _png_color_metadata(source: BinaryIO, image: Image.Image, *, input_color: str) -> tuple[Image.Exif, dict[str, Any]]:
     """Inspect bounded color chunks, including late EXIF, without raster reads.
 
@@ -158,6 +162,12 @@ def _png_color_metadata(source: BinaryIO, image: Image.Image, *, input_color: st
     length, duplication and placement checks so malformed metadata cannot be
     mistaken for an untagged image by either preview or execution.
     """
+    # The chunk walk is bounded by the admitted stream size, not a flat count:
+    # libpng-family writers emit 8 KiB IDAT chunks, so large valid PNGs carry
+    # more than 8192 chunks, while a chunk bomb of tiny chunks still fails
+    # closed once it averages under _PNG_MIN_AVERAGE_CHUNK_BYTES per chunk.
+    stream_bytes = source.seek(0, io.SEEK_END)
+    chunk_budget = _PNG_BASE_CHUNK_BUDGET + stream_bytes // _PNG_MIN_AVERAGE_CHUNK_BYTES
     source.seek(8)
     seen: set[bytes] = set()
     metadata: dict[str, Any] = {}
@@ -165,7 +175,7 @@ def _png_color_metadata(source: BinaryIO, image: Image.Image, *, input_color: st
     seen_pixels = False
     color_chunks = {b"IHDR", b"iCCP", b"sRGB", b"gAMA", b"cHRM", b"cICP", b"eXIf", b"tRNS", b"mDCV", b"cLLI"}
     lengths = {b"IHDR": 13, b"sRGB": 1, b"gAMA": 4, b"cHRM": 32, b"cICP": 4, b"mDCV": 24, b"cLLI": 8}
-    for _ in range(8192):
+    for _ in range(chunk_budget):
         header = source.read(8)
         if len(header) != 8:
             raise ValueError("Incomplete PNG metadata")
