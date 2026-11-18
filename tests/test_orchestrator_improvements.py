@@ -1432,6 +1432,147 @@ class TestCachedRunFidelity:
         assert materials2.calls == 0
         assert v2_second.input_bytes == []
 
+    def test_depth_reuse_takes_the_v2_skip_decision_once_per_image(self, tmp_path):
+        """The hand-off choice and the V2 stage act on one skip decision, not two evaluations."""
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        input_root = tmp_path / "in"
+        self._write_gradient_png(input_root / "villa.png")
+        output_root = tmp_path / "out"
+        self._run_materials_v2_batch(input_root, output_root)
+
+        decisions: list[bool] = []
+        real_should_skip_v2 = EnhanceOrchestrator.should_skip_v2
+
+        def counting_should_skip_v2(self, *args, **kwargs):
+            decision = real_should_skip_v2(self, *args, **kwargs)
+            decisions.append(decision)
+            return decision
+
+        with patch.object(EnhanceOrchestrator, "should_skip_v2", counting_should_skip_v2):
+            _depth, materials_skip, v2_skip = self._run_materials_v2_batch(input_root, output_root)
+            assert decisions == [True]
+            assert (materials_skip.calls, v2_skip.input_bytes) == (0, [])
+
+            decisions.clear()
+            _depth, materials_rerun, v2_rerun = self._run_materials_v2_batch(input_root, output_root, v2_preset="luxury")
+            assert decisions == [False]
+            assert materials_rerun.calls == 1
+            assert len(v2_rerun.input_bytes) == 1
+
+    def test_prepared_forced_v2_rerun_binds_the_recomputed_materials_masks(self, tmp_path):
+        """A prepared depth-reuse rerun that re-executes V2 feeds it the hand-off and attests the masks it used."""
+        import hashlib
+        import json
+
+        import numpy as np
+
+        from transformation_portal.lux_depth_v3.execution_evidence import (
+            require_required_artifacts,
+            verify_execution_evidence_file,
+        )
+        from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        input_root = tmp_path / "inputs"
+        source = self._write_gradient_png(input_root / "villa.png")
+        prepared = prepare_lux_execution(
+            EnhanceConfig(
+                depth_backend="synthetic",
+                enable_v2=True,
+                force_v2=True,
+                enable_materials_v3=True,
+                quality_tier="premium",
+                v2_input_color="srgb",
+                emit_run_card=False,
+            ),
+            input_root,
+            [source],
+        )
+        output_root = tmp_path / "output"
+        orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
+
+        class _VaryingMasksMaterials:
+            calls = 0
+
+            def process(self, image, segmentation_result, depth_map):
+                self.calls += 1
+                pixels = np.asarray(image, dtype=np.float32)
+                return {
+                    "enhanced_image": np.clip(1.0 - pixels, 0.0, 1.0),
+                    # Different mask bytes on every call: a reused record of the
+                    # first run can never describe a later recomputation.
+                    "material_masks": {"sky": np.full(pixels.shape[:2], 1.0 / self.calls, dtype=np.float32)},
+                    "materials_v3_pixel_ops": {
+                        "enabled": True,
+                        "applied": [{"material": "sky", "ops": ["sky_gradient"]}],
+                        "blocked": [],
+                    },
+                    "materials_v3_response_plan": {"per_class": {}},
+                    "materials_v3_metadata": {"version": "3.1", "segmentation_metadata": {}},
+                }
+
+        materials = _VaryingMasksMaterials()
+        orchestrator.materials_v3_engine = materials
+        v2_inputs: list[bytes] = []
+
+        def fake_v2_stage(**kwargs):
+            v2_input = Path(kwargs["image_input"].path)
+            v2_inputs.append(v2_input.read_bytes())
+            output_key = Path(kwargs["output_key"])
+            output_path = output_root / "v2" / output_key.parent / f"{output_key.name}_v2_enhanced.png"
+            report_path = output_root / "v2" / output_key.parent / f"{output_key.name}_v2_report.json"
+            log_path = Path(kwargs["v2_log_path"])
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(v2_inputs[-1])
+            log_path.write_text("v2 run\n", encoding="utf-8")
+            report_path.write_text('{"depth_consumed": true, "status": "ok"}', encoding="utf-8")
+            result = {
+                "status": "ok",
+                "output": str(output_path),
+                "output_paths": [str(output_path)],
+                "report_path": str(report_path),
+                "depth_map": str(kwargs["depth_path"]),
+                "depth_consumed": True,
+                "runtime_s": 0.01,
+            }
+            return result, 0.01, report_path
+
+        orchestrator._run_v2_stage = fake_v2_stage
+
+        def run_and_read_mask_record() -> tuple[dict, bytes]:
+            known = set((output_root / "manifests").glob("execution_evidence_*.json"))
+            results = orchestrator.enhance_batch(input_root, input_files=[source])
+            assert [result["status"] for result in results] == ["ok"]
+            (evidence_path,) = set((output_root / "manifests").glob("execution_evidence_*.json")) - known
+            evidence = verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan)
+            require_required_artifacts(evidence)
+            (record,) = next(
+                outcome["artifacts"]
+                for outcome in evidence["produced_artifacts"]
+                if outcome["artifact_kind"] == "materials_v3_masks"
+            )
+            manifest = json.loads(Path(results[0]["manifest"]).read_bytes())
+            assert manifest["materials_v3"]["pixel_ops"]["applied"] == [{"material": "sky", "ops": ["sky_gradient"]}]
+            (stable_masks,) = (output_root / "segmentation").glob("*_materials_v3_masks.npz")
+            return record, stable_masks.read_bytes()
+
+        first_record, first_mask_bytes = run_and_read_mask_record()
+        assert first_record["sha256"] == hashlib.sha256(first_mask_bytes).hexdigest()
+
+        second_record, second_mask_bytes = run_and_read_mask_record()
+
+        # Depth was reused, V2 re-executed on the rebuilt hand-off.
+        assert materials.calls == 2
+        assert len(v2_inputs) == 2
+        assert v2_inputs[1] != source.read_bytes()
+        assert v2_inputs[1] == v2_inputs[0]
+        # The evidence of the second run attests the masks that run produced.
+        assert second_mask_bytes != first_mask_bytes
+        assert second_record["sha256"] == hashlib.sha256(second_mask_bytes).hexdigest()
+        assert second_record["path"] != first_record["path"]
+
 
 def _completed_prepared_depth_run(tmp_path: Path, **config_overrides):
     from PIL import Image

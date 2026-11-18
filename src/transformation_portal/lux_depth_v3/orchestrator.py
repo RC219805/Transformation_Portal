@@ -5671,7 +5671,7 @@ class EnhanceOrchestrator:
         materials_v3_runtime_s: float,
         enhanced_image_path: Optional[Path],
         prepared_reuse: Optional[_PreparedReuseSnapshot],
-    ) -> tuple[Optional[dict], float, Optional[Path]]:
+    ) -> tuple[Optional[dict], float, Optional[Path], Optional[bool]]:
         """Rebuild a missing Materials V3 hand-off before a non-APEX V2 rerun.
 
         Cached-depth reruns restore Materials V3 metadata from the manifest,
@@ -5680,8 +5680,13 @@ class EnhanceOrchestrator:
         failed V2), it must not silently consume the un-enhanced source while
         the manifest still records the applied pixel ops. APEX has its own
         stricter recovery in ``_ensure_apex_canonical_materials_execution``.
+
+        The fourth element is the V2 skip decision when this method had to
+        take it (``None`` otherwise). The V2 stage must act on that same
+        decision: taking it a second time would re-read the V2 deliverable in
+        prepared mode and could disagree with the hand-off chosen here.
         """
-        unchanged = (materials_v3_result, materials_v3_runtime_s, enhanced_image_path)
+        unchanged = (materials_v3_result, materials_v3_runtime_s, enhanced_image_path, None)
         restored_without_handoff = (
             enhanced_image_path is None
             and isinstance(materials_v3_result, dict)
@@ -5698,39 +5703,46 @@ class EnhanceOrchestrator:
             or not depth_path.exists()
         ):
             return unchanged
-        if not self.config.force_v2 and self.should_skip_v2(
+        skip_v2 = not self.config.force_v2 and self.should_skip_v2(
             find_v2_report(self.v2_dir, output_key.name),
             manifest_path,
             image_input,
             skip_depth,
             prepared_reuse=prepared_reuse,
-        ):
-            return unchanged
+        )
+        if skip_v2:
+            return materials_v3_result, materials_v3_runtime_s, enhanced_image_path, True
 
         logger.info(
             "Depth was reused and V2 will rerun but the Materials V3 hand-off is missing;"
             " recomputing Materials V3 from cached depth.",
         )
+        # The restored masks are about to be replaced (or their metadata
+        # dropped): prepared evidence must bind what this run leaves behind,
+        # not the previous batch's carrier of the masks.
+        if prepared_reuse is not None:
+            prepared_reuse.reused_artifact_kinds.discard("materials_v3_masks")
         depth_for_materials = self._load_cached_depth(depth_path, float_depth_path)
         if depth_for_materials is None:
             logger.warning(
                 "Cached depth could not be reloaded for Materials V3 recomputation;"
                 " dropping restored Materials V3 metadata so V2 input and manifest agree.",
             )
-            return None, 0.0, None
+            return None, 0.0, None, False
 
         from .preprocessing import preprocess_image, validate_image_format
 
         validated_path = validate_image_format(image_input.path)
         preprocessed_array, _ = preprocess_image(validated_path, raw_config=self.config)
         depth_array = np.asarray(depth_for_materials, dtype=np.float32)
-        return self._run_materials_v3_stage(
+        recomputed_result, recomputed_runtime_s, recomputed_enhanced_path = self._run_materials_v3_stage(
             preprocessed_array=preprocessed_array,
             source_path=image_input.path,
             depth_map=depth_array,
             output_key=output_key,
             artifact_shape=_shape_2d(depth_array),
         )
+        return recomputed_result, recomputed_runtime_s, recomputed_enhanced_path, False
 
     def _enforce_apex_v2_canonical_input_preflight(
         self,
@@ -6095,6 +6107,7 @@ class EnhanceOrchestrator:
         depth_artifact_sha256: Optional[str] = None,
         geometry_input_sha256: Optional[str] = None,
         native_materials_source: Optional[str] = None,
+        skip_v2_decision: Optional[bool] = None,
     ) -> tuple[dict, float, Optional[Path]]:
         """Stage B: V2 enhancement subprocess.
 
@@ -6109,6 +6122,9 @@ class EnhanceOrchestrator:
                 result with material_masks.
                 If provided, masks are
                 serialized and passed to V2.
+            skip_v2_decision: Skip decision already
+                taken for this image while choosing
+                the V2 input; ``None`` decides here.
 
         Returns:
             Tuple of (v2_result, v2_runtime_s, v2_report_path)
@@ -6123,13 +6139,16 @@ class EnhanceOrchestrator:
             raise LuxExecutionPlanAuthorityError("V2 Materials handoff does not match the returned intermediate path")
 
         v2_report_path = find_v2_report(self.v2_dir, output_key.name)
-        skip_v2 = not self.config.force_v2 and self.should_skip_v2(
-            v2_report_path,
-            manifest_path,
-            image_input,
-            skip_depth,
-            prepared_reuse=prepared_reuse,
-        )
+        if skip_v2_decision is not None:
+            skip_v2 = skip_v2_decision
+        else:
+            skip_v2 = not self.config.force_v2 and self.should_skip_v2(
+                v2_report_path,
+                manifest_path,
+                image_input,
+                skip_depth,
+                prepared_reuse=prepared_reuse,
+            )
 
         if skip_v2:
             logger.info("V2 outputs valid, skipping.")
@@ -7016,6 +7035,7 @@ class EnhanceOrchestrator:
                 materials_v3_result,
                 materials_v3_runtime_s,
                 enhanced_image_path,
+                v2_skip_decision,
             ) = self._ensure_materials_handoff_for_v2_rerun(
                 image_input=processing_image_input,
                 output_key=output_key,
@@ -7047,6 +7067,11 @@ class EnhanceOrchestrator:
             materials_v3_result=materials_v3_result,
         )
 
+        # Hand the V2 stage the skip decision the Materials hand-off was chosen
+        # under, so the stage neither re-reads the V2 deliverable nor disagrees.
+        v2_decision_kwargs: dict[str, Any] = {}
+        if v2_skip_decision is not None:
+            v2_decision_kwargs["skip_v2_decision"] = v2_skip_decision
         v2_geometry_kwargs: dict[str, Any] = {}
         if self._uses_corrected_geometry() and self.config.enable_v2:
             if depth_metadata is None or not isinstance(depth_metadata.stats, dict):
@@ -7076,6 +7101,7 @@ class EnhanceOrchestrator:
                 materials_v3_result=materials_v3_result,
                 materials_input_path=enhanced_image_path,
                 prepared_reuse=prepared_reuse,
+                **v2_decision_kwargs,
                 **v2_geometry_kwargs,
             )
         v2_result_status = self._normalize_v2_status(v2_result.get("status"))
