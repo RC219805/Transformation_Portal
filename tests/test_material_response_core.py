@@ -18,6 +18,7 @@ import pytest
 from transformation_portal.processors.material_response.core import (
     MaterialResponseExample,
     MaterialResponsePrinciple,
+    MaterialResponseValidator,
     _clamp,
     _coerce_diagonal,
     _coerce_matrix,
@@ -78,6 +79,15 @@ class TestCoerceMatrix:
     def test_rejects_jagged_rows(self) -> None:
         with pytest.raises(ValueError, match="rectangular"):
             _coerce_matrix([[1, 2], [3]])
+
+    def test_accepts_numpy_arrays(self) -> None:
+        """L-14: the validator documents "array-like" inputs, so ndarrays must coerce."""
+        assert _coerce_matrix(np.array([[1, 2], [3, 4]])) == [[1.0, 2.0], [3.0, 4.0]]
+        assert _coerce_matrix(np.array([1.5, 2.5])) == [[1.5, 2.5]]
+
+    def test_rejects_zero_dimensional_array(self) -> None:
+        with pytest.raises(TypeError):
+            _coerce_matrix(np.float64(1.0))  # type: ignore[arg-type]
 
 
 class TestFlattenAndMedian:
@@ -143,6 +153,36 @@ class TestDft2AndEnergyByBand:
         # All energy is at DC (radius 0), which is in the low band.
         assert low == pytest.approx(16.0)
         assert high == pytest.approx(0.0, abs=1e-9)
+
+    def test_dft2_matches_textbook_definition(self) -> None:
+        """L-15: the FFT-backed _dft2 keeps the textbook sign convention."""
+        import cmath
+
+        matrix = [[0.1, 0.9, 0.4], [0.7, 0.2, 0.5]]
+        rows, cols = 2, 3
+        result = _dft2(matrix)
+        for u in range(rows):
+            for v in range(cols):
+                expected = sum(
+                    matrix[x][y] * cmath.exp(-2j * cmath.pi * (u * x / rows + v * y / cols))
+                    for x in range(rows)
+                    for y in range(cols)
+                )
+                assert result[u][v] == pytest.approx(expected, abs=1e-12)
+                assert isinstance(result[u][v], complex)
+
+    def test_specular_preservation_scales_beyond_toy_grids(self) -> None:
+        """L-15: the former pure-Python O(N^4) DFT took ~10 s for a 64x64 grid."""
+        import time
+
+        rng = np.random.default_rng(0)
+        before = rng.random((64, 64)).tolist()
+        after = (np.asarray(before) * 2.0).tolist()
+        start = time.perf_counter()
+        ratio = MaterialResponseValidator().measure_specular_preservation(before, after)
+        elapsed = time.perf_counter() - start
+        assert ratio == pytest.approx(4.0, rel=1e-9)
+        assert elapsed < 2.0
 
 
 class TestLinearRegression:
@@ -362,3 +402,28 @@ class TestApplyTransformationTensor:
     def test_rejects_non_3d_input(self) -> None:
         with pytest.raises(ValueError, match="H.W.C"):
             apply_transformation_tensor(np.zeros((2, 2)))
+
+    def test_integer_image_does_not_truncate_fractional_coefficients(self) -> None:
+        """L-14: the matrix used to be cast to uint8, turning a 0.5 scale into 0."""
+        image = np.ones((2, 2, 3), dtype=np.uint8)
+        out = apply_transformation_tensor(image, 0.5)
+        assert out.dtype == np.float32
+        assert np.allclose(out, 0.5)
+
+    def test_explicit_dtype_is_honoured(self) -> None:
+        image = np.ones((1, 1, 3), dtype=np.uint8)
+        out = apply_transformation_tensor(image, 0.25, dtype=np.float64)
+        assert out.dtype == np.float64
+        assert np.allclose(out, 0.25)
+
+    def test_float_image_keeps_its_dtype(self) -> None:
+        image = np.full((1, 1, 3), 0.5, dtype=np.float32)
+        out = apply_transformation_tensor(image, 0.5)
+        assert out.dtype == np.float32
+
+    def test_pixels_are_row_vectors(self) -> None:
+        """Documented convention: out = pixel @ M (row c holds input channel c)."""
+        matrix = np.array([[0.2126, 0.7152, 0.0722], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+        green = np.array([[[0.0, 1.0, 0.0]]], dtype=np.float32)
+        out = apply_transformation_tensor(green, matrix)
+        assert np.allclose(out[0, 0], green[0, 0] @ matrix)
