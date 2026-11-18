@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from transformation_portal.rl.gat import GATLayer, create_gat_layer
+from transformation_portal.rl.gat import GATLayer, batch_edge_index, create_gat_layer
 
 logger = logging.getLogger(__name__)
 
@@ -180,29 +180,12 @@ class TemporalGATCritic:
 
         B, T, N, D = agent_states_seq.shape
 
-        # Process each timestep through GAT
-        node_embeddings_seq = []
+        # Run every (batch, timestep) graph at once as B*T disjoint copies of the DAG
+        x = self.node_embed(agent_states_seq.reshape(B * T * N, D))  # [B*T*N, embed_dim]
+        x = self._run_gat(x, batch_edge_index(edge_index, B * T, N))  # [B*T*N, embed_dim]
 
-        for t in range(T):
-            timestep_embeds = []
-
-            for b in range(B):
-                # Embed node states
-                x = self.node_embed(agent_states_seq[b, t])  # [N, embed_dim]
-
-                # Run GAT
-                x = self._run_gat(x, edge_index)  # [N, embed_dim]
-
-                timestep_embeds.append(x)
-
-            # Stack batch: [B, N, embed_dim]
-            timestep_embeds = torch.stack(timestep_embeds, dim=0)
-
-            # Aggregate nodes to single embedding per batch: [B, embed_dim]
-            node_embeddings_seq.append(timestep_embeds.mean(dim=1))
-
-        # Stack sequence: [B, T, embed_dim]
-        node_embeddings_seq = torch.stack(node_embeddings_seq, dim=1)
+        # Aggregate nodes to single embedding per (batch, timestep): [B, T, embed_dim]
+        node_embeddings_seq = x.view(B, T, N, self.embed_dim).mean(dim=2)
 
         # Add positional encoding
         node_embeddings_seq = node_embeddings_seq + self.pos_encoding[:, :T, :]

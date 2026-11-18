@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from transformation_portal.rl.gat import GATLayer, create_gat_layer
+from transformation_portal.rl.gat import GATLayer, batch_edge_index, create_gat_layer
 
 logger = logging.getLogger(__name__)
 
@@ -169,21 +169,10 @@ class GATQMIXCritic:
 
         B, N, D = agent_states.shape
 
-        # Process each batch item through GAT
-        # (GAT operates on single graphs, so we loop over batch)
-        embeddings = []
-
-        for b in range(B):
-            # Embed node states
-            x = self.node_embed(agent_states[b])  # [N, embed_dim]
-
-            # Run GAT
-            x = self._run_gat(x, edge_index)  # [N, embed_dim]
-
-            embeddings.append(x)
-
-        # Stack embeddings
-        embeddings = torch.stack(embeddings, dim=0)  # [B, N, embed_dim]
+        # Run the whole batch as one graph of B disjoint copies of the DAG
+        x = self.node_embed(agent_states.reshape(B * N, D))  # [B*N, embed_dim]
+        x = self._run_gat(x, batch_edge_index(edge_index, B, N))  # [B*N, embed_dim]
+        embeddings = x.view(B, N, self.embed_dim)  # [B, N, embed_dim]
 
         # Aggregate to context (mean pooling)
         context = embeddings.mean(dim=1)  # [B, embed_dim]

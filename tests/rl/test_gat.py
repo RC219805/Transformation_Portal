@@ -143,3 +143,97 @@ def test_gat_layers_expose_train_eval_modes(version):
     assert layer.training is True
     assert layer.eval().training is False
     assert layer.train(True).training is True
+
+
+# --- R8: vectorised per-destination softmax / aggregation and batched critics ---
+
+
+def _loop_segment_softmax(e, dst, num_nodes):
+    """The original per-node Python loop, kept as the reference."""
+    F = torch.nn.functional
+    attn = torch.zeros_like(e)
+    for i in range(num_nodes):
+        mask = dst == i
+        if mask.any():
+            attn[mask] = F.softmax(e[mask], dim=0)
+    return attn
+
+
+def _loop_scatter_sum(messages, dst, num_nodes):
+    out = torch.zeros((num_nodes,) + tuple(messages.shape[1:]), dtype=messages.dtype)
+    for i in range(messages.size(0)):
+        out[dst[i]] += messages[i]
+    return out
+
+
+R8_EDGES = torch.tensor([[0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3], [1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 5, 6, 3]])
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_vectorised_gat_layer_matches_loop_reference(version, monkeypatch):
+    import transformation_portal.rl.gat as gat_mod
+
+    torch.manual_seed(0)
+    layer = gat_mod.create_gat_layer(6, 5, version=version, heads=3)
+    x = torch.randn(10, 6, requires_grad=True)
+
+    out = layer.forward(x, R8_EDGES)
+    (grad_vec,) = torch.autograd.grad((out * torch.arange(5.0)).sum(), x)
+
+    monkeypatch.setattr(gat_mod, "_segment_softmax", _loop_segment_softmax)
+    monkeypatch.setattr(gat_mod, "_scatter_sum", _loop_scatter_sum)
+    ref = layer.forward(x, R8_EDGES)
+    (grad_ref,) = torch.autograd.grad((ref * torch.arange(5.0)).sum(), x)
+
+    assert torch.allclose(out, ref, rtol=0, atol=1e-6)
+    assert torch.allclose(grad_vec, grad_ref, rtol=0, atol=1e-6)
+
+
+def test_segment_softmax_is_stable_for_large_scores():
+    from transformation_portal.rl.gat import _segment_softmax
+
+    e = torch.tensor([[1000.0], [999.0], [-1000.0]])
+    dst = torch.tensor([0, 0, 1])
+
+    attn = _segment_softmax(e, dst, 3)
+
+    assert torch.isfinite(attn).all()
+    assert torch.allclose(attn, _loop_segment_softmax(e, dst, 3), rtol=0, atol=1e-6)
+
+
+def test_batched_gat_qmix_critic_matches_per_item_loop():
+    from transformation_portal.rl.ma_gat_critic import GATQMIXCritic
+
+    torch.manual_seed(0)
+    critic = GATQMIXCritic(state_dim=7, n_agents=10, embed_dim=8, gat_heads=2)
+    args = (torch.randn(4, 10), torch.randn(4, 10, 7), torch.randn(4, 7), R8_EDGES)
+
+    batched = critic.forward(*args)
+    looped, _ = critic.forward_with_attention(*args)  # still runs one graph per batch item
+
+    assert torch.allclose(batched, looped, rtol=0, atol=1e-6)
+
+
+def test_batched_temporal_gat_critic_matches_per_item_loop():
+    from transformation_portal.rl.temporal_gat_critic import TemporalGATCritic
+
+    torch.manual_seed(0)
+    critic = TemporalGATCritic(7, 10, embed_dim=8, seq_len=3, gat_heads=2, temporal_heads=2)
+    args = (torch.randn(4, 3, 10), torch.randn(4, 3, 10, 7), torch.randn(4, 3, 7), R8_EDGES)
+
+    batched = critic.forward(*args)
+    looped, _, _ = critic.forward_with_attention(*args)  # still loops over (timestep, batch item)
+
+    assert torch.allclose(batched, looped, rtol=0, atol=1e-6)
+
+
+def test_batch_edge_index_offsets_copies_and_rejects_out_of_range_nodes():
+    from transformation_portal.rl.gat import batch_edge_index
+
+    edges = torch.tensor([[0, 1], [1, 2]])
+
+    assert batch_edge_index(edges, 2, 3).tolist() == [[0, 1, 3, 4], [1, 2, 4, 5]]
+    assert batch_edge_index(torch.zeros(2, 0, dtype=torch.long), 4, 3).numel() == 0
+    for bad in (torch.tensor([[0, 3], [1, 2]]), torch.tensor([[0, -1], [1, 2]])):
+        with pytest.raises(ValueError, match="outside"):
+            batch_edge_index(bad, 2, 3)

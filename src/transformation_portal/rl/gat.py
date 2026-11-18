@@ -59,6 +59,52 @@ def _with_self_loops(edge_index: Any, num_nodes: int) -> Any:
     return torch.cat([edge_index, torch.stack([missing, missing])], dim=1)
 
 
+def _segment_softmax(e: Any, dst: Any, num_nodes: int) -> Any:
+    """Softmax of edge scores ``e`` [E, H] over the incoming edges of each destination.
+
+    Vectorised equivalent of ``softmax(e[dst == i], dim=0)`` for every node ``i``:
+    the per-destination maximum is subtracted for stability (as a constant, so the
+    gradient is that of the plain softmax) and the normaliser is a scatter-add.
+    """
+    torch, _, _ = _get_torch()
+
+    index = dst.unsqueeze(-1).expand_as(e)
+    e_max = torch.full((num_nodes, e.size(1)), float("-inf"), device=e.device, dtype=e.dtype)
+    e_max = e_max.scatter_reduce(0, index, e.detach(), reduce="amax", include_self=True)
+    exp = torch.exp(e - e_max[dst])
+    denom = torch.zeros(num_nodes, e.size(1), device=e.device, dtype=e.dtype).index_add(0, dst, exp)
+    return exp / denom[dst]
+
+
+def _scatter_sum(messages: Any, dst: Any, num_nodes: int) -> Any:
+    """Sum edge messages [E, H, D] into their destination nodes -> [N, H, D]."""
+    torch, _, _ = _get_torch()
+
+    out = torch.zeros((num_nodes,) + tuple(messages.shape[1:]), device=messages.device, dtype=messages.dtype)
+    return out.index_add(0, dst, messages)
+
+
+def batch_edge_index(edge_index: Any, num_graphs: int, num_nodes: int) -> Any:
+    """Replicate one graph's ``edge_index`` for ``num_graphs`` disjoint copies.
+
+    Copy ``g`` uses node ids ``g * num_nodes ... (g + 1) * num_nodes - 1``, so a
+    batch of node features flattened to ``[num_graphs * num_nodes, dim]`` runs
+    through a GAT layer in one call with the same per-graph result as looping.
+
+    Raises:
+        ValueError: if an edge references a node outside ``[0, num_nodes)``
+            (it would otherwise leak into a neighbouring graph of the batch).
+    """
+    torch, _, _ = _get_torch()
+
+    if edge_index.numel() == 0:
+        return edge_index
+    if int(edge_index.min()) < 0 or int(edge_index.max()) >= num_nodes:
+        raise ValueError(f"edge_index references nodes outside [0, {num_nodes})")
+    offsets = torch.arange(num_graphs, device=edge_index.device, dtype=edge_index.dtype) * num_nodes
+    return (edge_index.unsqueeze(1) + offsets.view(1, -1, 1)).reshape(2, -1)
+
+
 class GATLayer:
     """Single Graph Attention Network layer.
 
@@ -186,7 +232,6 @@ class GATLayer:
             edge_index = _with_self_loops(edge_index, N)
 
         src, dst = edge_index  # [E], [E]
-        E = src.size(0)
 
         # Get source and destination node features
         h_src = h[src]  # [E, H, D]
@@ -198,14 +243,8 @@ class GATLayer:
         e_dst = (h_dst * self.a_dst).sum(dim=-1)  # [E, H]
         e = F.leaky_relu(e_src + e_dst, negative_slope=self.negative_slope)
 
-        # Softmax over incoming edges per destination node
-        # Use scatter operations for efficiency
-        attn = torch.zeros(E, H, device=x.device, dtype=x.dtype)
-
-        for i in range(N):
-            mask = dst == i
-            if mask.any():
-                attn[mask] = F.softmax(e[mask], dim=0)
+        # Softmax over incoming edges per destination node (scatter ops)
+        attn = _segment_softmax(e, dst, N)  # [E, H]
 
         # Apply dropout to attention weights
         if self.dropout > 0 and self.training:
@@ -213,10 +252,7 @@ class GATLayer:
 
         # Aggregate: weighted sum of source features
         # out_i = Σ_j α_ij · h_j
-        out = torch.zeros(N, H, D, device=x.device, dtype=x.dtype)
-
-        for i in range(E):
-            out[dst[i]] += attn[i].unsqueeze(-1) * h_src[i]
+        out = _scatter_sum(attn.unsqueeze(-1) * h_src, dst, N)  # [N, H, D]
 
         # Average over heads
         out = out.mean(dim=1)  # [N, D]
@@ -360,7 +396,6 @@ class GATv2Layer:
             edge_index = _with_self_loops(edge_index, N)
 
         src, dst = edge_index
-        E = src.size(0)
 
         # GATv2: apply nonlinearity before attention
         # e_ij = a · LeakyReLU(W_src·h_i + W_dst·h_j)
@@ -368,16 +403,10 @@ class GATv2Layer:
         e = (combined * self.att).sum(dim=-1)  # [E, H]
 
         # Softmax per destination
-        attn = torch.zeros(E, H, device=x.device, dtype=x.dtype)
-        for i in range(N):
-            mask = dst == i
-            if mask.any():
-                attn[mask] = F.softmax(e[mask], dim=0)
+        attn = _segment_softmax(e, dst, N)
 
         # Aggregate
-        out = torch.zeros(N, H, D, device=x.device, dtype=x.dtype)
-        for i in range(E):
-            out[dst[i]] += attn[i].unsqueeze(-1) * h_src[src[i]]
+        out = _scatter_sum(attn.unsqueeze(-1) * h_src[src], dst, N)
 
         return out.mean(dim=1) + self.bias
 
