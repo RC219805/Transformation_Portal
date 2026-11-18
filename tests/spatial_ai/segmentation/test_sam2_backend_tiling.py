@@ -623,6 +623,102 @@ def test_tiling_skips_non_overlapping_tile_pairs():
     assert [item.area for item in result.metadata] == [64, 64]
 
 
+class _GroundTruthCropBackend:
+    """Report, per tile, the visible crop of full-image masks as full-tile patches (the SAM2 ``segment_tile`` shape)."""
+
+    name = "stub"
+    device = "cpu"
+
+    def __init__(self, masks_for_tile):
+        self._masks_for_tile = masks_for_tile
+
+    def global_seed_pass(self, **kwargs):
+        del kwargs
+        return None
+
+    def segment_tile(self, **kwargs):
+        tile_spec = kwargs["tile_spec"]
+        box = tile_spec.bbox
+        instances = []
+        for idx, full_mask in enumerate(self._masks_for_tile(tile_spec)):
+            crop = full_mask[box.y0 : box.y1, box.x0 : box.x1]
+            if not crop.any():
+                continue
+            instances.append(
+                TileInstance(
+                    local_id=f"{tile_spec.tile_id}:{idx}",
+                    score=0.9,
+                    stability_score=0.9,
+                    soft_mask=SoftMaskPatch(bbox=BBox(0, 0, box.w, box.h), values=crop.astype(np.float32), space="prob"),
+                )
+            )
+        return tuple(instances)
+
+
+def _run_default_engine_on_ground_truth(masks_for_tile, *, width, height, tile_size_px=200, overlap_px=50):
+    config = SegmentationTilingConfig(enabled=True, tile_size_px=tile_size_px, overlap_px=overlap_px)
+    config.global_pass.enabled = False
+    engine = SAM2Backend.__new__(SAM2Backend)._build_default_tiled_engine()
+    return engine.run(
+        backend=_GroundTruthCropBackend(masks_for_tile),
+        seg_input=SegmentationInput(image=np.zeros((height, width, 3), dtype=np.float32), gamma=1.0, mode="auto"),
+        image_hash="abc",
+        config=config,
+    )
+
+
+def _rect_mask(height, width, rows, cols):
+    mask = np.zeros((height, width), dtype=bool)
+    mask[rows[0] : rows[1], cols[0] : cols[1]] = True
+    return mask
+
+
+def test_tiling_keeps_nested_part_and_whole_as_separate_instances_across_seam():
+    """A part inside the overlap band is 100 % contained in the other tile's whole mask; that is not agreement."""
+    height, width = 60, 300  # tiles [0, 200) and [150, 300); overlap band [150, 200)
+    sofa = _rect_mask(height, width, (10, 50), (20, 280))
+    cushion = _rect_mask(height, width, (20, 40), (160, 190))
+
+    result = _run_default_engine_on_ground_truth(lambda tile: [sofa, cushion], width=width, height=height)
+
+    assert result.masks.shape == (2, height, width)
+    assert np.array_equal(result.masks[0], sofa)
+    assert np.array_equal(result.masks[1], cushion)
+    assert [item.area for item in result.metadata] == [int(sofa.sum()), int(cushion.sum())]
+
+
+def test_tiling_unions_same_tile_parts_before_blending_across_tiles():
+    """One tile splits an object in two, the neighbour sees one mask: no confident pixel may be dropped."""
+    height, width = 60, 300
+    left_part = _rect_mask(height, width, (10, 50), (20, 170))
+    right_part = _rect_mask(height, width, (10, 50), (170, 200))
+    whole = left_part | right_part
+
+    def masks_for_tile(tile):
+        return [left_part, right_part] if tile.bbox.x0 == 0 else [whole]
+
+    result = _run_default_engine_on_ground_truth(masks_for_tile, width=width, height=height)
+
+    assert result.masks.shape == (1, height, width)
+    assert np.array_equal(result.masks[0], whole)
+    assert result.metadata[0].area == int(whole.sum())
+
+
+def test_tiling_reproduces_ground_truth_when_all_tiles_agree():
+    """Four tiles meeting in one corner, a whole with a nested part in the corner and an object seen by one tile."""
+    size = 300  # 2 x 2 tiles of 200 px with a 50 px overlap; all four share [150, 200) x [150, 200)
+    floor = _rect_mask(size, size, (20, 280), (20, 280))
+    rug = _rect_mask(size, size, (165, 185), (165, 185))
+    lamp = _rect_mask(size, size, (5, 15), (5, 15))
+
+    result = _run_default_engine_on_ground_truth(lambda tile: [floor, rug, lamp], width=size, height=size)
+
+    assert result.masks.shape == (3, size, size)
+    assert np.array_equal(result.masks[0], floor)
+    assert np.array_equal(result.masks[1], rug)
+    assert np.array_equal(result.masks[2], lamp)
+
+
 def test_stable_image_hash_is_deterministic_for_identical_input(tmp_path):
     checkpoint = tmp_path / "sam2_test.pt"
     checkpoint.touch()

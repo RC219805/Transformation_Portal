@@ -60,30 +60,42 @@ class BinaryUnionTileMerger:
         ly1 = y1 - candidate.bbox.y0
         return candidate.mask_patch[ly0:ly1, lx0:lx1]
 
-    def _iou(self, left: _PatchCandidate, right: _PatchCandidate, overlap_window: tuple[int, int, int, int]) -> float:
-        left_band = self._window_patch(left, overlap_window)
-        right_band = self._window_patch(right, overlap_window)
-        intersection = int(np.count_nonzero(left_band & right_band))
+    def _band_area(self, candidate: _PatchCandidate, tile_overlap: tuple[int, int, int, int]) -> int:
+        """Count the candidate's mask pixels inside the band shared by two tiles."""
+        window = self._bbox_overlap_window(BBox(*tile_overlap), candidate.bbox)
+        if window is None:
+            return 0
+        return int(np.count_nonzero(self._window_patch(candidate, window)))
+
+    @staticmethod
+    def _iou(left: _PatchCandidate, right: _PatchCandidate, intersection: int) -> float:
+        """IoU of the two whole instances; they can only intersect inside the shared band."""
         if intersection <= 0:
             return 0.0
         union = int(left.area) + int(right.area) - intersection
         return float(intersection / union) if union > 0 else 0.0
 
-    def _overlap_band_continuity(
-        self,
-        left: _PatchCandidate,
-        right: _PatchCandidate,
-        overlap_window: tuple[int, int, int, int],
-    ) -> float:
-        left_band = self._window_patch(left, overlap_window)
-        right_band = self._window_patch(right, overlap_window)
-        left_area = int(np.count_nonzero(left_band))
-        right_area = int(np.count_nonzero(right_band))
-        denominator = min(left_area, right_area)
+    @staticmethod
+    def _band_iou(left_band_area: int, right_band_area: int, intersection: int) -> float:
+        """Agreement of two instances inside the shared band (symmetric)."""
+        if intersection <= 0:
+            return 0.0
+        union = left_band_area + right_band_area - intersection
+        return float(intersection / union) if union > 0 else 0.0
+
+    @staticmethod
+    def _overlap_band_continuity(left_band_area: int, right_band_area: int, intersection: int) -> float:
+        """Share of the smaller band mask that the other tile also covers.
+
+        This is containment, not agreement: a part (cushion) lies 100 % inside
+        the whole (sofa) another tile reports. It is the seam metric reported to
+        the validator and must be paired with ``_band_iou`` before two instances
+        are treated as one object.
+        """
+        denominator = min(left_band_area, right_band_area)
         if denominator <= 0:
             return 0.0
-        overlap_area = int(np.count_nonzero(left_band & right_band))
-        return float(overlap_area / denominator)
+        return float(intersection / denominator)
 
     @staticmethod
     def _weighted_mean(items: Sequence[_PatchCandidate], key: str) -> float:
@@ -114,26 +126,37 @@ class BinaryUnionTileMerger:
         return probs
 
     @staticmethod
-    def _candidate_weight(candidate: _PatchCandidate, *, W: int, H: int, mode: str) -> np.ndarray:
-        overlap = max(0, int(candidate.tile_overlap_px))
+    def _tile_weight(
+        tile_bbox: BBox,
+        overlap_px: int,
+        region: tuple[int, int, int, int],
+        *,
+        W: int,
+        H: int,
+        mode: str,
+    ) -> np.ndarray:
+        """Blend weight of one tile over ``region`` (global ``x0, y0, x1, y1``)."""
+        x0, y0, x1, y1 = region
+        height = max(0, y1 - y0)
+        width = max(0, x1 - x0)
+        overlap = max(0, int(overlap_px))
         if overlap <= 0 or mode not in {"hann", "cosine", "linear"}:
-            return np.ones_like(candidate.prob_patch, dtype=np.float32)
+            return np.ones((height, width), dtype=np.float32)
 
-        height, width = candidate.prob_patch.shape
-        ys = np.arange(candidate.bbox.y0, candidate.bbox.y1, dtype=np.float32) - float(candidate.tile_bbox.y0)
-        xs = np.arange(candidate.bbox.x0, candidate.bbox.x1, dtype=np.float32) - float(candidate.tile_bbox.x0)
-        tile_w = max(1, candidate.tile_bbox.w)
-        tile_h = max(1, candidate.tile_bbox.h)
+        ys = np.arange(y0, y1, dtype=np.float32) - float(tile_bbox.y0)
+        xs = np.arange(x0, x1, dtype=np.float32) - float(tile_bbox.x0)
+        tile_w = max(1, tile_bbox.w)
+        tile_h = max(1, tile_bbox.h)
 
         x_ratio = np.ones((width,), dtype=np.float32)
         y_ratio = np.ones((height,), dtype=np.float32)
-        if candidate.tile_bbox.x0 > 0:
+        if tile_bbox.x0 > 0:
             x_ratio = np.minimum(x_ratio, xs / float(overlap))
-        if candidate.tile_bbox.x1 < W:
+        if tile_bbox.x1 < W:
             x_ratio = np.minimum(x_ratio, (float(tile_w - 1) - xs) / float(overlap))
-        if candidate.tile_bbox.y0 > 0:
+        if tile_bbox.y0 > 0:
             y_ratio = np.minimum(y_ratio, ys / float(overlap))
-        if candidate.tile_bbox.y1 < H:
+        if tile_bbox.y1 < H:
             y_ratio = np.minimum(y_ratio, (float(tile_h - 1) - ys) / float(overlap))
 
         ratio = np.clip(np.minimum(y_ratio[:, np.newaxis], x_ratio[np.newaxis, :]), 0.0, 1.0)
@@ -209,15 +232,42 @@ class BinaryUnionTileMerger:
         single_source = np.zeros((height, width), dtype=np.float32)
         contributions = np.zeros((height, width), dtype=np.uint16)
 
+        # One vote per tile. Two members of the same tile are parts of what a
+        # neighbouring tile reported as one object; averaging them lets each
+        # part vote "0" against its sibling and erases both. Take their union
+        # first and blend only across tiles. A tile votes over its whole
+        # footprint (0 where none of its members is set), so the result does not
+        # depend on how tightly a backend crops its patches.
+        members_by_tile: dict[str, list[_PatchCandidate]] = {}
         for item in group:
-            x0 = item.bbox.x0 - gx0
-            y0 = item.bbox.y0 - gy0
-            x1 = item.bbox.x1 - gx0
-            y1 = item.bbox.y1 - gy0
-            weight = self._candidate_weight(item, W=W, H=H, mode=window)
-            weighted[y0:y1, x0:x1] += item.prob_patch * weight
+            members_by_tile.setdefault(item.tile_id, []).append(item)
+
+        for members in members_by_tile.values():
+            tile_bbox = members[0].tile_bbox
+            tx0 = min(max(tile_bbox.x0, gx0), min(item.bbox.x0 for item in members))
+            ty0 = min(max(tile_bbox.y0, gy0), min(item.bbox.y0 for item in members))
+            tx1 = max(min(tile_bbox.x1, gx1), max(item.bbox.x1 for item in members))
+            ty1 = max(min(tile_bbox.y1, gy1), max(item.bbox.y1 for item in members))
+            tile_prob = np.zeros((ty1 - ty0, tx1 - tx0), dtype=np.float32)
+            for item in members:
+                target = tile_prob[item.bbox.y0 - ty0 : item.bbox.y1 - ty0, item.bbox.x0 - tx0 : item.bbox.x1 - tx0]
+                np.maximum(target, item.prob_patch, out=target)
+
+            x0 = tx0 - gx0
+            y0 = ty0 - gy0
+            x1 = tx1 - gx0
+            y1 = ty1 - gy0
+            weight = self._tile_weight(
+                tile_bbox,
+                members[0].tile_overlap_px,
+                (tx0, ty0, tx1, ty1),
+                W=W,
+                H=H,
+                mode=window,
+            )
+            weighted[y0:y1, x0:x1] += tile_prob * weight
             weights[y0:y1, x0:x1] += weight
-            single_source[y0:y1, x0:x1] = np.maximum(single_source[y0:y1, x0:x1], item.prob_patch)
+            single_source[y0:y1, x0:x1] = np.maximum(single_source[y0:y1, x0:x1], tile_prob)
             contributions[y0:y1, x0:x1] += 1
 
         probabilities = np.zeros((height, width), dtype=np.float32)
@@ -306,6 +356,16 @@ class BinaryUnionTileMerger:
                     return
                 parent[right_root] = left_root
 
+            band_areas: dict[tuple[int, tuple[int, int, int, int]], int] = {}
+
+            def band_area(idx: int, tile_overlap: tuple[int, int, int, int]) -> int:
+                key = (idx, tile_overlap)
+                cached = band_areas.get(key)
+                if cached is None:
+                    cached = self._band_area(candidates[idx], tile_overlap)
+                    band_areas[key] = cached
+                return cached
+
             for left_idx in range(len(candidates)):
                 for right_idx in range(left_idx + 1, len(candidates)):
                     left = candidates[left_idx]
@@ -326,11 +386,23 @@ class BinaryUnionTileMerger:
                     )
                     if overlap_window is None:
                         continue
-                    continuity = self._overlap_band_continuity(left, right, overlap_window)
+                    left_band_area = band_area(left_idx, tile_overlap)
+                    right_band_area = band_area(right_idx, tile_overlap)
+                    intersection = 0
+                    if left_band_area > 0 and right_band_area > 0:
+                        intersection = int(
+                            np.count_nonzero(
+                                self._window_patch(left, overlap_window) & self._window_patch(right, overlap_window)
+                            )
+                        )
+                    continuity = self._overlap_band_continuity(left_band_area, right_band_area, intersection)
                     if border_only and continuity <= 0.0:
                         continue
-                    should_merge = (
-                        self._iou(left, right, overlap_window) >= iou_threshold or continuity >= continuity_threshold
+                    # Same object only if the two tiles agree inside the band.
+                    # Containment alone also holds for a part inside a whole.
+                    band_iou = self._band_iou(left_band_area, right_band_area, intersection)
+                    should_merge = self._iou(left, right, intersection) >= iou_threshold or (
+                        continuity >= continuity_threshold and band_iou >= iou_threshold
                     )
                     if should_merge:
                         union(left_idx, right_idx)
