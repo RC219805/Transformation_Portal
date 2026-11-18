@@ -950,8 +950,8 @@ class TestEnsembleAvailabilityAndWeights:
 
     @pytest.mark.parametrize(
         "weights",
-        [(0.0, 0.0), (float("nan"), 1.0), (float("inf"), 1.0), ("heavy", 1.0)],
-        ids=["all_zero", "nan", "inf", "non_numeric"],
+        [(0.0, 0.0), (float("nan"), 1.0), (float("inf"), 1.0), ("heavy", 1.0), ("0.5", 0.5), (None, 1.0)],
+        ids=["all_zero", "nan", "inf", "non_numeric", "numeric_string", "none"],
     )
     def test_invalid_weights_are_rejected(self, weights):
         models = [ModelConfig(name="da3", weight=weights[0]), ModelConfig(name="synthetic", weight=weights[1])]
@@ -959,3 +959,27 @@ class TestEnsembleAvailabilityAndWeights:
 
         with pytest.raises(ValueError, match="weight"):
             DepthEnsembleBackend(config, models=models)
+
+    def test_ensure_available_initialises_degraded_when_one_constituent_is_ready(self, monkeypatch, caplog):
+        ensemble = self._ensemble_with(monkeypatch, {"depth_pro": FileNotFoundError("checkpoint missing"), "da3": None})
+        caplog.set_level("WARNING", logger="transformation_portal.depth.backends.ensemble")
+
+        ensemble.ensure_available()
+
+        degraded = [r.getMessage() for r in caplog.records if "Ensemble degraded" in r.getMessage()]
+        assert len(degraded) == 1
+        assert "1 of 2" in degraded[0] and "checkpoint missing" in degraded[0]
+
+    def test_ensure_available_under_plan_authority_rejects_any_unready_constituent(self, monkeypatch):
+        from types import SimpleNamespace
+
+        from transformation_portal.lux_depth_v3.execution_plan_adapter import LuxExecutionPlanAuthorityError
+
+        ensemble = self._ensemble_with(monkeypatch, {"depth_pro": None, "da3": ImportError("transformers missing")})
+        # Only the presence of carried authority matters to readiness: exact planned membership is required.
+        ensemble._candidate_authority = SimpleNamespace(candidate_id="ensemble")
+
+        with pytest.raises(LuxExecutionPlanAuthorityError, match="'da3' is unavailable") as exc_info:
+            ensemble.ensure_available()
+
+        assert isinstance(exc_info.value.__cause__, ImportError)

@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import math
+import numbers
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
@@ -369,10 +370,9 @@ class DepthEnsembleBackend:
 
         # Validate weights sum to 1.0
         for model in enabled_models:
-            try:
-                finite = math.isfinite(float(model.weight))
-            except (TypeError, ValueError):
-                finite = False
+            # A numeric string ("0.5") converts with float() but cannot be summed:
+            # only real numbers are weights.
+            finite = isinstance(model.weight, numbers.Real) and math.isfinite(float(model.weight))
             if not finite:
                 raise ValueError(f"Ensemble model {model.name!r} weight must be a finite number (got {model.weight!r})")
         total_weight = sum(m.weight for m in enabled_models)
