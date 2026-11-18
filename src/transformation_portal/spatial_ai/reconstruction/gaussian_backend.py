@@ -508,10 +508,16 @@ class GaussianBackend:
         """
         all_positions = []
         all_colors = []
+        invalid_depth_pixels = 0
 
         for i, (img, depth, cam) in enumerate(zip(images, depth_maps, cameras)):
             H, W = depth.shape
             mask = masks[i] if masks is not None else np.ones((H, W), dtype=bool)
+            # Zero, negative and non-finite depth marks pixels without a measurement:
+            # unprojecting them would place splats at or behind the camera centre.
+            valid_depth = np.isfinite(depth) & (depth > 0)
+            invalid_depth_pixels += int(np.count_nonzero(mask & ~valid_depth))
+            mask = mask & valid_depth
 
             # Create pixel grid
             u, v = np.meshgrid(np.arange(W), np.arange(H))
@@ -546,6 +552,10 @@ class GaussianBackend:
 
         positions = np.concatenate(all_positions, axis=0).astype(np.float32)
         colors = np.concatenate(all_colors, axis=0).astype(np.float32)
+        if invalid_depth_pixels:
+            logger.warning(f"Skipped {invalid_depth_pixels} pixels without a finite positive depth during initialization")
+            if len(positions) == 0:
+                raise ValueError("Depth-guided initialization found no pixel with a finite positive depth")
 
         # Subsample if too many points
         if len(positions) > self.MAX_GAUSSIANS:

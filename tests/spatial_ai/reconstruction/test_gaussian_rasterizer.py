@@ -390,6 +390,26 @@ class TestFastRendering:
         assert rendered.shape == (H, W, 3)
         assert not torch.isnan(rendered).any()
 
+        # The cap keeps the closest *visible* splats: splats behind the camera or projecting
+        # off-screen are nearer than the visible pair below but must not take its slots.
+        hidden = torch.tensor([[0.0, 0.0, -0.5]] * 4 + [[1.0, 0.0, 0.5]] * 4)  # behind / off-screen
+        visible = torch.tensor([[0.0, 0.0, 2.0], [0.0, 0.0, 6.0]])  # near red in front of far blue
+        positions = torch.cat([hidden, visible])
+        colors = torch.cat([torch.ones(8, 3), torch.tensor([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])])
+        scales = torch.cat([torch.full((8, 3), 0.1), torch.tensor([[0.2] * 3, [0.6] * 3])])
+        rotations = torch.tensor([[1.0, 0.0, 0.0, 0.0]]).repeat(10, 1)
+        opacities = torch.full((10, 1), 0.9)
+        scene = (positions, colors, scales, rotations, opacities, intrinsics, extrinsics, image_size)
+        with torch.inference_mode():
+            full = render_gaussians(*scene)
+            capped_to_visible = render_gaussians_fast(*scene, max_gaussians=2)
+            nearest_only = render_gaussians_fast(*scene, max_gaussians=1)
+        # Two slots hold exactly the two visible splats, so the capped render is the full render.
+        assert torch.equal(capped_to_visible, full)
+        assert torch.allclose(full[H // 2, W // 2], torch.tensor([0.9, 0.0, 0.1 * 0.9]), atol=1e-5)
+        # One slot goes to the nearest visible splat: the near red splat wins, the far blue one is cut.
+        assert torch.allclose(nearest_only[H // 2, W // 2], torch.tensor([0.9, 0.0, 0.0]), atol=1e-5)
+
 
 class TestLossComputation:
     """Test loss functions."""

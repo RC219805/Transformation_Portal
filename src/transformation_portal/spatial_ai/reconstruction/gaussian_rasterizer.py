@@ -395,7 +395,8 @@ def render_gaussians_fast(
 ) -> torch.Tensor:
     """Fast rasterizer with Gaussian culling for optimization.
 
-    Renders only the closest max_gaussians to reduce memory/computation.
+    Renders only the max_gaussians closest visible splats to reduce
+    memory/computation; visibility culling happens before the cap is applied.
     Useful during optimization when full quality is not needed.
 
     Args:
@@ -416,12 +417,19 @@ def render_gaussians_fast(
             positions, colors, scales, rotations, opacities, intrinsics, extrinsics, image_size, False, device
         )
 
-    # Sort by distance to camera and keep closest
-    positions_hom = torch.cat([positions, torch.ones(N, 1, device=device)], dim=1)
-    positions_cam = torch.matmul(extrinsics, positions_hom.T).T[:, :3]
-    distances = torch.norm(positions_cam, dim=1)
+    # Cull first, then keep the closest: only splats the full renderer would draw
+    # (in front of the camera, centre inside the image) compete for the cap, so
+    # splats behind the camera or off-screen never displace visible ones.
+    with torch.no_grad():
+        _, _, _, valid_mask = project_gaussians_2d(
+            positions, scales, rotations, intrinsics, extrinsics, image_size, use_rotation=False
+        )
+        visible_indices = torch.where(valid_mask)[0]
+        positions_hom = torch.cat([positions[visible_indices], torch.ones(len(visible_indices), 1, device=device)], dim=1)
+        positions_cam = torch.matmul(extrinsics, positions_hom.T).T[:, :3]
+        distances = torch.norm(positions_cam, dim=1)
 
-    closest_indices = torch.argsort(distances)[:max_gaussians]
+    closest_indices = visible_indices[torch.argsort(distances, stable=True)[:max_gaussians]]
 
     # Render subset
     return render_gaussians(

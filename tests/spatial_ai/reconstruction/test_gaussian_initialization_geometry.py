@@ -77,3 +77,19 @@ def test_initialize_gaussians_camera_roundtrip(use_depth_prior: bool) -> None:
         np.testing.assert_array_equal(splats.colors, pixel_colors, err_msg=pose_name)
         assert splats.metadata["initialization"] == ("depth" if use_depth_prior else "sfm"), pose_name
         assert backend._model_loaded is False, pose_name
+
+        if use_depth_prior:
+            # Pixels without a finite positive depth carry no measurement: with every pixel
+            # unmasked they are skipped, never unprojected to (or behind) the camera centre.
+            for depth in reconstruction_input.depth_maps:
+                depth[0, 1], depth[1, 0], depth[1, 1] = 0.0, np.nan, -3.0
+            unmasked = ReconstructionInput(
+                images=images, gamma=1.0, cameras=cameras, depth_maps=reconstruction_input.depth_maps, tier="experimental"
+            )
+            depth_only = backend._initialize_gaussians(unmasked, use_depth_prior=True, use_segmentation=True)
+            np.testing.assert_array_equal(depth_only.positions, splats.positions, err_msg=pose_name)
+            np.testing.assert_array_equal(depth_only.colors, splats.colors, err_msg=pose_name)
+            for depth in unmasked.depth_maps:
+                depth[0, 0] = np.inf
+            with pytest.raises(ValueError, match="no pixel with a finite positive depth"):
+                backend._initialize_gaussians(unmasked, use_depth_prior=True, use_segmentation=True)
