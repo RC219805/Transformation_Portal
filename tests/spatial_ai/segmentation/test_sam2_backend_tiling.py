@@ -782,6 +782,131 @@ def test_tiling_merge_does_not_depend_on_patch_crop():
     assert full[3]["seam_metrics"]["merged_pair_count"] > 0
 
 
+_SEAM_HEIGHT, _SEAM_WIDTH = 60, 700  # tiles of 400 px; with a 50 px overlap: [0, 400) and [350, 700)
+_SEAM_OBJECT_COLS = (360, 390)  # one small object inside the overlap band of the first two tiles
+_SEAM_OBJECT = _rect_mask(_SEAM_HEIGHT, _SEAM_WIDTH, (20, 40), _SEAM_OBJECT_COLS)
+
+
+class _SeamDisagreementBackend:
+    """The first tile and its neighbours place one small object 10 px apart; the two masks still share two thirds.
+
+    The merger joins the pair (IoU 0.5) and the seam validator rejects it (discontinuity 1/3). With
+    ``agree_from_overlap_px`` every tile reports the true object once the tiles overlap that much. The overlap of
+    every tile the engine asks for is recorded.
+    """
+
+    name = "stub"
+    device = "cpu"
+
+    def __init__(self, *, agree_from_overlap_px=None):
+        self._agree_from_overlap_px = agree_from_overlap_px
+        self.overlaps_seen = []
+
+    def global_seed_pass(self, **kwargs):
+        del kwargs
+        return None
+
+    def segment_tile(self, **kwargs):
+        tile_spec = kwargs["tile_spec"]
+        self.overlaps_seen.append(tile_spec.overlap_px)
+        box = tile_spec.bbox
+        col0, col1 = _SEAM_OBJECT_COLS
+        if self._agree_from_overlap_px is None or tile_spec.overlap_px < self._agree_from_overlap_px:
+            shift = -5 if box.x0 == 0 else 5
+            col0, col1 = col0 + shift, col1 + shift
+        crop = _rect_mask(_SEAM_HEIGHT, _SEAM_WIDTH, (20, 40), (col0, col1))[box.y0 : box.y1, box.x0 : box.x1]
+        if not crop.any():
+            return ()
+        return (
+            TileInstance(
+                local_id=f"{tile_spec.tile_id}:0",
+                score=0.9,
+                stability_score=0.9,
+                soft_mask=SoftMaskPatch(bbox=BBox(0, 0, box.w, box.h), values=crop.astype(np.float32), space="prob"),
+            ),
+        )
+
+
+def _seam_config(*, overlap_px=50, validation=None):
+    config = SegmentationTilingConfig(
+        enabled=True, tile_size_px=400, overlap_px=overlap_px, validation=validation or ValidationConfig()
+    )
+    config.global_pass.enabled = False
+    return config
+
+
+def _run_default_engine_on_seam_object(backend, config):
+    engine = SAM2Backend.__new__(SAM2Backend)._build_default_tiled_engine()
+    return engine.run(
+        backend=backend,
+        seg_input=SegmentationInput(image=np.zeros((_SEAM_HEIGHT, _SEAM_WIDTH, 3), dtype=np.float32), gamma=1.0, mode="auto"),
+        image_hash="abc",
+        config=config,
+    )
+
+
+def test_tiling_retries_with_doubled_overlap_when_seam_validation_fails():
+    """A pair the merger joined but the validator rejects is re-tiled (max_retries=1, auto_increase_overlap)."""
+    backend = _SeamDisagreementBackend(agree_from_overlap_px=100)
+    config = _seam_config()
+
+    result = _run_default_engine_on_seam_object(backend, config)
+
+    # Two tiles at the configured 50 px, then [0, 400), [300, 700) and [600, 700) at 100 px.
+    assert backend.overlaps_seen == [50, 50, 100, 100, 100]
+    assert result.masks.shape == (1, _SEAM_HEIGHT, _SEAM_WIDTH)
+    assert np.array_equal(result.masks[0], _SEAM_OBJECT)
+    assert config.overlap_px == 50
+
+
+def test_tiling_fails_closed_when_seam_validation_retries_are_exhausted():
+    backend = _SeamDisagreementBackend()
+
+    with pytest.raises(
+        RuntimeError,
+        match=r"SAM2 tiling validation failed after 1 retry \(overlap_px 50 -> 100\): .*0\.333 exceeds threshold 0\.250",
+    ):
+        _run_default_engine_on_seam_object(backend, _seam_config())
+
+    assert backend.overlaps_seen == [50, 50, 100, 100, 100]
+
+
+def test_tiling_retry_overlap_stops_at_half_the_tile_size():
+    backend = _SeamDisagreementBackend()
+
+    with pytest.raises(RuntimeError, match=r"SAM2 tiling validation failed after 2 retries \(overlap_px 50 -> 200\): "):
+        _run_default_engine_on_seam_object(backend, _seam_config(validation=ValidationConfig(max_retries=5)))
+
+    assert backend.overlaps_seen == [50] * 2 + [100] * 3 + [200] * 4
+
+
+@pytest.mark.parametrize(
+    ("overlap_px", "validation", "tiles"),
+    [
+        (50, ValidationConfig(max_retries=0), 2),
+        (50, ValidationConfig(auto_increase_overlap=False), 2),
+        (200, ValidationConfig(), 4),
+    ],
+    ids=["no-retries-allowed", "overlap-increase-disabled", "overlap-already-half-the-tile"],
+)
+def test_tiling_does_not_repeat_an_identical_tiling_after_seam_validation_fails(overlap_px, validation, tiles):
+    backend = _SeamDisagreementBackend()
+
+    with pytest.raises(RuntimeError, match=r"SAM2 tiling validation failed: SAM2 tiling seam discontinuity"):
+        _run_default_engine_on_seam_object(backend, _seam_config(overlap_px=overlap_px, validation=validation))
+
+    assert backend.overlaps_seen == [overlap_px] * tiles
+
+
+def test_tiling_returns_the_merged_pair_without_retry_when_seam_validation_is_disabled():
+    backend = _SeamDisagreementBackend()
+
+    result = _run_default_engine_on_seam_object(backend, _seam_config(validation=ValidationConfig(enabled=False)))
+
+    assert backend.overlaps_seen == [50, 50]
+    assert result.masks.shape == (1, _SEAM_HEIGHT, _SEAM_WIDTH)
+
+
 def test_stable_image_hash_is_deterministic_for_identical_input(tmp_path):
     checkpoint = tmp_path / "sam2_test.pt"
     checkpoint.touch()
