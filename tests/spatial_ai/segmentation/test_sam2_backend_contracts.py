@@ -342,6 +342,41 @@ def test_auto_mode_returns_empty_contract_when_no_masks_found(
     assert result.metadata == []
 
 
+def _sam2_amg_record(mask: np.ndarray) -> dict[str, Any]:
+    """Mirror SAM2's automatic mask generator: XYWH from inclusive max edges."""
+    ys, xs = np.where(mask)
+    bbox = [int(xs.min()), int(ys.min()), int(xs.max() - xs.min()), int(ys.max() - ys.min())]
+    return {
+        "segmentation": mask,
+        "area": int(mask.sum()),
+        "bbox": bbox,
+        "predicted_iou": 0.95,
+        "stability_score": 0.97,
+    }
+
+
+def test_auto_mode_bbox_is_true_pixel_extent_and_accepts_one_pixel_wide_masks(
+    segmentation_surface: tuple[Any, Any], checkpoint_path: str
+) -> None:
+    SAM2Backend, SegmentationInput = segmentation_surface
+    backend = SAM2Backend(model_size="large", device="cpu", checkpoint_path=checkpoint_path)
+    square = np.zeros((64, 64), dtype=bool)
+    square[8:40, 8:40] = True
+    thin = np.zeros((64, 64), dtype=bool)
+    thin[10:30, 50] = True  # 20 px tall, 1 px wide
+    dot = np.zeros((64, 64), dtype=bool)
+    dot[60, 3] = True
+    records = [_sam2_amg_record(m) for m in (square, thin, dot)]
+    backend._mask_generator = SimpleNamespace(generate=lambda image_uint8: records)  # type: ignore[assignment]
+
+    result = backend._segment_auto(
+        SegmentationInput(image=np.full((64, 64, 3), 0.5, dtype=np.float32), gamma=1.0, mode="auto")
+    )
+
+    assert [meta.bbox for meta in result.metadata] == [(8, 8, 32, 32), (50, 10, 1, 20), (3, 60, 1, 1)]
+    assert result.masks.shape == (3, 64, 64)
+
+
 def test_prompted_mode_accepts_tuple_predictor_output_and_orders_scores(
     segmentation_surface: tuple[Any, Any], checkpoint_path: str
 ) -> None:

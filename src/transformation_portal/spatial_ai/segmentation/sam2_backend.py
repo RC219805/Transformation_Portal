@@ -945,14 +945,11 @@ class SAM2Backend:
             # Create metadata for each mask
             metadata_list = []
             for m, stab_score in zip(masks_data, stability_scores):
-                bbox_raw = m["bbox"]  # SAM2 format: [x, y, w, h]
-                # SAM2 returns bbox in [x, y, width, height] format already
-                bbox_xywh = (
-                    int(bbox_raw[0]),
-                    int(bbox_raw[1]),
-                    int(bbox_raw[2]),
-                    int(bbox_raw[3]),
-                )
+                # SAM2's own "bbox" is XYWH with w = xmax - xmin over inclusive
+                # pixel edges: one pixel short, and 0 for a 1-pixel-wide mask,
+                # which MaskMetadata rejects. Use the true pixel extent instead,
+                # as every other path does.
+                bbox_xywh = mask_bbox_xywh(np.asarray(m["segmentation"]))
                 metadata_list.append(
                     self._make_mask_metadata(area=int(m["area"]), bbox=bbox_xywh, stability_score=float(stab_score))
                 )
