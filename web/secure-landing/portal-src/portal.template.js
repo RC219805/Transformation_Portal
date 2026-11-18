@@ -12305,14 +12305,25 @@ function _effectiveThemeFromPreference(preference, themeQuery = null) {
 }
 
 function _migrateThemePreferenceStorage() {
-    const storageVersion = localStorage.getItem(THEME_STORAGE_VERSION_KEY);
-    if (storageVersion === THEME_STORAGE_VERSION) return;
+    // Denied or full site storage must not abort start-up (see _syncApiKeyInputState).
+    try {
+        const storageVersion = localStorage.getItem(THEME_STORAGE_VERSION_KEY);
+        if (storageVersion === THEME_STORAGE_VERSION) return;
 
-    if (localStorage.getItem(THEME_STORAGE_KEY) !== null) {
-        localStorage.removeItem(THEME_STORAGE_KEY);
+        if (localStorage.getItem(THEME_STORAGE_KEY) !== null) {
+            localStorage.removeItem(THEME_STORAGE_KEY);
+        }
+
+        localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);
+    } catch { /* Theme storage is a convenience; the preference falls back to 'system'. */ }
+}
+
+function _savedThemePreference() {
+    try {
+        return _normalizeThemePreference(localStorage.getItem(THEME_STORAGE_KEY)) || 'system';
+    } catch {
+        return 'system';
     }
-
-    localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);
 }
 
 function _nextThemePreference(preference) {
@@ -12347,9 +12358,11 @@ function applyThemePreference(preference, options) {
     document.documentElement.classList.toggle('light', mode === 'light');
 
     if (persist) {
-        localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);
-        if (normalizedPreference === 'system') localStorage.removeItem(THEME_STORAGE_KEY);
-        else localStorage.setItem(THEME_STORAGE_KEY, normalizedPreference);
+        try {
+            localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);
+            if (normalizedPreference === 'system') localStorage.removeItem(THEME_STORAGE_KEY);
+            else localStorage.setItem(THEME_STORAGE_KEY, normalizedPreference);
+        } catch { /* The theme still applies for this page when storage is denied. */ }
     }
 
     _syncThemeButton();
@@ -12928,8 +12941,7 @@ window.addEventListener('popstate', portalHistoryNavigation.pop);
 async function init() {
     const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');
     _migrateThemePreferenceStorage();
-    const savedThemePreference = _normalizeThemePreference(localStorage.getItem(THEME_STORAGE_KEY)) || 'system';
-    applyThemePreference(savedThemePreference, { persist: false, themeQuery });
+    applyThemePreference(_savedThemePreference(), { persist: false, themeQuery });
     setupAmbientMotion();
     _startPortalRumObservers();
 

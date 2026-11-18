@@ -386,3 +386,31 @@ test("bootstrap retry budget is per incident, not per page lifetime", () => {
   assert.equal(context._scheduleBootstrapRetry("upstream_unavailable", 503), false);
   assert.equal(outcomes.at(-1), "terminal_retry_limit#4");
 });
+
+test("denied site storage does not abort theme start-up or theme switching", async () => {
+  const denied = () => { throw new Error("SecurityError: The operation is insecure."); };
+  const classes = new Set();
+  const context = vm.createContext({
+    localStorage: { getItem: denied, setItem: denied, removeItem: denied },
+    window: { matchMedia: () => ({ matches: true }) },
+    document: { documentElement: { classList: { toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)) } } },
+    state: {},
+    els: {},
+  });
+  vm.runInContext(
+    between(portal, "const THEME_STORAGE_KEY", "\nconst THEME_PREFERENCES") + "\n"
+    + between(portal, "const THEME_PREFERENCES", "\n") + "\n"
+    + between(portal, "function _normalizeThemePreference(", "if (els.themeBtn) els.themeBtn.addEventListener")
+    // init() up to the first post-theme step: the theme preamble must not reject.
+    + between(portal, "async function init()", "setupAmbientMotion();") + "}\n"
+    + "this.init = init; this.applyThemePreference = applyThemePreference;",
+    context,
+  );
+  await context.init();
+  assert.equal(context.state.themePreference, "system");
+  assert.equal(context.state.theme, "dark");
+  assert.ok(classes.has("dark"));
+  context.applyThemePreference("light");
+  assert.equal(context.state.themePreference, "light");
+  assert.ok(classes.has("light") && !classes.has("dark"));
+});
