@@ -95,6 +95,8 @@ export function createOperateTools(host) {
   // twice the cap until that block is trimmed), and the autoscroll plus the
   // summary are coalesced into one animation frame.
   function appendLog(jobId, line) {
+    // A line of a run that is not the selected one never touches the pane.
+    if (!els.logPane || (state.selectedJobId && state.selectedJobId !== jobId)) return;
     reconcileOwner();
     const job = currentJob();
     const pane = els.logPane;

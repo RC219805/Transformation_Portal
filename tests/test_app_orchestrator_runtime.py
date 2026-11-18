@@ -2582,11 +2582,12 @@ def test_portal_theme_preference_defaults_to_system_without_persisting_boot_valu
     assert "localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);" in apply_body
     assert "if (normalizedPreference === 'system') localStorage.removeItem(THEME_STORAGE_KEY);" in apply_body
     assert "else localStorage.setItem(THEME_STORAGE_KEY, normalizedPreference);" in apply_body
-    saved_body = _extract_js_function_body(content, "_savedThemePreference")
     assert "_migrateThemePreferenceStorage();" in init_body
-    assert "return _normalizeThemePreference(localStorage.getItem(THEME_STORAGE_KEY)) || 'system';" in saved_body
-    assert "return 'system';" in saved_body
-    assert "applyThemePreference(_savedThemePreference(), { persist: false, themeQuery });" in init_body
+    # Denied or full site storage must not abort start-up: the migration and the saved read share one
+    # guard, and applyThemePreference turns a missing saved value into 'system'.
+    assert "savedThemePreference = localStorage.getItem(THEME_STORAGE_KEY);" in init_body
+    assert "} catch { /* storage unavailable */ }" in init_body
+    assert "applyThemePreference(savedThemePreference, { persist: false, themeQuery });" in init_body
 
 
 def test_portal_theme_control_cycles_system_dark_light_preferences() -> None:
