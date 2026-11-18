@@ -433,38 +433,53 @@ def inpaint_depth_holes(
         method: Inpainting method ('telea', 'ns')
 
     Returns:
-        Inpainted depth map
+        Inpainted depth map (float32, in the input's depth units; valid
+        pixels are returned unchanged and only holes are filled)
     """
     if not CV2_AVAILABLE:
         logger.warning("cv2 not available, returning depth with holes filled with mean value")
         # Simple fallback: fill holes with mean of valid values
         if mask is None:
-            mask = (depth == 0) | np.isnan(depth)
+            mask = (depth == 0) | ~np.isfinite(depth)
         else:
-            mask = mask.astype(bool)
+            mask = mask.astype(bool) | ~np.isfinite(depth)
         result = depth.copy()
         valid_mean = depth[~mask].mean() if (~mask).any() else 0
         result[mask] = valid_mean
         return result
 
-    # Auto-detect holes
-    if mask is None:
-        mask = ((depth == 0) | np.isnan(depth)).astype(np.uint8)
-    else:
-        mask = mask.astype(np.uint8)
-
-    # Convert to uint8 for OpenCV inpainting
-    depth_uint8 = (normalize_depth(depth) * 255).astype(np.uint8)
-
-    # Inpaint
     if method == "telea":
-        inpainted = cv2.inpaint(depth_uint8, mask, inpaintRadius=3, flags=cv2.INPAINT_TELEA)
+        flags = cv2.INPAINT_TELEA
     elif method == "ns":
-        inpainted = cv2.inpaint(depth_uint8, mask, inpaintRadius=3, flags=cv2.INPAINT_NS)
+        flags = cv2.INPAINT_NS
     else:
         raise ValueError(f"Unknown inpainting method: {method}")
 
-    return inpainted.astype(np.float32) / 255.0
+    # Auto-detect holes; non-finite pixels are always holes.
+    if mask is None:
+        hole = (depth == 0) | ~np.isfinite(depth)
+    else:
+        hole = mask.astype(bool) | ~np.isfinite(depth)
+
+    result = depth.astype(np.float32, copy=True)
+    if not (~hole).any():
+        logger.warning("Depth map has no valid pixels, returning zeros")
+        return np.zeros_like(result)
+
+    # Normalize over the valid pixels only (NaN holes would poison min/max),
+    # inpaint in 8-bit, then map the filled values back to the original range.
+    lo = float(result[~hole].min())
+    hi = float(result[~hole].max())
+    span = hi - lo
+    filled = np.where(hole, lo, result)
+    norm = (filled - lo) / span if span > 1e-8 else np.zeros_like(filled)
+    depth_uint8 = np.clip(norm * 255.0, 0, 255).astype(np.uint8)
+
+    inpainted = cv2.inpaint(depth_uint8, hole.astype(np.uint8), inpaintRadius=3, flags=flags)
+
+    # Valid pixels keep their exact input values; only holes are replaced.
+    result[hole] = inpainted[hole].astype(np.float32) / 255.0 * span + lo
+    return result
 
 
 def create_depth_of_field_map(
