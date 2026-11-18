@@ -120,6 +120,8 @@ class DatasetManifest:
             )
             for f in data.get("files", [])
         ]
+        for file in files:
+            _logical_parts(file.logical_path)
 
         return cls(
             name=data["name"],
@@ -132,6 +134,36 @@ class DatasetManifest:
 
 class DatasetCASError(RuntimeError):
     """Raised for dataset CAS errors."""
+
+
+def _logical_parts(logical_path: Any) -> tuple[str, ...]:
+    """Return the components of a manifest path that stays inside its dataset.
+
+    A logical path names a location *within* a dataset and is later joined
+    under a caller-chosen directory. Absolute paths, drive or UNC anchors,
+    ``..`` components, NUL bytes and empty paths can only point elsewhere, so
+    they are never valid.
+    """
+    if not isinstance(logical_path, str) or not logical_path.strip() or "\x00" in logical_path:
+        raise DatasetCASError(f"Invalid dataset logical path: {logical_path!r}")
+    candidate = Path(logical_path)
+    if candidate.is_absolute() or candidate.anchor or ".." in candidate.parts or not candidate.parts:
+        raise DatasetCASError(f"Dataset logical path escapes its dataset: {logical_path!r}")
+    return candidate.parts
+
+
+def _confined_destination(root: Path, logical_path: Any) -> Path:
+    """Join ``logical_path`` under the resolved ``root``, refusing any escape.
+
+    The lexical check alone is not enough: a directory symlink already inside
+    the target would redirect the write. The parent is therefore resolved and
+    must still be inside ``root``. The final component is never followed; the
+    CAS replaces it instead.
+    """
+    destination = root.joinpath(*_logical_parts(logical_path))
+    if not destination.parent.resolve().is_relative_to(root):
+        raise DatasetCASError(f"Dataset logical path escapes the target directory: {logical_path!r}")
+    return destination
 
 
 class DatasetCAS:
@@ -299,6 +331,10 @@ class DatasetCAS:
         """
         dataset_files: List[DatasetFile] = []
 
+        # Refuse an unusable manifest before anything is added to the CAS.
+        for logical_path, _src_path in files:
+            _logical_parts(logical_path)
+
         for logical_path, src_path in files:
             if not src_path.exists():
                 logger.warning("File not found, skipping: %s", src_path)
@@ -344,12 +380,21 @@ class DatasetCAS:
 
         Returns:
             Target directory path
+
+        Raises:
+            DatasetCASError: If any logical path would be written outside
+                ``target_dir``. Nothing is materialized in that case.
         """
         target_dir.mkdir(parents=True, exist_ok=True)
+        root = target_dir.resolve()
+        # Check every entry before writing any: a manifest is untrusted input
+        # and one hostile path must not leave the dataset half materialized.
+        for file in manifest.files:
+            _confined_destination(root, file.logical_path)
         materialized = 0
 
         for file in manifest.files:
-            dst = target_dir / file.logical_path
+            dst = _confined_destination(root, file.logical_path)
             dst.parent.mkdir(parents=True, exist_ok=True)
 
             try:
