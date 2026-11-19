@@ -154,6 +154,85 @@ jobs:
       - name: Run unit and regression tests
         run: pytest tests/ -m "not ml and not slow and not benchmark" --maxfail=3
 
+  orchestrator-services:
+    name: Orchestrator Service Contracts (advisory)
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          # This password is used only inside the disposable CI runner.
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379/tcp
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements-dev.txt
+            requirements-ci.txt
+            requirements.txt
+            requirements/base.txt
+            requirements/constraints.txt
+            pyproject.toml
+            .github/workflows/enforcement.yml
+
+      - name: Install core dependencies
+        run: |
+          python -m pip install --upgrade "pip==26.2.2"
+          python -m pip install -c requirements/constraints.txt --build-constraint requirements/constraints.txt -r requirements-dev.txt
+          python -m pip install -e . --no-deps
+          python -m pip install numpy==2.2.6 pandas==2.2.3 jsonschema==4.23.0
+          python -m pip check
+
+      - name: Create isolated Postgres test databases
+        env:
+          POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          docker exec "$POSTGRES_CONTAINER_ID" createdb --username postgres tp_orchestrator_plain_test
+          docker exec "$POSTGRES_CONTAINER_ID" createdb --username postgres tp_orchestrator_migrated_test
+
+      - name: Run live Postgres and Redis contracts
+        env:
+          TP_TEST_POSTGRES_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:${{ job.services.postgres.ports[5432] }}/tp_orchestrator_plain_test
+          TP_DISPATCH_TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:${{ job.services.postgres.ports[5432] }}/tp_orchestrator_migrated_test
+          TP_TEST_REDIS_URL: redis://127.0.0.1:${{ job.services.redis.ports[6379] }}/0
+        run: python scripts/validation/run_orchestrator_service_contracts.py ci --evidence-out "$RUNNER_TEMP/orchestrator-service-contracts.json"
+
+      - name: Upload service contract evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: orchestrator-service-contracts
+          path: ${{ runner.temp }}/orchestrator-service-contracts.json
+          if-no-files-found: error
+          retention-days: 7
+
   test-layer2-ml:
     name: Layer 2 Tests (ML Tier)
     runs-on: ubuntu-latest

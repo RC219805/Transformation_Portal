@@ -15,6 +15,7 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from tests.orchestrator.test_dispatch_authority_services import service_urls  # noqa: F401 - shared isolated database
 from tests.orchestrator.test_dispatch_authority_services import _admit, _record
@@ -138,24 +139,39 @@ async def test_migration_refuses_to_remove_admitted_photography_authority(servic
         await _SharedEngine.dispose(database_url)
 
 
-async def test_binding_migration_downgrade_and_upgrade_preserve_legacy_attempts(service_urls, tmp_path):
+async def test_binding_migration_downgrade_and_upgrade_preserve_legacy_attempts(service_urls, tmp_path, monkeypatch):
     database_url, _ = service_urls
     store = PostgresOperationalRecordStore(database_url=database_url)
     try:
         locator = await _admit(store, "job_legacy", tmp_path)
         plan = await store.fetch_plan(locator)
         engine, _ = await _SharedEngine.get(database_url)
-        async with engine.begin() as connection:
-            await connection.run_sync(_migration, "downgrade")
-            assert await connection.scalar(text("""
-                        SELECT count(*) FROM information_schema.columns
-                        WHERE table_schema = current_schema() AND table_name = 'dispatch_attempts'
-                        AND column_name IN ('execution_bindings', 'execution_bindings_digest')
-                        """)) == 0
-            await connection.run_sync(_migration, "upgrade")
-        assert await store.get_locator(locator.job_id) == locator
-        assert await store.fetch_plan(locator) == plan
-        assert await store.fetch_execution_bindings(locator) is None
+        identity_guard = text("SELECT pg_get_functiondef('tp_protect_dispatch_identity()'::regprocedure)")
+        async with engine.connect() as connection:
+            head_identity_guard = await connection.scalar(identity_guard)
+            assert head_identity_guard is not None and "NEW.submission_key" in head_identity_guard
+            try:
+                await connection.run_sync(_migration, "downgrade")
+                assert await connection.scalar(text("""
+                            SELECT count(*) FROM information_schema.columns
+                            WHERE table_schema = current_schema() AND table_name = 'dispatch_attempts'
+                            AND column_name IN ('execution_bindings', 'execution_bindings_digest')
+                            """)) == 0
+                await connection.run_sync(_migration, "upgrade")
+                assert await connection.scalar(identity_guard) != head_identity_guard
+                # The round trip holds a table lock. Read through the same
+                # connection before rolling back the historical schema change.
+                with monkeypatch.context() as scope:
+                    scope.setattr(
+                        store, "_session_factory", async_sessionmaker(connection, join_transaction_mode="create_savepoint")
+                    )
+                    assert await store.get_locator(locator.job_id) == locator
+                    assert await store.fetch_plan(locator) == plan
+                    assert await store.fetch_execution_bindings(locator) is None
+            finally:
+                await connection.rollback()
+        async with engine.connect() as connection:
+            assert await connection.scalar(identity_guard) == head_identity_guard
     finally:
         await _SharedEngine.dispose(database_url)
 
