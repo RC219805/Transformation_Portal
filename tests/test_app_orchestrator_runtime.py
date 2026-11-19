@@ -787,27 +787,98 @@ def test_preview_reports_non_integer_output_bit_depth_without_truncation(
     )
 
 
+@pytest.mark.parametrize("enable_v2", [True, False], ids=["v2", "materials-only"])
 @pytest.mark.parametrize("policy", ["auto", "auto_assume_srgb", "srgb", "linear_srgb", None])
-def test_managed_v3_carries_explicit_finishing_input_color(policy: str | None, tmp_path: Path) -> None:
+def test_managed_v3_carries_explicit_finishing_input_color(policy: str | None, enable_v2: bool, tmp_path: Path) -> None:
     source = tmp_path / "input"
     source.mkdir()
-    args = {"input_dir": str(source), "output_dir": str(tmp_path / "output"), "enable_v2": True, "v2_input_color": policy}
+    args = {
+        "input_dir": str(source),
+        "output_dir": str(tmp_path / "output"),
+        "enable_v2": enable_v2,
+        "materials_v3": not enable_v2,
+        "v2_input_color": policy,
+    }
     preview = orchestrator_app._build_lux_config_preview(args)
     assert preview["normalized_args"]["v2_input_color"] == (policy or "auto")
     argv = orchestrator_app._argv_from_request({"pipeline": "lux-depth-v3", "args": args})
     assert _flag_value(argv, "--v2-input-color") == (policy or "auto")
 
 
+@pytest.mark.parametrize("enable_v2", [True, False], ids=["v2", "materials-only"])
 @pytest.mark.parametrize("invalid", [True, "assume_any_profile", [], {}])
-def test_managed_v3_rejects_unknown_finishing_color_policy(invalid: object, tmp_path: Path) -> None:
+def test_managed_v3_rejects_unknown_finishing_color_policy(invalid: object, enable_v2: bool, tmp_path: Path) -> None:
     source = tmp_path / "input"
     source.mkdir()
-    args = {"input_dir": str(source), "output_dir": str(tmp_path / "output"), "enable_v2": True, "v2_input_color": invalid}
+    args = {
+        "input_dir": str(source),
+        "output_dir": str(tmp_path / "output"),
+        "enable_v2": enable_v2,
+        "materials_v3": not enable_v2,
+        "v2_input_color": invalid,
+    }
     preview = orchestrator_app._build_lux_config_preview(args)
     assert any(error["field"] == "v2_input_color" for error in preview["field_errors"])
     with pytest.raises(orchestrator_app.HTTPException) as rejection:
         orchestrator_app._argv_from_request({"pipeline": "lux-depth-v3", "args": args})
     assert rejection.value.status_code == 400
+
+
+@pytest.mark.parametrize("suffix", ["png", "tiff"])
+def test_managed_v3_materials_only_uses_portal_color_for_untagged_image(
+    suffix: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unittest.mock import Mock
+
+    import numpy as np
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3 import segmentation_backend
+    from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    source = input_dir / f"scene.{suffix}"
+    pixels = np.full((8, 10, 3), [64, 96, 128], dtype=np.uint8)
+    Image.fromarray(pixels).save(source)
+    output_dir = tmp_path / "output"
+    args = {
+        "input_dir": str(input_dir),
+        "output_dir": str(output_dir),
+        "materials_v3": True,
+        "enable_v2": False,
+        "v2_input_color": "auto_assume_srgb",
+        "v2_preset": "none",
+    }
+
+    argv = orchestrator_app._argv_from_request({"pipeline": "lux-depth-v3", "args": args})
+    assert "--v2-preset" not in argv
+    config = _capture_lux_cli_config_from_args(argv[3:])
+    assert config.enable_materials_v3 and not config.enable_v2
+
+    proxy = pixels.astype(np.float32) / 255
+    mask = np.ones(proxy.shape[:2], dtype=np.float32)
+    process = Mock(return_value={"material_masks": {"stone": mask}})
+    monkeypatch.setattr(segmentation_backend, "segment_materials", lambda *args, **kwargs: {"stone": mask})
+    monkeypatch.setattr(segmentation_backend, "get_last_segmentation_runtime_metadata", lambda: {})
+    orchestrator = object.__new__(EnhanceOrchestrator)
+    orchestrator.config = config
+    orchestrator.output_root = output_dir
+    orchestrator.segmentation_dir = output_dir / "segmentation"
+    orchestrator.materials_v3_engine = SimpleNamespace(process=process)
+
+    result, _, _ = orchestrator._run_materials_v3_stage(
+        preprocessed_array=proxy, source_path=source, depth_map=mask, output_key=Path("scene")
+    )
+
+    assert result is not None
+    np.testing.assert_allclose(process.call_args.kwargs["image"], proxy, atol=1e-6, rtol=0)
+    metadata = result["materials_v3_metadata"]["segmentation_metadata"]
+    assert metadata["color_preparation"]["preparation"]["resolution"] == "untagged_input_srgb_assumption"
+    with np.load(metadata["mask_artifact_path"], allow_pickle=False) as masks:
+        np.testing.assert_array_equal(masks["stone"], mask)
+    preview = orchestrator_app._build_lux_config_preview(args)
+    assert "--v2-input-color auto_assume_srgb" in preview["argv_preview"]
 
 
 def test_argv_rejects_explicit_8_with_truthy_legacy_bit_depth_alias() -> None:

@@ -8968,6 +8968,7 @@ def _argv_from_request(
                 ALLOWED_INPUT_ROOTS,
             )
 
+        enable_materials_v3 = _as_bool(_pick(args, "materials_v3", "materials", default=False))
         argv.extend(
             [
                 "--preset",
@@ -8983,14 +8984,7 @@ def _argv_from_request(
                 "--segmentation-cache",
                 segmentation_cache,
                 "--materials-v3",
-                onoff(
-                    _pick(
-                        args,
-                        "materials_v3",
-                        "materials",
-                        default=False,
-                    )
-                ),
+                onoff(enable_materials_v3),
                 "--pbr",
                 onoff(_pick(args, "pbr", default=False)),
                 "--save-float-depth",
@@ -9084,6 +9078,7 @@ def _argv_from_request(
             v2_preset = _pick(args, "v2_preset", "v2Preset")
             if v2_preset:
                 argv.extend(["--v2-preset", str(v2_preset)])
+        if enable_materials_v3 or enable_v2:
             v2_input_color = _pick(args, "v2_input_color", "v2InputColor", default="auto")
             if not isinstance(v2_input_color, str) or v2_input_color not in {
                 "auto",
