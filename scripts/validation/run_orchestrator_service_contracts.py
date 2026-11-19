@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import asyncio
 import json
 import os
@@ -41,6 +42,15 @@ DISPATCH_S3 = f"{PROVIDER_FILES[0]}::test_minio_generation_is_conditional_digest
 PAID_PILOT_S3 = "test_paid_pilot_services_contract.py::test_paid_pilot_backend_services_compose_end_to_end"
 SERVICE_SELECTION = "(unit or integration) and not ml and not slow and not benchmark"
 LOOPBACK = frozenset({"127.0.0.1", "::1", "localhost"})
+ALEMBIC_FAILURES = {
+    "asyncpg.exceptions.InvalidPasswordError": "database authentication",
+    "asyncpg.exceptions.InsufficientPrivilegeError": "database privileges",
+    "asyncpg.exceptions.InvalidCatalogNameError": "database name",
+    "ModuleNotFoundError": "missing Python dependency",
+    "TimeoutError": "connection or operation timeout",
+    "sqlalchemy.exc.OperationalError": "database connection or operation",
+    "sqlalchemy.exc.ProgrammingError": "database statement or schema",
+}
 
 
 class ContractError(RuntimeError):
@@ -271,7 +281,93 @@ def run_command(args: tuple[str, ...], env: dict[str, str], *, label: str, ci: b
         print(output, end="", flush=True)
     if result.returncode:
         print(f"{label} exited with status {result.returncode}", file=sys.stderr)
+        if not ci and args[0] == "alembic":
+            lines = result.stdout.splitlines()
+            reported_classes = {line.partition(":")[0] for line in lines}
+            for name, reason in ALEMBIC_FAILURES.items():
+                if name in reported_classes:
+                    print(f"{label}: {reason}", file=sys.stderr)
+            if any(line.startswith("FAILED: New upgrade operations detected") for line in lines):
+                print(f"{label}: database schema differs from the ORM metadata", file=sys.stderr)
     return result.returncode
+
+
+def allowed_skip(node: str, suite: Suite) -> bool:
+    # The wildcard is limited to the existing payload-version parameter of a
+    # named memory-only variant. Required backend evidence never uses it.
+    return any(
+        node == f"{TESTS}/{allowed}"
+        or (allowed.endswith("*") and node.startswith(f"{TESTS}/{allowed[:-1]}") and node.endswith("]"))
+        for allowed in suite.allowed_skips
+    )
+
+
+def report_provider_pytest_failure(report: Path, suite: Suite) -> None:
+    """Print fixed outcomes with identifiers taken from the selected committed source."""
+    try:
+        payload = json.loads(report.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    modules: set[str] = set()
+    tests: set[str] = set()
+    deselected = {arg.removeprefix("--deselect=") for arg in suite.args if arg.startswith("--deselect=")}
+    for file, _ in suite.required_groups:
+        path = f"{TESTS}/{file}"
+        try:
+            source = subprocess.check_output(["git", "show", f"HEAD:{path}"], cwd=ROOT, stderr=subprocess.DEVNULL)
+            tree = ast.parse(source)
+        except (OSError, subprocess.CalledProcessError, ValueError, SyntaxError):
+            continue
+        modules.add(path)
+        for definition in tree.body:
+            if (
+                isinstance(definition, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and definition.name.isascii()
+                and definition.name.startswith("test_")
+            ):
+                tests.add(f"{path}::{definition.name}")
+    tests.difference_update(deselected)
+
+    diagnostics: set[str] = set()
+    for section in ("collectors", "tests"):
+        records = payload.get(section)
+        if not isinstance(records, list):
+            continue
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            node = record.get("nodeid")
+            outcome = record.get("outcome")
+            if not isinstance(node, str) or outcome not in ("failed", "error", "skipped", "xfailed", "xpassed"):
+                continue
+            if outcome == "skipped" and allowed_skip(node, suite):
+                continue
+            if section == "collectors":
+                label = node
+                phase = "collection"
+                if label not in modules:
+                    continue
+            else:
+                # Runtime parameter IDs may contain provider-controlled data.
+                label = node.partition("[")[0]
+                phase = "test"
+                if label not in tests:
+                    continue
+            for stage in ("setup", "call", "teardown"):
+                details = record.get(stage)
+                if isinstance(details, dict) and details.get("outcome") in ("failed", "skipped"):
+                    phase = stage
+                    break
+            diagnostics.add(f"{suite.name}: {label} ({phase} {outcome})")
+    if not diagnostics:
+        print(f"{suite.name}: no verified pytest failure identifiers available", file=sys.stderr)
+    for diagnostic in sorted(diagnostics)[:12]:
+        print(diagnostic, file=sys.stderr)
+    if len(diagnostics) > 12:
+        print(f"{suite.name}: {len(diagnostics) - 12} additional pytest diagnostics omitted", file=sys.stderr)
 
 
 def check_report(report: Path, suite: Suite) -> dict[str, int]:
@@ -305,15 +401,8 @@ def check_report(report: Path, suite: Suite) -> dict[str, int]:
     if missing:
         raise ContractError(f"{suite.name} did not pass required service tests: {', '.join(sorted(missing))}")
     for node in tests_by_id.keys() - passed:
-        # The wildcard is limited to the existing payload-version parameter of a
-        # named memory-only variant. Required backend evidence never uses it.
-        if tests_by_id[node]["outcome"] != "skipped" or not any(
-            node == f"{TESTS}/{allowed}"
-            or (allowed.endswith("*") and node.startswith(f"{TESTS}/{allowed[:-1]}") and node.endswith("]"))
-            for allowed in suite.allowed_skips
-        ):
-            module = Path(node.partition("::")[0]).name
-            raise ContractError(f"{suite.name} had an unexpected non-passing test in {module}")
+        if tests_by_id[node]["outcome"] != "skipped" or not allowed_skip(node, suite):
+            raise ContractError(f"{suite.name} had an unexpected non-passing test")
     return dict(counts)
 
 
@@ -339,9 +428,14 @@ def run_suite(suite: Suite, env: dict[str, str], directory: Path, *, ci: bool) -
     report = directory / f"{suite.name}.json"
     args = ("pytest", "-qra", "-m", SERVICE_SELECTION, "--json-report", f"--json-report-file={report}", *suite.args)
     print(f"Running {suite.name}", flush=True)
-    if run_command(args, env, label=suite.name, ci=ci):
-        raise ContractError(f"{suite.name} pytest run failed")
-    counts = check_report(report, suite)
+    try:
+        if run_command(args, env, label=suite.name, ci=ci):
+            raise ContractError(f"{suite.name} pytest run failed")
+        counts = check_report(report, suite)
+    except ContractError:
+        if not ci:
+            report_provider_pytest_failure(report, suite)
+        raise
     print(f"{suite.name} passed with {counts}", flush=True)
     return {"name": suite.name, "outcomes": counts, "required_tests": suite.required_tests}
 

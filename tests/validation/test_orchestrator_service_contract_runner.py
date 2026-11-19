@@ -7,6 +7,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from subprocess import CompletedProcess
 from types import ModuleType
 from unittest.mock import AsyncMock
 
@@ -173,8 +174,93 @@ def test_incomplete_service_evidence_fails_closed(tmp_path, change):
 def test_unknown_service_skip_fails_even_when_all_known_canaries_pass(tmp_path):
     report = tmp_path / "report.json"
     tests = _results_for_plain()
-    tests.append({"nodeid": f"{runner.TESTS}/test_new_provider.py::test_service_url_missing", "outcome": "skipped"})
+    tests.append({"nodeid": f"{runner.TESTS}/private_provider_name.py::test_service_url_missing", "outcome": "skipped"})
     report.write_text(json.dumps({"exitcode": 0, "tests": tests}))
 
-    with pytest.raises(runner.ContractError, match="unexpected non-passing test"):
+    with pytest.raises(runner.ContractError, match="unexpected non-passing test") as error:
         runner.check_report(report, runner.PLAIN)
+    assert "private_provider_name" not in str(error.value)
+
+
+def test_provider_pytest_failure_reports_only_verified_identifiers(monkeypatch, tmp_path, capsys):
+    suite = runner.PROVIDER
+    known_test = f"{runner.TESTS}/{suite.required_tests[0]}"
+    selected_file = known_test.split("::", 1)[0]
+    unexpected_test = f"{selected_file}::test_private_hostname"
+    unselected_test = f"{runner.TESTS}/{runner.PLAIN.required_tests[0]}"
+    deselected_test = f"{runner.TESTS}/{runner.DISPATCH_S3}"
+    report = {
+        "exitcode": 1,
+        "collectors": [
+            {"nodeid": selected_file, "outcome": "failed", "longrepr": "private_collection_message"},
+            {"nodeid": "/private-provider-path/test_file.py", "outcome": "failed"},
+        ],
+        "tests": [
+            {
+                "nodeid": f"{known_test}[private_parameter_token]",
+                "outcome": "error",
+                "setup": {
+                    "outcome": "failed",
+                    "crash": {"message": "private_exception_message"},
+                    "stderr": "private_captured_output",
+                },
+            },
+            *[{"nodeid": node, "outcome": "failed"} for node in (unexpected_test, unselected_test, deselected_test)],
+        ],
+    }
+    original_run = runner.subprocess.run
+
+    def simulate_pytest(argv, **kwargs):
+        if argv[0] == "git":
+            return original_run(argv, **kwargs)
+        (tmp_path / f"{suite.name}.json").write_text(json.dumps(report), encoding="utf-8")
+        return CompletedProcess(argv, 1, "postgresql+asyncpg://operator:private_provider_password@private-host/database")
+
+    monkeypatch.setattr(runner.subprocess, "run", simulate_pytest)
+
+    with pytest.raises(runner.ContractError, match="provider-authority pytest run failed"):
+        runner.run_suite(suite, {}, tmp_path, ci=False)
+
+    captured = capsys.readouterr()
+    assert captured.out == "Running provider-authority\n"
+    assert captured.err.splitlines() == [
+        "provider-authority exited with status 1",
+        f"provider-authority: {selected_file} (collection failed)",
+        f"provider-authority: {known_test} (setup error)",
+    ]
+
+
+def test_provider_pytest_failure_without_verified_report_has_safe_fallback(monkeypatch, tmp_path, capsys):
+    def simulate_pytest(*_args, **_kwargs):
+        (tmp_path / f"{runner.PLAIN.name}.json").write_text("private incomplete report", encoding="utf-8")
+        return 2
+
+    monkeypatch.setattr(runner, "run_command", simulate_pytest)
+
+    with pytest.raises(runner.ContractError, match="plain-postgres pytest run failed"):
+        runner.run_suite(runner.PLAIN, {}, tmp_path, ci=False)
+
+    assert capsys.readouterr().err == "plain-postgres: no verified pytest failure identifiers available\n"
+
+
+@pytest.mark.parametrize(
+    ("operation", "error", "expected"),
+    [
+        ("upgrade", "asyncpg.exceptions.InsufficientPrivilegeError", "database privileges"),
+        ("check", "FAILED: New upgrade operations detected", "database schema differs from the ORM metadata"),
+        ("check", "UnknownFailure", None),
+    ],
+)
+def test_provider_alembic_failure_prints_only_known_categories(monkeypatch, capsys, operation, error, expected):
+    raw = f"{error}: private database at postgresql+asyncpg://operator:secret@private-host/db\n"
+    monkeypatch.setattr(runner.subprocess, "run", lambda argv, **kwargs: CompletedProcess(argv, 1, raw))
+
+    status = runner.run_command(("alembic", operation), {}, label=f"alembic {operation}", ci=False)
+
+    assert status == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    expected_lines = [f"alembic {operation} exited with status 1"]
+    if expected is not None:
+        expected_lines.append(f"alembic {operation}: {expected}")
+    assert captured.err.splitlines() == expected_lines
