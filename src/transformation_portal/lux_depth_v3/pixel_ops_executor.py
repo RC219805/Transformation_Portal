@@ -343,7 +343,27 @@ def apply_pixel_ops(
     # A5: Resolve overlapping masks using priority
     from .materials_v3_taxonomy import DEFAULT_MATERIAL_METADATA
 
-    resolved_materials, overlap_telemetry = _resolve_overlaps(materials, DEFAULT_MATERIAL_METADATA, image.shape[:2])
+    # A1: Validate every mask per material *before* overlap resolution, so one
+    # malformed mask blocks only its own material instead of aborting the run.
+    valid_materials: Dict[str, np.ndarray] = {}
+    for material_key, mask in materials.items():
+        try:
+            mask_2d = _canonical_mask(np.asarray(mask))
+            if mask_2d.shape != tuple(image.shape[:2]):
+                raise ValueError(f"Mask shape {tuple(mask_2d.shape)} does not match image dimensions {tuple(image.shape[:2])}")
+        except ValueError as e:
+            telemetry["blocked"].append(
+                {
+                    "material": material_key,
+                    "reason": "invalid_mask_shape",
+                    "blocked_by": [str(e)],
+                    "recommended_ops": [],
+                }
+            )
+            continue
+        valid_materials[material_key] = mask_2d
+
+    resolved_materials, overlap_telemetry = _resolve_overlaps(valid_materials, DEFAULT_MATERIAL_METADATA, image.shape[:2])
     telemetry["overlap_resolution"] = overlap_telemetry
 
     # Get feathering configuration (A3)
@@ -367,21 +387,8 @@ def apply_pixel_ops(
         key=lambda x: (-DEFAULT_MATERIAL_METADATA.get(x[0], {}).get("priority", 0), x[0]),
     )
 
-    for material_key, mask in sorted_materials:
-        # A1: Canonicalize mask to 2D early
-        try:
-            mask_2d = _canonical_mask(mask)
-        except ValueError as e:
-            telemetry["blocked"].append(
-                {
-                    "material": material_key,
-                    "reason": "invalid_mask_shape",
-                    "blocked_by": [str(e)],
-                    "recommended_ops": [],
-                }
-            )
-            continue
-
+    for material_key, mask_2d in sorted_materials:
+        # Masks were canonicalized and shape-checked above; resolved masks are 2-D float32.
         plan_entry = plan_per_class.get(material_key, {})
         if not plan_entry:
             continue

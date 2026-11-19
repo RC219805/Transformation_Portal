@@ -87,6 +87,8 @@ class CandidateResult:
         improvement: Actual improvement over parent
         success: Whether evaluation succeeded
         error: Error message if failed
+        output: Pipeline output the score was computed from (reused when the
+            candidate is accepted, so the next iteration sees its real metrics)
     """
 
     candidate: Candidate
@@ -94,6 +96,7 @@ class CandidateResult:
     improvement: float
     success: bool = True
     error: str | None = None
+    output: dict[str, Any] | None = None
 
 
 @dataclass

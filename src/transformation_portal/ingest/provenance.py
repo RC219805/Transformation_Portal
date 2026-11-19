@@ -81,7 +81,7 @@ def _check_exiftool_available() -> bool:
             timeout=5,
         )
         return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         return False
 
 
@@ -100,9 +100,21 @@ def _get_exiftool_version() -> Optional[str]:
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         pass
     return None
+
+
+def _exiftool_file_argument(file_path: Path) -> str:
+    """Return ``file_path`` as an exiftool argument that cannot parse as an option.
+
+    Discovery under a relative input directory such as ``.`` yields bare names,
+    and a file named ``-x.jpg`` would otherwise reach exiftool as the ``-x``
+    option. Only such names get a ``./`` prefix; every other path is passed
+    unchanged so exiftool's ``SourceFile`` stays byte-identical.
+    """
+    text = str(file_path)
+    return f"./{text}" if text.startswith("-") else text
 
 
 def _extract_exif_with_exiftool(file_path: Path) -> Dict[str, Any]:
@@ -136,7 +148,7 @@ def _extract_exif_with_exiftool(file_path: Path) -> Dict[str, Any]:
                 "-struct",  # Enable struct feature
                 "-coordFormat",
                 "%.8f",  # GPS coordinate format
-                str(file_path),
+                _exiftool_file_argument(file_path),
             ],
             capture_output=True,
             text=True,
@@ -193,7 +205,7 @@ def _get_git_commit() -> Optional[str]:
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         pass
 
     return None
@@ -251,7 +263,7 @@ def _capture_toolchain_versions() -> List[ToolchainVersion]:
                                 path=None,
                             )
                         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         pass
 
     # libraw (via rawpy - optional)
@@ -344,21 +356,32 @@ def _parse_exif_fields(exif_all_tags: Dict[str, Any]) -> ExifMetadata:
                 return exif_all_tags[key]
         return None
 
+    def get_text(*keys: str) -> Any:
+        # exiftool's JSON output prints numeric-looking strings as numbers (a
+        # camera model named "6300" arrives as 6300). The sidecar schema types
+        # these fields as text and stays strict, so the text form is restored
+        # here, where the exiftool payload enters, and not in the schema model
+        # that also validates sidecar files. ``all_tags`` keeps the raw value.
+        value = get_field(*keys)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return str(value)
+        return value
+
     return ExifMetadata(
         all_tags=exif_all_tags,
-        camera_make=get_field("EXIF:Make", "Make"),
-        camera_model=get_field("EXIF:Model", "Model"),
-        lens_model=get_field("EXIF:LensModel", "LensModel"),
+        camera_make=get_text("EXIF:Make", "Make"),
+        camera_model=get_text("EXIF:Model", "Model"),
+        lens_model=get_text("EXIF:LensModel", "LensModel"),
         iso=get_field("EXIF:ISO", "ISO"),
         aperture=get_field("EXIF:FNumber", "FNumber", "Aperture"),
-        shutter_speed=get_field("EXIF:ShutterSpeed", "ShutterSpeed", "ExposureTime"),
+        shutter_speed=get_text("EXIF:ShutterSpeed", "ShutterSpeed", "ExposureTime"),
         focal_length=get_field("EXIF:FocalLength", "FocalLength"),
-        white_balance=get_field("EXIF:WhiteBalance", "WhiteBalance"),
-        color_space=get_field("EXIF:ColorSpace", "ColorSpace"),
+        white_balance=get_text("EXIF:WhiteBalance", "WhiteBalance"),
+        color_space=get_text("EXIF:ColorSpace", "ColorSpace"),
         width=get_field("EXIF:ImageWidth", "ImageWidth"),
         height=get_field("EXIF:ImageHeight", "ImageHeight"),
         bit_depth=get_field("EXIF:BitsPerSample", "BitsPerSample"),
-        datetime_original=get_field("EXIF:DateTimeOriginal", "DateTimeOriginal"),
+        datetime_original=get_text("EXIF:DateTimeOriginal", "DateTimeOriginal"),
         gps_latitude=get_field("EXIF:GPSLatitude", "GPSLatitude"),
         gps_longitude=get_field("EXIF:GPSLongitude", "GPSLongitude"),
     )

@@ -10,23 +10,54 @@ remains accepted and ignored for backward compatibility.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Bounds for the ``max_iterations`` request field. Out-of-range or non-integer
+# values are rejected with 422 instead of reaching the training loop.
+MIN_MAX_ITERATIONS = 1
+MAX_MAX_ITERATIONS = 10_000
+
+# Upper bound on jobs kept in the per-router registry. Finished jobs are
+# evicted oldest-first; when every retained job is still active a new job is
+# refused with 503 instead of growing the registry without bound.
+MAX_RETAINED_JOBS = 256
+_TERMINAL_STATUSES = frozenset({"completed", "error"})
 
 # Optional FastAPI import. These names must be resolvable at module scope:
 # `from __future__ import annotations` defers annotation evaluation, so
 # FastAPI resolves endpoint annotations (e.g. ``BackgroundTasks``) against
 # the module globals rather than any function-local import.
 try:
-    from fastapi import APIRouter, BackgroundTasks
+    from fastapi import APIRouter, BackgroundTasks, HTTPException
 
     FASTAPI_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only without FastAPI installed
     FASTAPI_AVAILABLE = False
     APIRouter = None
     BackgroundTasks = None
+    HTTPException = None
+
+
+def _validate_max_iterations(value: Any) -> int:
+    """Return ``value`` as a bounded iteration count or raise ``ValueError``."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("max_iterations must be an integer")
+    if not MIN_MAX_ITERATIONS <= value <= MAX_MAX_ITERATIONS:
+        raise ValueError(f"max_iterations must be between {MIN_MAX_ITERATIONS} and {MAX_MAX_ITERATIONS}")
+    return value
+
+
+def _make_room_for_job(jobs: dict[str, dict[str, Any]]) -> bool:
+    """Evict the oldest finished jobs; return False if the registry stays full."""
+    for job_id in [jid for jid, j in jobs.items() if j.get("status") in _TERMINAL_STATUSES]:
+        if len(jobs) < MAX_RETAINED_JOBS:
+            break
+        del jobs[job_id]
+    return len(jobs) < MAX_RETAINED_JOBS
 
 
 def create_rl_api_router():
@@ -52,7 +83,8 @@ def create_rl_api_router():
 
         Request body:
             pipeline: Pipeline configuration
-            max_iterations: Maximum training iterations (default: 50)
+            max_iterations: Maximum training iterations (default: 50, integer
+                between 1 and 10000; anything else is rejected with 422)
             model_path: Deprecated, unsupported field; accepted and ignored
                 for backward compatibility
         """
@@ -60,7 +92,16 @@ def create_rl_api_router():
 
         job_id = str(uuid.uuid4())[:8]
         pipeline = payload.get("pipeline", {})
-        max_iters = payload.get("max_iterations", 50)
+        try:
+            max_iters = _validate_max_iterations(payload.get("max_iterations", 50))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        if not _make_room_for_job(_running_jobs):
+            raise HTTPException(
+                status_code=503,
+                detail=f"too many active RL optimization jobs (limit {MAX_RETAINED_JOBS})",
+            )
 
         _running_jobs[job_id] = {
             "status": "starting",
@@ -69,33 +110,38 @@ def create_rl_api_router():
             "iterations": 0,
         }
 
+        def train_job() -> Any:
+            """Run the blocking imports and training loop (worker thread)."""
+            # Mock implementation - would use actual RL optimizer
+            from transformation_portal.rl.action_space import enumerate_actions
+            from transformation_portal.rl.env import MockPipelineEnv
+            from transformation_portal.rl.model import create_model
+            from transformation_portal.rl.optimize_rl import (
+                RLOptimizationConfig,
+                train_rl,
+            )
+            from transformation_portal.rl.state_encoder import get_state_dim
+            from transformation_portal.rl.trainer import RLTrainer
+
+            # Create mock environment for testing
+            actions = enumerate_actions()
+            env = MockPipelineEnv(actions)
+
+            # Create model and trainer
+            state_dim = get_state_dim()
+            model = create_model(state_dim, len(actions))
+            trainer = RLTrainer(model, actions)
+
+            # Run optimization. The trained model is not persisted: jobs are
+            # mock runs and must not write into the server's working directory.
+            config = RLOptimizationConfig(max_iterations=max_iters, save_model=False)
+            return train_rl(env, trainer, pipeline, config)
+
         async def run_optimization():
             try:
                 _running_jobs[job_id]["status"] = "running"
-
-                # Mock implementation - would use actual RL optimizer
-                from transformation_portal.rl.action_space import enumerate_actions
-                from transformation_portal.rl.env import MockPipelineEnv
-                from transformation_portal.rl.model import create_model
-                from transformation_portal.rl.optimize_rl import (
-                    RLOptimizationConfig,
-                    train_rl,
-                )
-                from transformation_portal.rl.state_encoder import get_state_dim
-                from transformation_portal.rl.trainer import RLTrainer
-
-                # Create mock environment for testing
-                actions = enumerate_actions()
-                env = MockPipelineEnv(actions)
-
-                # Create model and trainer
-                state_dim = get_state_dim()
-                model = create_model(state_dim, len(actions))
-                trainer = RLTrainer(model, actions)
-
-                # Run optimization
-                config = RLOptimizationConfig(max_iterations=max_iters)
-                result = train_rl(env, trainer, pipeline, config)
+                # Keep the event loop responsive while the job trains.
+                result = await asyncio.to_thread(train_job)
 
                 _running_jobs[job_id].update(
                     {

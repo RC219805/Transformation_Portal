@@ -12,7 +12,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from queue import Queue
+from queue import Empty, Full, Queue
 from typing import Callable, Generic, Literal, Sequence, TypeVar, cast
 
 LoadedT = TypeVar("LoadedT")
@@ -61,6 +61,25 @@ class _Failure:
 
 
 _SENTINEL = object()
+
+# Poll interval for queue operations that must notice an aborted batch.
+_POLL_SECONDS = 0.05
+
+
+def _put_until(queue: Queue, item: object, give_up: Callable[[], bool]) -> bool:
+    """Put *item* on *queue*, retrying until it fits or ``give_up()`` is true.
+
+    Returns True when the item was enqueued, False when the caller gave up.
+    """
+
+    while True:
+        if give_up():
+            return False
+        try:
+            queue.put(item, timeout=_POLL_SECONDS)
+        except Full:
+            continue
+        return True
 
 
 class ParallelIOPipeline(Generic[LoadedT, ProcessedT, SavedT]):
@@ -122,19 +141,26 @@ class ParallelIOPipeline(Generic[LoadedT, ProcessedT, SavedT]):
             with result_lock:
                 results[index] = result
 
+        # Set when the caller thread leaves the batch abnormally (for example a
+        # KeyboardInterrupt raised by processor_fn) so the loader stops instead
+        # of blocking forever on a full queue nobody drains any more.
+        stop_event = threading.Event()
+
         def loader_worker() -> None:
             try:
                 for index, input_path in enumerate(paths):
+                    if stop_event.is_set():
+                        return
                     try:
                         payload = self._loader(input_path)
                     except Exception as exc:
-                        load_queue.put(
-                            _Failure(index, input_path, "load", exc),
-                        )
+                        item: object = _Failure(index, input_path, "load", exc)
                     else:
-                        load_queue.put(_LoadedItem(index, input_path, payload))
+                        item = _LoadedItem(index, input_path, payload)
+                    if not _put_until(load_queue, item, stop_event.is_set):
+                        return
             finally:
-                load_queue.put(_SENTINEL)
+                _put_until(load_queue, _SENTINEL, stop_event.is_set)
 
         def saver_worker() -> None:
             while True:
@@ -142,6 +168,8 @@ class ParallelIOPipeline(Generic[LoadedT, ProcessedT, SavedT]):
                 try:
                     if item is _SENTINEL:
                         return
+                    if stop_event.is_set():
+                        continue
 
                     save_item = cast(_SaveItem[ProcessedT], item)
                     try:
@@ -176,52 +204,73 @@ class ParallelIOPipeline(Generic[LoadedT, ProcessedT, SavedT]):
             loader_future = executor.submit(loader_worker)
             saver_futures = [executor.submit(saver_worker) for _ in range(self.num_savers)]
 
-            while True:
-                loaded = load_queue.get()
-                try:
-                    if loaded is _SENTINEL:
-                        break
+            def savers_gone() -> bool:
+                return all(future.done() for future in saver_futures)
 
-                    if isinstance(loaded, _Failure):
-                        record(
-                            loaded.index,
-                            ParallelIOItemResult(
-                                input_path=loaded.input_path,
-                                error=loaded.error,
-                                stage=loaded.stage,
-                            ),
-                        )
-                        continue
-
-                    loaded_item = cast(_LoadedItem[LoadedT], loaded)
+            completed = False
+            try:
+                while True:
+                    loaded = load_queue.get()
                     try:
-                        processed = processor_fn(
-                            loaded_item.input_path,
-                            loaded_item.payload,
-                        )
-                    except Exception as exc:
-                        record(
-                            loaded_item.index,
-                            ParallelIOItemResult(
-                                input_path=loaded_item.input_path,
-                                error=exc,
-                                stage="process",
-                            ),
-                        )
-                    else:
-                        save_queue.put(
-                            _SaveItem(
-                                loaded_item.index,
+                        if loaded is _SENTINEL:
+                            break
+
+                        if isinstance(loaded, _Failure):
+                            record(
+                                loaded.index,
+                                ParallelIOItemResult(
+                                    input_path=loaded.input_path,
+                                    error=loaded.error,
+                                    stage=loaded.stage,
+                                ),
+                            )
+                            continue
+
+                        loaded_item = cast(_LoadedItem[LoadedT], loaded)
+                        try:
+                            processed = processor_fn(
                                 loaded_item.input_path,
-                                processed,
-                            ),
-                        )
-                finally:
-                    load_queue.task_done()
+                                loaded_item.payload,
+                            )
+                        except Exception as exc:
+                            record(
+                                loaded_item.index,
+                                ParallelIOItemResult(
+                                    input_path=loaded_item.input_path,
+                                    error=exc,
+                                    stage="process",
+                                ),
+                            )
+                        else:
+                            _put_until(
+                                save_queue,
+                                _SaveItem(
+                                    loaded_item.index,
+                                    loaded_item.input_path,
+                                    processed,
+                                ),
+                                savers_gone,
+                            )
+                    finally:
+                        load_queue.task_done()
+                completed = True
+            finally:
+                if not completed:
+                    # Abnormal exit: stop the loader, discard queued work and
+                    # make sure the savers can still reach their sentinels so
+                    # the executor shutdown below cannot deadlock.
+                    stop_event.set()
+                    for pending in (load_queue, save_queue):
+                        while True:
+                            try:
+                                pending.get_nowait()
+                            except Empty:
+                                break
+                            pending.task_done()
+                for _ in range(self.num_savers):
+                    _put_until(save_queue, _SENTINEL, savers_gone)
 
             loader_future.result()
-            for _ in range(self.num_savers):
-                save_queue.put(_SENTINEL)
             for saver_future in saver_futures:
                 saver_future.result()
 

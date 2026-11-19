@@ -6,9 +6,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import re
 import shutil
 import stat
 import sys
+import unicodedata
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -25,6 +28,13 @@ EXIT_BUILD_ERROR = 3
 EXIT_VALIDATE_ERROR = 4
 
 READ_CHUNK_BYTES = 1024 * 1024
+
+# Tag files the tag manifest has to cover; without them an emptied tag manifest hides any edit to
+# the bag declaration, bag-info.txt or the payload manifest.
+REQUIRED_TAG_MANIFEST_ENTRIES = ("bagit.txt", "bag-info.txt", "manifest-sha256.txt")
+BAGIT_VERSION_LINE_RE = re.compile(r"BagIt-Version: \d+\.\d+")
+BAGIT_ENCODING_LINE_RE = re.compile(r"Tag-File-Character-Encoding: UTF-8", re.IGNORECASE)
+PAYLOAD_OXUM_RE = re.compile(r"(\d+)\.(\d+)")
 
 
 def _materialize_relpath(relpath: str) -> tuple[Path | None, str]:
@@ -166,6 +176,71 @@ def _parse_manifest_file(path: Path) -> list[tuple[str, str]]:
                 raise ValueError(f"Invalid manifest line {line_number} in {path.name}: {stripped!r}") from exc
             rows.append((digest.strip(), relpath.strip()))
     return rows
+
+
+def _bag_path_key(relpath_obj: Path) -> str:
+    """Comparable bag-relative path; NFC so HFS+-style decomposed names still match manifest rows."""
+    return unicodedata.normalize("NFC", relpath_obj.as_posix())
+
+
+def _bagit_declaration_is_valid(bagit_path: Path) -> bool:
+    try:
+        lines = bagit_path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return False
+    return (
+        len(lines) == 2
+        and BAGIT_VERSION_LINE_RE.fullmatch(lines[0]) is not None
+        and BAGIT_ENCODING_LINE_RE.fullmatch(lines[1]) is not None
+    )
+
+
+def _read_payload_oxum_values(bag_info_path: Path) -> list[str] | None:
+    """Return every declared Payload-Oxum value, or None when bag-info.txt cannot be read."""
+    try:
+        lines = bag_info_path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return None
+    values: list[str] = []
+    for line in lines:
+        label, separator, value = line.partition(":")
+        if separator and label.strip().lower() == "payload-oxum":
+            values.append(value.strip())
+    return values
+
+
+def _scan_payload_directory(bag_dir: Path) -> tuple[set[str], int, int]:
+    """Return every entry under data/ plus the octet and file totals of its regular files.
+
+    Symlinks are never followed: a symlinked file or directory is reported as one entry so it
+    cannot keep unlisted content out of the completeness check. Two on-disk names that differ only
+    in Unicode normalization form share one comparison key, and a manifest row can only stand for
+    one of them, so the second one is reported under its raw (non-NFC) name and stays unlisted.
+    """
+    present: set[str] = set()
+    raw_by_key: dict[str, str] = {}
+    octets = 0
+    file_count = 0
+    for dirpath, dirnames, filenames in os.walk(bag_dir / "data", followlinks=False):
+        base = Path(dirpath)
+        symlinked_dirs = [name for name in dirnames if (base / name).is_symlink()]
+        for name in [*filenames, *symlinked_dirs]:
+            entry = base / name
+            raw = entry.relative_to(bag_dir).as_posix()
+            key = _bag_path_key(entry.relative_to(bag_dir))
+            if key in raw_by_key:
+                present.add(raw if raw != key else raw_by_key[key])
+            else:
+                raw_by_key[key] = raw
+                present.add(key)
+            try:
+                entry_stat = entry.lstat()
+            except OSError:
+                continue
+            if stat.S_ISREG(entry_stat.st_mode):
+                octets += int(entry_stat.st_size)
+                file_count += 1
+    return present, octets, file_count
 
 
 def _bagit_validate_with_library(bag_dir: Path) -> tuple[bool, str | None]:
@@ -373,12 +448,14 @@ def _validate_bag(
         print(f"Validation error: {exc}", file=sys.stderr)
         return EXIT_VALIDATE_ERROR
 
-    def _validate_rows(scope: str, rows: list[tuple[str, str]]) -> None:
+    def _validate_rows(scope: str, rows: list[tuple[str, str]]) -> set[str]:
+        listed: set[str] = set()
         for expected_sha, relpath in rows:
             relpath_obj, relpath_error = _materialize_relpath(relpath)
             if relpath_obj is None:
                 mismatches.append({"scope": scope, "path": relpath, "issue": relpath_error})
                 continue
+            listed.add(_bag_path_key(relpath_obj))
 
             symlink_component_error = _check_symlink_components(bag_dir, relpath_obj)
             if symlink_component_error:
@@ -408,9 +485,43 @@ def _validate_bag(
                         "observed": observed_sha,
                     }
                 )
+        return listed
 
-    _validate_rows("payload", payload_rows)
-    _validate_rows("tag", tag_rows)
+    listed_payload = _validate_rows("payload", payload_rows)
+    listed_tags = _validate_rows("tag", tag_rows)
+
+    # Rows only prove that what is listed still matches. The checks below prove that nothing else
+    # is in the payload, that the tag manifest covers the files the rows depend on, and that the
+    # declared payload totals still hold.
+    if not _bagit_declaration_is_valid(bagit_path):
+        mismatches.append({"scope": "tag", "path": "bagit.txt", "issue": "invalid_bag_declaration"})
+
+    for required_tag in REQUIRED_TAG_MANIFEST_ENTRIES:
+        if required_tag not in listed_tags:
+            mismatches.append({"scope": "tag", "path": required_tag, "issue": "missing_from_tag_manifest"})
+
+    present_payload, payload_octets, payload_file_count = _scan_payload_directory(bag_dir)
+    for unlisted in sorted(present_payload - listed_payload):
+        mismatches.append({"scope": "payload", "path": unlisted, "issue": "unlisted_payload"})
+
+    declared_oxum_values = _read_payload_oxum_values(bag_info_path)
+    if declared_oxum_values is None:
+        mismatches.append({"scope": "tag", "path": "bag-info.txt", "issue": "unreadable"})
+    elif declared_oxum_values:
+        declared_oxum = declared_oxum_values[0]
+        oxum_match = PAYLOAD_OXUM_RE.fullmatch(declared_oxum)
+        if len(declared_oxum_values) > 1 or oxum_match is None:
+            mismatches.append({"scope": "tag", "path": "bag-info.txt", "issue": "invalid_payload_oxum"})
+        elif (int(oxum_match.group(1)), int(oxum_match.group(2))) != (payload_octets, payload_file_count):
+            mismatches.append(
+                {
+                    "scope": "payload",
+                    "path": "data",
+                    "issue": "payload_oxum_mismatch",
+                    "expected": declared_oxum,
+                    "observed": f"{payload_octets}.{payload_file_count}",
+                }
+            )
 
     library_validation: dict[str, Any] | None = None
     if validate_with_bagit_python:

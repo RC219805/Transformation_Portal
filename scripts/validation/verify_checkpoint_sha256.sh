@@ -4,12 +4,49 @@
 # Validates model checkpoint integrity
 #
 # Usage:
-#   ./scripts/validation/verify_checkpoint_sha256.sh
+#   ./scripts/validation/verify_checkpoint_sha256.sh [--strict]
+#
+# Exit codes:
+#   0  every checkpoint with a registered SHA256 matches it
+#   1  a checkpoint does not match its registered SHA256, or the checkpoint
+#      directory is missing; with --strict also when a checkpoint has no
+#      registered SHA256 or no checkpoint was found (nothing was verified)
+#   2  usage error
+#
+# Compatible with macOS system bash 3.2 (no associative arrays).
 #
 
 set -euo pipefail
 
 CHECKPOINT_DIR="checkpoints"
+STRICT=0
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --strict)
+            STRICT=1
+            ;;
+        -h|--help)
+            sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            echo "Usage: $0 [--strict]" >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+# Known checksums from presets. Prints nothing for a checkpoint that is not registered.
+expected_checksum_for() {
+    case "$1" in
+        depth_pro.pt) echo "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce" ;;
+        # Add more as verified
+        *) ;;
+    esac
+}
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Checkpoint SHA256 Verification"
@@ -23,13 +60,8 @@ fi
 
 CHECKPOINTS_FOUND=0
 VERIFIED=0
+MISMATCHED=0
 MISSING=0
-
-# Known checksums from presets
-declare -A EXPECTED_CHECKSUMS=(
-    ["depth_pro.pt"]="3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce"
-    # Add more as verified
-)
 
 echo "Scanning checkpoints..."
 echo ""
@@ -46,8 +78,8 @@ for checkpoint in "$CHECKPOINT_DIR"/*.pt "$CHECKPOINT_DIR"/*.pth; do
         echo "   Actual:   $ACTUAL_SHA"
 
         # Check if expected checksum exists
-        if [ -n "${EXPECTED_CHECKSUMS[$BASENAME]:-}" ]; then
-            EXPECTED_SHA="${EXPECTED_CHECKSUMS[$BASENAME]}"
+        EXPECTED_SHA=$(expected_checksum_for "$BASENAME")
+        if [ -n "$EXPECTED_SHA" ]; then
             echo "   Expected: $EXPECTED_SHA"
 
             if [ "$ACTUAL_SHA" == "$EXPECTED_SHA" ]; then
@@ -55,6 +87,7 @@ for checkpoint in "$CHECKPOINT_DIR"/*.pt "$CHECKPOINT_DIR"/*.pth; do
                 VERIFIED=$((VERIFIED + 1))
             else
                 echo "   Status:   ❌ MISMATCH"
+                MISMATCHED=$((MISMATCHED + 1))
             fi
         else
             echo "   Expected: (not in registry)"
@@ -70,6 +103,11 @@ if [ $CHECKPOINTS_FOUND -eq 0 ]; then
     echo ""
     echo "Download checkpoints with:"
     echo "  python scripts/download_checkpoints.py"
+    if [ $STRICT -eq 1 ]; then
+        echo ""
+        echo "❌ --strict: nothing was verified"
+        exit 1
+    fi
     exit 0
 fi
 
@@ -77,11 +115,24 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "Summary:"
 echo "  Total checkpoints: $CHECKPOINTS_FOUND"
 echo "  Verified:          $VERIFIED"
+echo "  Mismatched:        $MISMATCHED"
 echo "  Unknown:           $MISSING"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if [ $MISSING -gt 0 ]; then
     echo ""
     echo "⚠️  Action Required:"
-    echo "  Update EXPECTED_CHECKSUMS in this script with verified hashes"
+    echo "  Register verified hashes in expected_checksum_for() in this script"
+fi
+
+if [ $MISMATCHED -gt 0 ]; then
+    echo ""
+    echo "❌ $MISMATCHED checkpoint(s) do not match their registered SHA256"
+    exit 1
+fi
+
+if [ $STRICT -eq 1 ] && [ $MISSING -gt 0 ]; then
+    echo ""
+    echo "❌ --strict: $MISSING checkpoint(s) have no registered SHA256"
+    exit 1
 fi

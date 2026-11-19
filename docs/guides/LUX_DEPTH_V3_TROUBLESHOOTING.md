@@ -376,9 +376,12 @@ readiness. A fresh runtime installation replaces the venv. Keep the existing
 research-license acknowledgments and canonical-plan validation intact; synthetic
 fallback does not repair a production runtime.
 
-Strict input discovery intentionally excludes hidden folders and generated
-output paths. Place validation sources under a normal input directory such as
-`input_images/local_managed_validation/`, rather than `.runtime/` or `output/`.
+Input discovery intentionally excludes hidden folders and generated output
+folders found below the input directory, and everything inside the run's own
+output directory (see `docs/guides/input_hygiene.md`). The location of the input
+directory itself is not filtered, but keep validation sources in a normal input
+directory such as `input_images/local_managed_validation/`, rather than inside
+`.runtime/` or `output/`, so sources are never mixed with generated files.
 Historical failed jobs remain failed after a repair; verify a new job and its
 indexed outputs before rerunning a larger batch.
 

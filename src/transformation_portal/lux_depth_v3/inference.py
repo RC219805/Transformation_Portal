@@ -582,7 +582,12 @@ class DA3InferenceEngine:
                     revision=model_revision,
                 )
             except TypeError:
-                if model_revision and strict_enabled:
+                # Fail closed once a revision is pinned: retrying without it
+                # would load repository HEAD while manifests and run cards
+                # still record the pinned SHA (audit LC-05). The revisionless
+                # retry is kept only when no revision was resolved, so the
+                # recorded contract already says "unpinned".
+                if model_revision:
                     raise
                 self.model = DepthAnything3.from_pretrained(model_id)
             self.model.to(self.device)  # type: ignore[union-attr]
@@ -724,8 +729,10 @@ class DA3InferenceEngine:
         # Normalize input to canonical uint8 RGB numpy + PIL Image
         if isinstance(image, Image.Image):
             # PIL Image input: convert to RGB
-            # (drop alpha, convert grayscale/palette)
-            pil_image = image.convert("RGB")
+            # (drop alpha, convert grayscale/palette; scale 16-bit grayscale)
+            from .preprocessing import pil_to_rgb8
+
+            pil_image = pil_to_rgb8(image)
             # Canonical original_image: uint8 RGB numpy
             original_image = np.array(pil_image, dtype=np.uint8)
 
@@ -883,8 +890,10 @@ class DA3InferenceEngine:
             )
             image_np = (np.clip(decoded, 0.0, 1.0) * 255.0).astype(np.uint8)
         else:
-            image = Image.open(image_path).convert("RGB")
-            image_np = np.array(image)
+            from .preprocessing import pil_to_rgb8
+
+            with Image.open(image_path) as opened:
+                image_np = np.array(pil_to_rgb8(opened))
 
         # Run inference
         return self.infer(image_np)

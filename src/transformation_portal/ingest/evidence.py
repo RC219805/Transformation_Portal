@@ -40,6 +40,9 @@ _DEFAULT_PROJECTION_PROFILE_PAYLOAD: dict[str, Any] = {
     "source_schema": MACHINE_SCHEMA_VERSION,
     "drop_paths": list(_DEFAULT_DROP_PATHS),
 }
+# Stable top-level keys every tp.meta.machine.v1 envelope must carry
+# (docs/schemas/machine_mode/tp.meta.machine.v1/envelope.schema.json "required").
+_REQUIRED_MACHINE_KEYS = ("schema", "command", "success", "exit_code", "data", "error")
 
 
 def canonical_evidence_bytes(payload: Mapping[str, Any]) -> bytes:
@@ -204,6 +207,10 @@ def _extract_file_sha256(projected_envelope: Mapping[str, Any]) -> str | None:
 def _validate_machine_contract_surface(
     machine_payload: Mapping[str, Any],
 ) -> tuple[str, bool, int]:
+    missing = [key for key in _REQUIRED_MACHINE_KEYS if key not in machine_payload]
+    if missing:
+        raise ValueError(f"machine payload is missing required keys: {', '.join(missing)}")
+
     command = machine_payload.get("command")
     if not isinstance(command, str) or command not in _ALLOWED_MACHINE_COMMANDS:
         allowed = ", ".join(sorted(_ALLOWED_MACHINE_COMMANDS))
@@ -214,7 +221,8 @@ def _validate_machine_contract_surface(
         raise ValueError("machine payload success must be a boolean")
 
     exit_code = machine_payload.get("exit_code")
-    if not isinstance(exit_code, int) or not (0 <= exit_code <= 255):
+    # bool is an int subclass; JSON true/false is not an exit code.
+    if type(exit_code) is not int or not (0 <= exit_code <= 255):
         raise ValueError("machine payload exit_code must be" " an integer in [0,255]")
     if success and exit_code != 0:
         raise ValueError("machine payload exit_code must be" " 0 when success is true")

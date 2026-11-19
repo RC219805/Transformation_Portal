@@ -509,3 +509,72 @@ class TestSemanticDiffFromHashes:
 
         assert result.summary == "Test"
         mock_backend.generate.assert_called_once()
+
+
+@pytest.mark.regression
+class TestMalformedModelAnswers:
+    """Regression (M-12): wrong-shape or prose-wrapped answers must not crash or read as identical."""
+
+    @staticmethod
+    def _run(tmp_path, answer):
+        img_a = tmp_path / "a.png"
+        img_b = tmp_path / "b.png"
+        img_a.write_bytes(b"a")
+        img_b.write_bytes(b"b")
+        backend = MagicMock()
+        backend.generate.return_value = answer
+        return semantic_diff(backend=backend, image_a=img_a, image_b=img_b)
+
+    def test_prose_prefixed_json_is_extracted(self, tmp_path):
+        answer = (
+            "Here is the analysis you asked for:\n"
+            '{"summary": "Seam visible", "changes": '
+            '[{"type": "artifact", "severity": "high", "description": "seam on wall"}]}\n'
+            "Let me know if you need more."
+        )
+        result = self._run(tmp_path, answer)
+        assert result.has_changes
+        assert result.high_severity_count == 1
+        assert compute_diff_penalty(result) == pytest.approx(0.6)
+
+    def test_parse_response_extracts_embedded_object(self):
+        parsed = _parse_response('Sure! {"summary": "s", "changes": []} done')
+        assert "parse_error" not in parsed
+        assert parsed["summary"] == "s"
+
+    def test_unparseable_answer_raises_instead_of_reporting_no_changes(self, tmp_path):
+        with pytest.raises(SemanticDiffError, match="Unparseable"):
+            self._run(tmp_path, "The images look about the same to me.")
+
+    @pytest.mark.parametrize(
+        "answer",
+        [
+            "[]",
+            '"no differences"',
+            '{"summary": "x"}',
+            '{"summary": "x", "changes": "none"}',
+            '{"summary": "x", "changes": ["texture is off"]}',
+            '{"summary": "x", "changes": [{"type": "artifact", "severity": "high", '
+            '"description": "d", "confidence": "high"}]}',
+            '{"summary": "x", "changes": [{"type": "artifact", "severity": "high", '
+            '"description": "d", "confidence": NaN}]}',
+        ],
+    )
+    def test_wrong_shape_raises_semantic_diff_error(self, tmp_path, answer):
+        with pytest.raises(SemanticDiffError):
+            self._run(tmp_path, answer)
+
+    def test_null_type_and_severity_fall_back(self, tmp_path):
+        result = self._run(
+            tmp_path,
+            '{"summary": "x", "changes": [{"type": null, "severity": null, "description": "d"}]}',
+        )
+        assert len(result.changes) == 1
+        assert result.changes[0].type == "semantic"
+        assert result.changes[0].severity == "medium"
+
+    def test_confidence_is_clamped_to_unit_interval(self):
+        high = _validate_change({"type": "texture", "severity": "high", "description": "d", "confidence": 7})
+        low = _validate_change({"type": "texture", "severity": "high", "description": "d", "confidence": -2})
+        assert high is not None and high.confidence == 1.0
+        assert low is not None and low.confidence == 0.0

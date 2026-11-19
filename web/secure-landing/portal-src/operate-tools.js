@@ -82,6 +82,21 @@ export function createOperateTools(host) {
       : `${snapshot.matching.length} matching / ${snapshot.lines.length} loaded lines · at most ${host.maxLogLines || 1200} · ${following ? 'following' : 'follow paused'}. Copy and download include all loaded lines.`;
     return snapshot;
   }
+
+  let logRenderPending = false;
+  // Reconcile the pane and its controls against the same bounded buffer once per frame.
+  function appendLog(jobId) {
+    if (!els.logPane || state.selectedJobId !== jobId || logRenderPending) return;
+    if (!host.portalRenderScheduler) {
+      renderLogs();
+      return;
+    }
+    logRenderPending = true;
+    host.portalRenderScheduler.schedule(() => {
+      logRenderPending = false;
+      renderLogs();
+    });
+  }
   function clearLogs() { const job = currentJob(); if (job) job.logs = []; renderLogs(); }
   search?.addEventListener('input', () => { criteria.query = search.value; host.onFilterChange(); });
   status?.addEventListener('change', () => { criteria.status = status.value; host.onFilterChange(); });
@@ -137,5 +152,5 @@ export function createOperateTools(host) {
     }
 
   renderQueueControls(); renderLogs();
-  return { visibleJobs, renderQueueControls, renderLogs, clearLogs, announceQueueDelta };
+  return { visibleJobs, renderQueueControls, renderLogs, appendLog, clearLogs, announceQueueDelta };
 }

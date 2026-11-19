@@ -339,6 +339,12 @@ class PriorityDAGScheduler:
 
         while ready:
             node = heapq.heappop(ready)
+
+            # Nodes that are already ready are pushed again whenever another
+            # node completes, so the queue holds duplicates (as in run()).
+            if node.node_id in executed:
+                continue
+
             order.append(node.node_id)
             executed.add(node.node_id)
 

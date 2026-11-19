@@ -268,6 +268,11 @@ class CASDAGExecutor:
         self.locks_dir = self.cache_dir / ".locks"
         self.locks_dir.mkdir(exist_ok=True)
 
+        # Verified reads refuse every symlink below the cache root. The root
+        # itself may be a link the operator configured; resolve it once so the
+        # entries written through it can be read back.
+        self._cache_read_root = self.cache_dir.resolve()
+
         # Pre-compute code hash
         self._code_hash = compute_code_hash(self.config.code_paths)
 
@@ -488,9 +493,15 @@ class CASDAGExecutor:
                             result = stage.execute_uncached(context)
                             cache_misses += 1
                             check(stage_name, "after_compute")
-                            if cache_enabled and result.is_success():
+                            # A skipped stage did no work worth caching.
+                            if cache_enabled and result.is_success() and result.status != StageStatus.SKIPPED:
                                 check(stage_name, "before_store")
-                                self._store_cache(identity, result)
+                                try:
+                                    self._store_cache(identity, result)
+                                except (CASError, OSError, TypeError, ValueError, RecursionError) as exc:
+                                    # The stage succeeded. A result the cache cannot
+                                    # hold is computed again next time, not failed now.
+                                    logger.warning("Result of stage %s was not cached: %s", stage_name, exc)
                 if result.cache_hit:
                     cache_hits += 1
                 stage_results[stage_name] = result
@@ -523,7 +534,7 @@ class CASDAGExecutor:
         descriptors = []
         try:
             flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-            descriptor = os.open(self.cache_dir, flags)
+            descriptor = os.open(self._cache_read_root, flags)
             descriptors.append(descriptor)
             for component in cache_path.relative_to(self.cache_dir).parts[:-1]:
                 descriptor = os.open(component, flags, dir_fd=descriptor)
@@ -622,9 +633,9 @@ class CASDAGExecutor:
             "cached_at": datetime.now(timezone.utc).isoformat(),
         }
         data["payload_sha256"] = hashlib.sha256(jcs_dumpb(data)).hexdigest()
-        if len(jcs_dumpb(data)) > _MAX_CACHE_MANIFEST_BYTES:
-            raise ValueError("Cache manifest exceeds byte limit")
-        _atomic_write_json(cache_path, data)
+        # One limit for both directions: the reader bounds the file as written,
+        # which is larger than its canonical form.
+        _atomic_write_json(cache_path, data, max_bytes=_MAX_CACHE_MANIFEST_BYTES)
 
     def _cache_path(self, cas_id: str) -> Path:
         """Get cache file path for a CAS ID."""
@@ -641,7 +652,8 @@ class CASDAGExecutor:
 
         Args:
             stage_names: Specific stages to invalidate (None = all)
-            before: Invalidate entries older than this time
+            before: Invalidate entries older than this time. A naive value is
+                taken as local time, as ``datetime.now()`` returns it.
 
         Returns:
             Number of cache entries invalidated
@@ -653,6 +665,10 @@ class CASDAGExecutor:
 
         if not dag_cache.exists():
             return 0
+
+        if before is not None and before.tzinfo is None:
+            # Entries record an aware UTC time; a naive bound cannot be compared with it.
+            before = before.astimezone(timezone.utc)
 
         for prefix_dir in dag_cache.iterdir():
             if not prefix_dir.is_dir():
@@ -679,7 +695,8 @@ class CASDAGExecutor:
                     cache_file.unlink()
                     count += 1
 
-                except (json.JSONDecodeError, OSError):
+                except (OSError, ValueError, TypeError, AttributeError):
+                    # Unreadable or malformed entry (bad JSON, bad timestamp): skip it
                     continue
 
         logger.info("Invalidated %d cache entries", count)
@@ -727,8 +744,16 @@ def verify_dag_determinism(
                 logger.warning("Run %d failed: %s", i + 1, result.error)
                 return False, all_hashes
 
-            for stage_name, identity in result.identities.items():
-                all_hashes[stage_name].append(identity.cas_id)
+            # Compare what each stage produced. Its execution identity only
+            # describes the inputs, which are the same on every run.
+            for stage_name, stage_result in result.stage_results.items():
+                try:
+                    output_payload = canonical_input_value(stage_result.artifacts)
+                    output_hash = hashlib.sha256(jcs_dumpb(output_payload)).hexdigest()
+                except (TypeError, ValueError) as exc:
+                    logger.warning("Outputs of stage %s cannot be hashed: %s", stage_name, exc)
+                    return False, all_hashes
+                all_hashes[stage_name].append(f"sha256:{output_hash}")
 
             logger.debug("Run %d completed", i + 1)
 

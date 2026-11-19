@@ -232,10 +232,48 @@ def run(
 
 
 def _load_tensor_from_cas(cas_root: Path, artifact_id: str):
-    import numpy as np
+    """Load an artifact's tensor and prove it is the payload the id names.
 
+    The directory name is not evidence: the payload is hashed again, under
+    the tensor role recorded with it, and must reproduce ``artifact_id``.
+    """
     tensor_hash = _parse_artifact_id(artifact_id)
     artifact_dir = cas_root / "sha256" / tensor_hash
+
+    tensor = _read_tensor_payload(artifact_dir, artifact_id)
+    tensor_role = _read_tensor_role(artifact_dir, artifact_id)
+    try:
+        payload_id = compute_artifact_id(tensor_role, tensor)
+    except ValueError as e:
+        raise ValueError(f"Tensor payload for artifact {artifact_id} is not a valid {tensor_role!r} tensor: {e}") from e
+    if payload_id != f"sha256:{tensor_hash}":
+        raise ValueError(
+            f"Tensor payload for artifact {artifact_id} in {artifact_dir} does not match its artifact id "
+            f"(payload hashes to {payload_id})"
+        )
+    return tensor
+
+
+def _read_tensor_role(artifact_dir: Path, artifact_id: str) -> str:
+    """Return the tensor role stored with an artifact; it is part of the id preimage."""
+    meta_path = artifact_dir / "tensor_meta.json"
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"No tensor metadata found for {artifact_id} in {artifact_dir}") from e
+    except OSError as e:
+        raise RuntimeError(f"Failed to read tensor metadata for artifact {artifact_id} from {meta_path}") from e
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid tensor metadata JSON for artifact {artifact_id} at {meta_path}") from e
+
+    tensor_role = meta.get("tensor_role") if isinstance(meta, dict) else None
+    if not isinstance(tensor_role, str):
+        raise KeyError(f"Missing 'tensor_role' in tensor metadata for artifact {artifact_id} at {meta_path}")
+    return tensor_role
+
+
+def _read_tensor_payload(artifact_dir: Path, artifact_id: str):
+    import numpy as np
 
     npy_path = artifact_dir / "output_tensor.npy"
     if npy_path.exists():

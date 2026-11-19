@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from transformation_portal.dashboard.execution_manager import ExecutionManager
@@ -40,18 +42,88 @@ def set_manager(manager: ExecutionManager) -> None:
     _manager = manager
 
 
+_MAX_JSON_SAFE_DEPTH = 64
+_MAX_REPR_CHARS = 200
+
+
+def _json_safe_str(text: str) -> str:
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        return text.encode("utf-8", "replace").decode("utf-8")
+    return text
+
+
+def _fallback_repr(value: Any) -> str:
+    try:
+        text = repr(value)
+    except Exception:  # noqa: BLE001 - a broken __repr__ must not break the stream
+        text = f"<{type(value).__name__}>"
+    return _json_safe_str(text[:_MAX_REPR_CHARS])
+
+
+def to_json_safe(value: Any, _depth: int = 0) -> Any:
+    """Return a strictly JSON-serialisable copy of ``value``.
+
+    Node outputs are arbitrary Python objects (arrays, paths, model results).
+    Non-finite floats become ``None``, array-likes are summarised by shape and
+    dtype, values FastAPI knows how to encode (paths, enums, datetimes,
+    dataclasses, models) are encoded, and anything else is replaced by a short
+    ``repr`` so one odd value can never fail a broadcast or a run lookup.
+    """
+
+    if value is None or isinstance(value, (bool, int)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, str):
+        return _json_safe_str(value)
+    if _depth >= _MAX_JSON_SAFE_DEPTH:
+        return _fallback_repr(value)
+    if isinstance(value, dict):
+        return {_json_safe_str(str(key)): to_json_safe(item, _depth + 1) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [to_json_safe(item, _depth + 1) for item in value]
+    shape = getattr(value, "shape", None)
+    dtype = getattr(value, "dtype", None)
+    if shape is not None and dtype is not None:
+        try:
+            dims = [int(dim) for dim in shape]
+        except (TypeError, ValueError):
+            return _fallback_repr(value)
+        item = getattr(value, "item", None)
+        if not dims and callable(item):
+            try:
+                return to_json_safe(item(), _depth + 1)
+            except Exception:  # noqa: BLE001
+                return _fallback_repr(value)
+        return {"type": type(value).__name__, "shape": dims, "dtype": str(dtype)}
+    try:
+        encoded = jsonable_encoder(value)
+    except Exception:  # noqa: BLE001 - unknown objects are summarised instead
+        return _fallback_repr(value)
+    return to_json_safe(encoded, _depth + 1)
+
+
 async def broadcast(msg: Dict[str, Any]) -> None:
     """Broadcast message to all connected WebSocket clients.
+
+    The message is made JSON-safe once, so a non-serialisable node output can
+    never be mistaken for a client disconnect. Only clients whose socket is
+    actually gone are unsubscribed.
 
     Args:
         msg: Message to broadcast
     """
+    payload = to_json_safe(msg)
     disconnected = []
-    for client in _websocket_clients:
+    for client in list(_websocket_clients):
         try:
-            await client.send_json(msg)
-        except Exception:
+            await client.send_json(payload)
+        except (WebSocketDisconnect, RuntimeError, OSError):
             disconnected.append(client)
+        except Exception:  # noqa: BLE001 - keep the subscriber, report the failure
+            logger.warning("Execution WebSocket send failed; client kept subscribed", exc_info=True)
 
     for client in disconnected:
         if client in _websocket_clients:
@@ -145,28 +217,30 @@ def create_execution_router() -> APIRouter:
             raise HTTPException(status_code=404, detail="Run not found")
 
         return JSONResponse(
-            {
-                "run_id": run.run_id,
-                "status": run.status.value,
-                "start_time": run.start_time,
-                "end_time": run.end_time,
-                "error": run.error,
-                "cancel_requested": run.cancel_requested,
-                "current_node_id": run.current_node_id,
-                "nodes": {
-                    node_id: {
-                        "status": state.status.value,
-                        "start_time": state.start_time,
-                        "end_time": state.end_time,
-                        "outputs": state.outputs,
-                        "error": state.error,
-                        "progress": state.progress,
-                        "merkle_hash": state.merkle_hash,
-                    }
-                    for node_id, state in run.nodes.items()
-                },
-                "results": run.results,
-            }
+            to_json_safe(
+                {
+                    "run_id": run.run_id,
+                    "status": run.status.value,
+                    "start_time": run.start_time,
+                    "end_time": run.end_time,
+                    "error": run.error,
+                    "cancel_requested": run.cancel_requested,
+                    "current_node_id": run.current_node_id,
+                    "nodes": {
+                        node_id: {
+                            "status": state.status.value,
+                            "start_time": state.start_time,
+                            "end_time": state.end_time,
+                            "outputs": state.outputs,
+                            "error": state.error,
+                            "progress": state.progress,
+                            "merkle_hash": state.merkle_hash,
+                        }
+                        for node_id, state in run.nodes.items()
+                    },
+                    "results": run.results,
+                }
+            )
         )
 
     @router.post("/runs/{run_id}/cancel")
@@ -369,6 +443,17 @@ def get_execution_ui_html() -> str:
         let runs = {};
         let logs = [];
 
+        // Escape a value for HTML text and quoted-attribute contexts. Run ids, node ids,
+        // errors and outputs come from client-supplied payloads.
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function connect() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(`${protocol}//${window.location.host}/api/exec/ws`);
@@ -499,9 +584,9 @@ def get_execution_ui_html() -> str:
             const container = document.getElementById('logs');
             container.innerHTML = logs.map(log => `
                 <div class="log-entry ${log.type === 'node_error' || log.type === 'run_error' ? 'error' : ''}">
-                    <span class="time">[${log.time}]</span>
-                    ${log.node ? `<span class="node">[${log.node}]</span>` : ''}
-                    <span class="message">${log.type}${log.message ? ': ' + log.message : ''}${log.error ? ': ' + log.error : ''}</span>
+                    <span class="time">[${escapeHtml(log.time)}]</span>
+                    ${log.node ? `<span class="node">[${escapeHtml(log.node)}]</span>` : ''}
+                    <span class="message">${escapeHtml(log.type)}${log.message ? ': ' + escapeHtml(log.message) : ''}${log.error ? ': ' + escapeHtml(log.error) : ''}</span>
                 </div>
             `).join('');
         }
@@ -538,10 +623,10 @@ def get_execution_ui_html() -> str:
 
             container.innerHTML = runList.map(r => `
                 <div class="run-item ${selectedRunId === r.run_id ? 'selected' : ''}"
-                     onclick="selectRun('${r.run_id}')">
-                    <h3>Run ${r.run_id}</h3>
+                     onclick="selectRun(${escapeHtml(JSON.stringify(String(r.run_id)))})">
+                    <h3>Run ${escapeHtml(r.run_id)}</h3>
                     <p>
-                        <span class="status ${r.status}">${r.status}</span>
+                        <span class="status ${escapeHtml(r.status)}">${escapeHtml(r.status)}</span>
                         ${r.start_time ? new Date(r.start_time).toLocaleString() : ''}
                     </p>
                 </div>
@@ -555,7 +640,7 @@ def get_execution_ui_html() -> str:
 
             // Fetch full run details
             try {
-                const res = await fetch(`/api/exec/runs/${runId}`);
+                const res = await fetch(`/api/exec/runs/${encodeURIComponent(runId)}`);
                 const data = await res.json();
                 runs[runId] = { ...runs[runId], ...data };
                 renderNodes();
@@ -594,7 +679,7 @@ def get_execution_ui_html() -> str:
             btn.textContent = 'Cancelling...';
 
             try {
-                const res = await fetch(`/api/exec/runs/${selectedRunId}/cancel`, { method: 'POST' });
+                const res = await fetch(`/api/exec/runs/${encodeURIComponent(selectedRunId)}/cancel`, { method: 'POST' });
                 const data = await res.json();
                 if (runs[selectedRunId]) {
                     runs[selectedRunId].status = data.status;
@@ -618,18 +703,18 @@ def get_execution_ui_html() -> str:
             }
 
             container.innerHTML = Object.entries(run.nodes).map(([nodeId, node]) => `
-                <div class="node-card ${node.status || 'pending'}">
-                    <h4>${nodeId}</h4>
+                <div class="node-card ${escapeHtml(node.status || 'pending')}">
+                    <h4>${escapeHtml(nodeId)}</h4>
                     <div class="meta">
-                        <span class="status ${node.status || 'pending'}">${node.status || 'pending'}</span>
-                        ${node.merkle_hash ? `<br>Hash: ${node.merkle_hash.slice(0, 8)}...` : ''}
+                        <span class="status ${escapeHtml(node.status || 'pending')}">${escapeHtml(node.status || 'pending')}</span>
+                        ${node.merkle_hash ? `<br>Hash: ${escapeHtml(String(node.merkle_hash).slice(0, 8))}...` : ''}
                     </div>
                     ${node.outputs ? `
                         <div class="outputs">
-                            ${JSON.stringify(node.outputs, null, 2)}
+                            ${escapeHtml(JSON.stringify(node.outputs, null, 2))}
                         </div>
                     ` : ''}
-                    ${node.error ? `<div class="outputs" style="color:#ff5252">${node.error}</div>` : ''}
+                    ${node.error ? `<div class="outputs" style="color:#ff5252">${escapeHtml(node.error)}</div>` : ''}
                 </div>
             `).join('');
         }

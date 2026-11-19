@@ -384,7 +384,8 @@ export function createPhotographicReview(host) {
       const figure = el("figure", "", "photo-review-figure");
       const viewport = el("div", "", "photo-review-viewport", `photographic-${name}-viewport`);
       viewport.tabIndex = 0;
-      viewport.setAttribute("aria-label", `${name === "primary" ? "Selected" : "Comparison"} image. Use arrow keys to pan native crops.`);
+      viewport.setAttribute("role", "group");
+      viewport.setAttribute("aria-label", `${name === "primary" ? "Selected" : "Comparison"} image. Arrow keys pan native crops.`);
       const image = el("img", "", "photo-review-image", `photographic-${name}-image`);
       image.alt = "";
       image.decoding = "async";

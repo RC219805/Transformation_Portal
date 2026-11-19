@@ -255,6 +255,10 @@ def compute_code_hash(
         - Only includes relevant source files, not the entire commit
         - Is stable across rebases that don't change source content
         - Excludes untracked/ignored files
+
+        Tracked files whose working-tree content differs from HEAD are hashed
+        in addition, so an uncommitted edit changes the result. A working
+        tree that matches HEAD hashes exactly as the tree listing alone.
     """
     if paths is None:
         paths = ["src/"]
@@ -275,8 +279,12 @@ def compute_code_hash(
 
             if result.returncode == 0 and result.stdout.strip():
                 # Hash the sorted tree output for determinism
-                digest = hashlib.sha256(result.stdout.encode("utf-8")).hexdigest()
-                return f"sha256:{digest}"
+                digest = hashlib.sha256(result.stdout.encode("utf-8"))
+                if not _update_with_uncommitted_changes(digest, paths):
+                    # The working tree cannot be compared with HEAD, so the
+                    # commit says nothing reliable about the code on disk.
+                    return _compute_file_hash(paths)
+                return f"sha256:{digest.hexdigest()}"
             else:
                 # Fallback to git rev-parse HEAD
                 result = subprocess.run(
@@ -295,6 +303,53 @@ def compute_code_hash(
 
     # Fallback: hash file contents directly
     return _compute_file_hash(paths)
+
+
+def _update_with_uncommitted_changes(digest: Any, paths: list[Union[str, Path]]) -> bool:
+    """Mix tracked files under ``paths`` that differ from HEAD into ``digest``.
+
+    Covers staged and unstaged edits and deletions; untracked files stay
+    excluded. ``digest`` is left untouched when the working tree matches HEAD.
+
+    Returns:
+        False when git cannot compare the working tree with HEAD.
+    """
+    changed = subprocess.run(
+        ["git", "diff", "HEAD", "--name-only", "--no-renames", "-z", "--", *(str(p) for p in paths)],
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    if changed.returncode != 0:
+        return False
+    names = sorted(name for name in changed.stdout.split(b"\0") if name)
+    if not names:
+        return True
+
+    # The names are relative to the repository root, not the working directory.
+    toplevel = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    if toplevel.returncode != 0:
+        return False
+    root = Path(os.fsdecode(toplevel.stdout.removesuffix(b"\n")))
+
+    digest.update(b"\0uncommitted\0")
+    for name in names:
+        path = root / os.fsdecode(name)
+        digest.update(name + b"\0")
+        try:
+            content = os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()
+        except FileNotFoundError:
+            digest.update(b"deleted\0")
+        except OSError:
+            digest.update(b"unreadable\0")
+        else:
+            digest.update(b"content\0" + hashlib.sha256(content).digest())
+    return True
 
 
 def _normalize_code_ast(source: str) -> str:
@@ -375,8 +430,10 @@ def compute_stage_code_hash(
     # Include schema version for identity stability
     digest.update(f"schema:{CAS_IDENTITY_VERSION}".encode("utf-8"))
 
-    # Get the class or function to inspect
-    target = type(stage) if hasattr(stage, "__class__") and not callable(stage) else stage
+    # Get the class or function to inspect. An instance is described by its
+    # class even when it defines ``__call__``: inspect cannot read the source
+    # of an instance, which used to leave only its name in the hash.
+    target = stage if inspect.isroutine(stage) or inspect.isclass(stage) else type(stage)
 
     try:
         # Get source code of the main target
@@ -400,14 +457,15 @@ def compute_stage_code_hash(
         if include_dependencies:
             module = inspect.getmodule(target)
             if module and hasattr(module, "__file__") and module.__file__:
-                # Hash the module file path for dependency tracking
-                digest.update(f"module:{module.__file__}".encode("utf-8"))
+                # Bind the defining module by name. Its file path would make
+                # identical code hash differently in every checkout.
+                digest.update(f"module:{module.__name__}".encode("utf-8"))
 
     except (OSError, TypeError) as e:
         # inspect.getsource fails for built-in/C extension types
-        # Fall back to repr + type name
-        logger.debug("Cannot get source for %s: %s, using repr fallback", target, e)
-        fallback = f"{type(target).__module__}.{type(target).__qualname__}"
+        # Fall back to the qualified name of the class or function
+        logger.debug("Cannot get source for %s: %s, using name fallback", target, e)
+        fallback = f"{getattr(target, '__module__', None)}.{getattr(target, '__qualname__', type(target).__qualname__)}"
         digest.update(fallback.encode("utf-8"))
 
     return f"sha256:{digest.hexdigest()}"

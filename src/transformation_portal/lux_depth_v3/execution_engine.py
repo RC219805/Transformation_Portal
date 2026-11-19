@@ -311,15 +311,15 @@ def generate_pbr_stage(
         pbr_dir = output_root / "pbr"
         pbr_dir.mkdir(parents=True, exist_ok=True)
 
-        # Derive base name from output_key for consistent artifact naming
-        sanitized_stem = output_key.stem if output_key.suffix else output_key.name
-
+        # An output key is ``<stem>_<ext>_<hash8>`` and carries no file
+        # extension, so its full name is the artifact base name. ``Path.stem``
+        # would cut a key with an interior dot before its discriminating hash.
         pbr_paths = write_pbr_maps(
             normal_map=normal_map,
             roughness_map=roughness_map,
             ao_map=ao_map,
             output_dir=pbr_dir,
-            base_name=sanitized_stem,
+            base_name=output_key.name,
         )
         pbr_write_ms = round((time.perf_counter() - pbr_write_t0) * 1000.0, 3)
 

@@ -62,6 +62,10 @@ def embed_dct_luma(img: Image.Image, manifest_hash_hex: str, session_id: str, st
     payload = _bytes_from_ids(manifest_hash_hex, session_id)
     bits = np.unpackbits(np.frombuffer(payload, dtype=np.uint8))
     h, w = Y.shape
+    # Fail closed rather than silently embedding a truncated payload: one bit
+    # is carried per full 8x8 block.
+    if (h // 8) * (w // 8) < bits.size:
+        raise ValueError("Image too small for DCT payload")
     # Process 8x8 blocks; use DCT coefficient (3,2) for embedding.
     # (3,2) is a mid-frequency coefficient (in zig-zag order) chosen as a compromise:
     # - Low-frequency coefficients (top-left) are more robust to compression but changes are more visible.

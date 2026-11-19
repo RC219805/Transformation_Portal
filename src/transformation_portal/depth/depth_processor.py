@@ -23,6 +23,14 @@ from .utils import load_image
 
 logger = logging.getLogger(__name__)
 
+# Depth backend that serves each supported DepthProcessor device. ``pytorch_cpu`` is the
+# PyTorch backend; it places the model on the requested device ("cpu" or "cuda").
+_DEVICE_BACKENDS = {
+    "cpu": "pytorch_cpu",
+    "cuda": "pytorch_cpu",
+    "mps": "coreml",
+}
+
 
 class DepthProcessor:
     """
@@ -41,21 +49,20 @@ class DepthProcessor:
         Initialize depth processor.
 
         Args:
-            device: Device for processing ('cpu', 'cuda', 'mps')
+            device: Device for processing ('cpu', 'cuda', 'mps'). Ignored when ``config_path`` is
+                given: the config file's ``depth_model`` section then selects backend and device.
             config_path: Optional path to config file. If None, uses defaults.
+
+        Raises:
+            ValueError: If ``device`` is not one of the supported devices (default config only)
         """
         self.device = device
 
-        # Create default config if not provided
         if config_path is None:
-            config = self._create_default_config(device)
+            self._pipeline = ArchitecturalDepthPipeline(self._create_default_config(device))
         else:
-            # Load from file
-            pipeline = ArchitecturalDepthPipeline.from_config(config_path)
-            config = pipeline.config
-
-        # Initialize the pipeline
-        self._pipeline = ArchitecturalDepthPipeline(config)
+            # Load the YAML and build the depth model once.
+            self._pipeline = ArchitecturalDepthPipeline.from_config(config_path)
 
         logger.info(f"DepthProcessor initialized with device: {device}")
 
@@ -68,13 +75,23 @@ class DepthProcessor:
 
         Returns:
             Default configuration dictionary
+
+        Raises:
+            ValueError: If ``device`` is not one of the supported devices
         """
+        if device not in _DEVICE_BACKENDS:
+            raise ValueError(f"Unsupported DepthProcessor device {device!r}; expected one of {sorted(_DEVICE_BACKENDS)}")
+        backend = _DEVICE_BACKENDS[device]
+        depth_model: Dict = {
+            # The variant the adapter has always loaded (the unrecognised "vitl" fell back to it).
+            "variant": "small",
+            "backend": backend,
+        }
+        if backend != "coreml":
+            # CoreML runs on its own device; the PyTorch backend honours the requested device.
+            depth_model["device"] = device
         return {
-            "depth_model": {
-                "variant": "vitl",  # vitl, vits, vitb
-                "backend": "coreml" if device == "mps" else "pytorch",
-                "device": device,
-            },
+            "depth_model": depth_model,
             "cache": {
                 "enabled": True,
                 "max_cache_size_gb": 2.0,
@@ -150,9 +167,10 @@ class DepthProcessor:
         Returns:
             Dictionary with cache hit/miss counts
         """
+        stats = self._pipeline.cache.get_stats()
         return {
-            "hits": self._pipeline.stats.get("cache_hits", 0),
-            "misses": self._pipeline.stats.get("cache_misses", 0),
+            "hits": stats["hits"],
+            "misses": stats["misses"],
         }
 
 

@@ -29,7 +29,13 @@ def _is_sequence(value: object) -> bool:
 
 
 def _coerce_matrix(data: Sequence[Sequence[float]]) -> List[List[float]]:
-    """Convert ``data`` into a rectangular list-of-lists of floats."""
+    """Convert ``data`` into a rectangular list-of-lists of floats.
+
+    ``data`` may be a nested sequence or a 1-D / 2-D :class:`numpy.ndarray`.
+    """
+
+    if isinstance(data, np.ndarray) and data.ndim >= 1:
+        data = data.tolist()
 
     if not _is_sequence(data):
         raise TypeError("material data must be a sequence")
@@ -90,22 +96,14 @@ def _fft_frequency(index: int, size: int) -> float:
 
 
 def _dft2(matrix: Sequence[Sequence[float]]) -> List[List[complex]]:
-    """Compute the 2D discrete Fourier transform for ``matrix``."""
+    """Compute the 2D discrete Fourier transform for ``matrix``.
 
-    rows = len(matrix)
-    cols = len(matrix[0])
-    result = [[0j for _ in range(cols)] for _ in range(rows)]
+    Uses :func:`numpy.fft.fft2` (same ``exp(-2*pi*i*(u*x/M + v*y/N))`` sign
+    convention as the textbook DFT) and returns nested Python complex lists.
+    """
 
-    for u in range(rows):
-        for v in range(cols):
-            total = 0j
-            for x in range(rows):
-                for y in range(cols):
-                    angle = -2.0 * math.pi * ((u * x / rows) + (v * y / cols))
-                    total += matrix[x][y] * complex(math.cos(angle), math.sin(angle))
-            result[u][v] = total
-
-    return result
+    spectrum: List[List[complex]] = np.fft.fft2(np.asarray(matrix, dtype=np.float64)).tolist()
+    return spectrum
 
 
 def _energy_by_band(
@@ -976,17 +974,38 @@ def apply_transformation_tensor(
     clip: bool = True,
     dtype: np.dtype | None = None,
 ) -> np.ndarray:
-    """Apply composed operations to ``image`` using a unified tensor multiply."""
+    """Apply composed operations to ``image`` using a unified tensor multiply.
+
+    Pixels are treated as row vectors: ``out[..., d] = sum_c image[..., c] *
+    M[c, d]`` (``pixel @ M``), i.e. row ``c`` of the composed matrix holds the
+    contributions of *input* channel ``c``.  This is the convention under which
+    :func:`compose_operations` multiplies operations "in the order
+    encountered" to match sequential application.
+
+    The multiply always runs in floating point so that fractional coefficients
+    are never truncated by an integer image dtype.  The result has ``dtype``
+    when given, otherwise the image dtype for floating images and
+    ``float32`` for integer images.  ``clip`` clamps to the unit range, so
+    integer images should be normalised to ``[0, 1]`` beforehand.
+    """
 
     if image.ndim != 3:
         raise ValueError("image must be a H×W×C array")
 
+    if dtype is not None:
+        out_dtype = np.dtype(dtype)
+    elif np.issubdtype(image.dtype, np.floating):
+        out_dtype = image.dtype
+    else:
+        out_dtype = np.dtype(np.float32)
+    work_dtype = out_dtype if np.issubdtype(out_dtype, np.floating) else np.dtype(np.float64)
+
     channels = image.shape[2]
-    matrix = compose_operations(*operations, size=channels, dtype=dtype or image.dtype)
-    transformed = np.einsum("hwc,cd->hwd", image, matrix, dtype=dtype or image.dtype)
+    matrix = compose_operations(*operations, size=channels, dtype=work_dtype)
+    transformed = np.einsum("hwc,cd->hwd", image.astype(work_dtype, copy=False), matrix, dtype=work_dtype)
     if clip:
-        return np.clip(transformed, 0.0, 1.0)
-    return transformed
+        transformed = np.clip(transformed, 0.0, 1.0)
+    return transformed.astype(out_dtype, copy=False)
 
 
 class QuantumMaterialResponse:

@@ -18,7 +18,35 @@ Performance:
 from typing import Optional
 
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 from scipy import ndimage
+
+# Pixels evaluated per block by _local_variance: bounds the (block, size*size) float64 window copy.
+_LOCAL_VARIANCE_BLOCK_PIXELS = 1 << 18
+
+
+def _local_variance(values: np.ndarray, size: int = 5) -> np.ndarray:
+    """Return ``ndimage.generic_filter(values, np.var, size=size)`` without a Python call per pixel.
+
+    generic_filter hands each reflect-padded ``size x size`` neighbourhood to ``np.var`` as a
+    float64 buffer and casts the result to the input dtype. This evaluates the same float64
+    ``np.var`` reduction on row blocks of sliding windows (scipy's ``reflect`` mode is numpy's
+    ``symmetric`` padding), so the result is bit-identical; non-float or non-2-D inputs keep
+    the generic_filter path.
+    """
+    if values.ndim != 2 or not np.issubdtype(values.dtype, np.floating):
+        return ndimage.generic_filter(values, np.var, size=size)
+
+    radius = size // 2
+    padded = np.pad(values.astype(np.float64), radius, mode="symmetric")
+    height, width = values.shape
+    variance = np.empty(values.shape, dtype=values.dtype)
+    rows_per_block = max(1, _LOCAL_VARIANCE_BLOCK_PIXELS // max(1, width))
+    for start in range(0, height, rows_per_block):
+        stop = min(height, start + rows_per_block)
+        windows = sliding_window_view(padded[start : stop + 2 * radius], (size, size))
+        variance[start:stop] = np.var(windows.reshape(stop - start, width, size * size), axis=-1)
+    return variance
 
 
 class HeuristicFallback:
@@ -92,18 +120,17 @@ class HeuristicFallback:
         # Clip to [0, 1] for stability
         rgb_clipped = np.clip(rgb, 0, 1)
 
-        # Convert to uint8 for bilateral filtering (cv2 requirement)
+        # Filter in float32: quantising linear RGB to 8 bits would flatten the
+        # shadows (every value below 1/255 became 0) before the filter runs.
         try:
             import cv2
 
-            rgb_uint8 = (rgb_clipped * 255).astype(np.uint8)
-
             # Bilateral filter: smooth lighting while preserving edges
             # d=9: diameter of pixel neighborhood
-            # sigmaColor=75: color space sigma (larger = more colors mixed)
+            # sigmaColor=75/255: color space sigma (75 in 8-bit units, expressed on the
+            #   [0, 1] float scale; larger = more colors mixed)
             # sigmaSpace=75: coordinate space sigma (larger = farther pixels mixed)
-            albedo_uint8 = cv2.bilateralFilter(rgb_uint8, d=9, sigmaColor=75, sigmaSpace=75)
-            albedo = albedo_uint8.astype(np.float32) / 255.0
+            albedo = cv2.bilateralFilter(rgb_clipped.astype(np.float32), d=9, sigmaColor=75.0 / 255.0, sigmaSpace=75)
 
         except ImportError:
             # Fallback to Gaussian if cv2 not available
@@ -174,7 +201,7 @@ class HeuristicFallback:
 
         # Compute local variance (texture indicator)
         # Use a sliding window approach
-        variance = ndimage.generic_filter(luminance, np.var, size=5)
+        variance = _local_variance(luminance, size=5)
 
         # Normalize to [0, 1]
         if np.max(variance) > 1e-6:
@@ -269,7 +296,7 @@ class HeuristicFallback:
                 concavity = concavity / np.max(concavity)
 
             # Also compute local depth variance (corners/edges)
-            depth_variance = ndimage.generic_filter(depth_smooth, np.var, size=5)
+            depth_variance = _local_variance(depth_smooth, size=5)
             if np.max(depth_variance) > 1e-6:
                 depth_variance = depth_variance / np.max(depth_variance)
 

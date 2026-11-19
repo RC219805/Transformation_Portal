@@ -287,6 +287,20 @@ class JobEventStore(ABC):
         iterating it.
         """
 
+    async def purge(self, job_id: str) -> None:
+        """Drop the replay history and sequence counter of a deleted job.
+
+        The owner of job deletion calls this once the job row is gone, so
+        events never outlive their job on a backend whose repository delete
+        does not cascade (memory). It is idempotent: unknown ids and backends
+        that already cascaded (Postgres) are a no-op. Never call it for a job
+        that still exists; its replay cursor would restart.
+
+        The default keeps older/fake implementations compatible with the
+        expanded event-store surface.
+        """
+        return None
+
     @abstractmethod
     async def reset(self) -> None:
         """Test-only: clear all stored events."""

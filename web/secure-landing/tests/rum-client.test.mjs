@@ -1461,3 +1461,114 @@ test("public RUM route noops without proxying when RUM is disabled", async () =>
     env.cleanup();
   }
 });
+
+test("public RUM route rejects oversized bodies with 413 before proxying", async () => {
+  const env = withRumEnvironment({ rumEnabled: true });
+
+  try {
+    const route = await importFresh("../app/v1/portal/rum/route.js");
+    const restoreFetch = withMockedFetch(async () => {
+      assert.fail("oversized public RUM bodies must not reach the backend");
+    });
+
+    try {
+      // Streamed body without a Content-Length header: the capped reader must
+      // stop as soon as the limit is crossed.
+      let pulledChunks = 0;
+      const chunk = new TextEncoder().encode("A".repeat(8 * 1024));
+      const streamedBody = new ReadableStream({
+        pull(controller) {
+          pulledChunks += 1;
+          if (pulledChunks > 1024) {
+            controller.close();
+            return;
+          }
+          controller.enqueue(chunk);
+        }
+      });
+      const streamed = await route.POST(buildRequest("https://portal.example.com/v1/portal/rum", {
+        method: "POST",
+        headers: new Headers({
+          "content-type": "application/json",
+          origin: "https://portal.example.com"
+        }),
+        body: streamedBody,
+        duplex: "half"
+      }));
+      const streamedPayload = await streamed.json();
+
+      assert.equal(streamed.status, 413);
+      assert.equal(streamedPayload.error.code, "REQUEST_TOO_LARGE");
+      assert.equal(streamedPayload.error.details.path, "/v1/portal/rum");
+      assert.equal(streamedPayload.error.details.max_request_bytes, 16 * 1024);
+      assert.ok(pulledChunks < 16, `reader kept pulling after the cap (${pulledChunks} chunks)`);
+
+      // Declared Content-Length above the cap is rejected without reading.
+      const declared = await route.POST(buildRequest("https://portal.example.com/v1/portal/rum", {
+        method: "POST",
+        headers: new Headers({
+          "content-length": String(50 * 1024 * 1024),
+          "content-type": "application/json",
+          origin: "https://portal.example.com"
+        }),
+        body: "{}"
+      }));
+      assert.equal(declared.status, 413);
+      assert.equal((await declared.json()).error.code, "REQUEST_TOO_LARGE");
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("public RUM route forwards only allowlisted client headers upstream", async () => {
+  const env = withRumEnvironment({ rumEnabled: true });
+
+  try {
+    const route = await importFresh("../app/v1/portal/rum/route.js");
+    let forwarded = null;
+    const restoreFetch = withMockedFetch(async (_url, init) => {
+      forwarded = init.headers;
+      return Response.json({
+        schema: "tp.orchestrator.portal_rum_ingest.v1",
+        success: true,
+        data: { accepted: true },
+        error: null
+      });
+    });
+
+    try {
+      const response = await route.POST(buildRequest("https://portal.example.com/v1/portal/rum", {
+        method: "POST",
+        headers: new Headers({
+          "content-type": "application/json",
+          origin: "https://portal.example.com",
+          "x-anything": "client-chosen",
+          "x-tp-request-id": "client-chosen"
+        }),
+        body: JSON.stringify({
+          event_type: "core_web_vital",
+          route: "/portal",
+          view: "overview",
+          metric: "lcp",
+          value: 100,
+          unit: "ms"
+        })
+      }));
+
+      assert.equal(response.status, 200);
+      assert.ok(forwarded, "request must reach the backend");
+      assert.equal(forwarded.get("content-type"), "application/json");
+      assert.equal(forwarded.get("authorization"), "Bearer backend-secret");
+      assert.equal(forwarded.has("x-anything"), false);
+      assert.equal(forwarded.has("x-tp-request-id"), false);
+      assert.equal(forwarded.has("origin"), false);
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});

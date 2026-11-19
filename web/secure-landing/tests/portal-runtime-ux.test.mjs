@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 import { isPhotographyPipeline, photographyVersion } from "../portal-src/internal/photography.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -307,4 +308,109 @@ test("bounded response readers keep the request timeout active through body cons
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("bootstrap retry budget is per incident, not per page lifetime", () => {
+  const timers = new Map();
+  let nextTimerId = 1;
+  let now = 1_000_000;
+  const loads = [];
+  const outcomes = [];
+  const context = vm.createContext({
+    Date: class extends Date { static now() { return now; } },
+    Math, Number, String, Boolean, Set,
+    BOOTSTRAP_RETRY_MAX_ATTEMPTS: 4,
+    BOOTSTRAP_RETRY_MAX_WINDOW_MS: 60_000,
+    BOOTSTRAP_RETRY_MAX_DELAY_MS: 12_000,
+    state: {
+      bootstrap: {
+        status: "degraded",
+        lastRateLimitHint: null,
+        retry: { attempt: 0, timer: null, deadlineAt: 0, lastOutcome: "", lastReason: "", lastHttpStatus: 0, lastDelayMs: 0, lastEventAt: 0, lastAttemptAt: 0 },
+      },
+    },
+    console: { info: (_tag, payload) => outcomes.push(`${payload.outcome}#${payload.attempt}`), warn: (_tag, payload) => outcomes.push(`${payload.outcome}#${payload.attempt}`) },
+    window: { setTimeout(callback) { const id = nextTimerId++; timers.set(id, callback); return id; } },
+    clearTimeout(id) { timers.delete(id); },
+    _isBootstrapRetryableFailure: () => true,
+    _nextBootstrapRetryDelayMs: () => 1_000,
+    loadPortalBootstrap(options) { loads.push(options); },
+  });
+  vm.runInContext(
+    between(portal, "function _isBootstrapReady(", "function _bootstrapFailureDetails(")
+    + between(portal, "function _scheduleBootstrapRetry(", "function _setBootstrapStatus("),
+    context,
+  );
+  const fireTimer = () => {
+    const [[id, callback]] = timers;
+    timers.delete(id);
+    now += 1_000;
+    callback();
+  };
+  const retry = context.state.bootstrap.retry;
+
+  // Incident 1: three failed retries, then the backend recovers. The success
+  // path in loadPortalBootstrap finalizes with the attempts actually used.
+  for (let failure = 0; failure < 3; failure += 1) {
+    assert.equal(context._scheduleBootstrapRetry("upstream_unavailable", 503), true);
+    fireTimer();
+  }
+  assert.equal(retry.attempt, 3);
+  context._finalizeBootstrapRetry("succeeded", { attempt: retry.attempt, reason: "bootstrap_ready", httpStatus: 200, delayMs: 0 });
+  assert.ok(outcomes.includes("succeeded#3"), "the success event still reports the attempts it used");
+  assert.equal(retry.attempt, 0, "a recovered incident releases its retry budget");
+
+  // Incident 2, minutes later: it must get the full BOOTSTRAP_RETRY_MAX_ATTEMPTS.
+  now += 300_000;
+  outcomes.length = 0;
+  loads.length = 0;
+  for (let failure = 0; failure < 4; failure += 1) {
+    assert.equal(context._scheduleBootstrapRetry("upstream_unavailable", 503), true, `retry ${failure + 1} of a fresh incident is scheduled`);
+    fireTimer();
+  }
+  assert.equal(loads.length, 4);
+  assert.equal(context._scheduleBootstrapRetry("upstream_unavailable", 503), false, "the per-incident limit still applies");
+  assert.equal(outcomes.at(-1), "terminal_retry_limit#4");
+
+  // A stale counter left behind by a terminal incident does not starve the next one either.
+  retry.attempt = 4;
+  context.state.bootstrap.status = "degraded";
+  now += 300_000;
+  assert.equal(context._scheduleBootstrapRetry("upstream_unavailable", 503), true);
+  assert.equal(outcomes.at(-1), "scheduled#1");
+
+  // Inside one running chain an elapsed window does not refill the budget.
+  fireTimer();
+  retry.attempt = 4;
+  retry.deadlineAt = now - 1;
+  assert.equal(context._scheduleBootstrapRetry("upstream_unavailable", 503), false);
+  assert.equal(outcomes.at(-1), "terminal_retry_limit#4");
+});
+
+test("denied site storage does not abort theme start-up or theme switching", async () => {
+  const denied = () => { throw new Error("SecurityError: The operation is insecure."); };
+  const classes = new Set();
+  const context = vm.createContext({
+    localStorage: { getItem: denied, setItem: denied, removeItem: denied },
+    window: { matchMedia: () => ({ matches: true }) },
+    document: { documentElement: { classList: { toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)) } } },
+    state: {},
+    els: {},
+  });
+  vm.runInContext(
+    between(portal, "const THEME_STORAGE_KEY", "\nconst THEME_PREFERENCES") + "\n"
+    + between(portal, "const THEME_PREFERENCES", "\n") + "\n"
+    + between(portal, "function _normalizeThemePreference(", "if (els.themeBtn) els.themeBtn.addEventListener")
+    // init() up to the first post-theme step: the theme preamble must not reject.
+    + between(portal, "async function init()", "setupAmbientMotion();") + "}\n"
+    + "this.init = init; this.applyThemePreference = applyThemePreference;",
+    context,
+  );
+  await context.init();
+  assert.equal(context.state.themePreference, "system");
+  assert.equal(context.state.theme, "dark");
+  assert.ok(classes.has("dark"));
+  context.applyThemePreference("light");
+  assert.equal(context.state.themePreference, "light");
+  assert.ok(classes.has("light") && !classes.has("dark"));
 });

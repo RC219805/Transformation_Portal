@@ -9,6 +9,7 @@ Provides structured scene understanding using LLaVA-1.5:
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -23,6 +24,14 @@ if TYPE_CHECKING:
 LLaVAProcessor: Any = None
 
 logger = logging.getLogger(__name__)
+
+# The "SPACE TYPE:" answer line of the structured analysis prompt.
+_SPACE_TYPE_LINE_RE = re.compile(r"space\s+type\s*:\s*([^\n]*)", re.IGNORECASE)
+# A numbered section heading of the structured analysis ("7. NOTES: ...").
+_NUMBERED_HEADING_RE = re.compile(r"^\s*\d+\.\s+\S")
+# The "LIGHTING:" label at the start of a line ("6. LIGHTING:", "**LIGHTING:**"),
+# as opposed to a mention inside another answer ("accent lighting: warm").
+_LIGHTING_HEADING_RE = re.compile(r"(?m)^[^\w\n]*(?:\d+\W*)?lighting\s*:")
 
 
 def _resolve_llava_processor_class() -> Any:
@@ -186,13 +195,27 @@ Provide your analysis in this exact format with clear sections."""
 
     def _extract_space_type(self, text: str) -> SpaceType:
         """Extract space type from analysis text."""
+        # The structured answer ("1. SPACE TYPE: Interior ...") decides when present;
+        # scanning the whole text let "overhead pendant lights" in the room
+        # description turn a kitchen into an aerial view.
+        section = _SPACE_TYPE_LINE_RE.search(text)
+        if section:
+            space_type = self._classify_space_type(section.group(1))
+            if space_type is not SpaceType.UNKNOWN:
+                return space_type
+        return self._classify_space_type(text)
+
+    @staticmethod
+    def _classify_space_type(text: str) -> SpaceType:
+        """Classify a space type from whole-word keywords."""
         text_lower = text.lower()
 
-        if "aerial" in text_lower or "overhead" in text_lower or "drone" in text_lower:
+        if re.search(r"\b(?:aerials?|overhead|drones?)\b", text_lower):
             return SpaceType.AERIAL
-        elif "exterior" in text_lower or "outdoor" in text_lower or "facade" in text_lower:
+        elif re.search(r"\b(?:exteriors?|outdoors?|facades?)\b", text_lower):
             return SpaceType.EXTERIOR
-        elif "interior" in text_lower or "indoor" in text_lower or "room" in text_lower:
+        # "room" also matches as a suffix (bedroom, bathrooms), as before.
+        elif re.search(r"\b(?:interiors?|indoors?)\b|rooms?\b", text_lower):
             return SpaceType.INTERIOR
 
         return SpaceType.UNKNOWN
@@ -312,7 +335,11 @@ Provide your analysis in this exact format with clear sections."""
         found_features = []
 
         for feature in features:
-            if feature in text_lower:
+            # A feature starts a word and may carry a suffix (customized, high
+            # ceilings). A short keyword must be the whole word, plural allowed:
+            # "spa" must not match "space" or "spacious".
+            tail = r"(?:s|es)?\b" if len(feature) <= 3 else ""
+            if re.search(rf"\b{re.escape(feature)}{tail}", text_lower):
                 found_features.append(feature)
 
         return found_features
@@ -323,9 +350,19 @@ Provide your analysis in this exact format with clear sections."""
 
         # Look for lighting section
         if "lighting:" in text_lower:
-            # Extract text after "lighting:" label
-            lighting_section = text_lower.split("lighting:")[-1].split("\n")[0]
-            return lighting_section.strip()
+            # The answer follows the last "LIGHTING:" label that starts a line: an
+            # echoed prompt precedes the answers, and a later mention inside another
+            # answer ("accent lighting: warm") is not the label. Without such a line
+            # the last "lighting:" anywhere is used, as before. When the label ends
+            # its line ("6. LIGHTING:\nnatural light") the answer is on the next line.
+            headings = list(_LIGHTING_HEADING_RE.finditer(text_lower))
+            tail = text_lower[headings[-1].end() :] if headings else text_lower.split("lighting:")[-1]
+            # Markdown emphasis closing the label ("**LIGHTING:**") is not an answer.
+            after = tail.lstrip("*_").split("\n")
+            if after[0].strip():
+                return after[0].strip()
+            if len(after) > 1 and after[1].strip() and not _NUMBERED_HEADING_RE.match(after[1]):
+                return after[1].strip()
 
         # Fallback: look for common lighting terms
         lighting_terms = [

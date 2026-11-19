@@ -167,3 +167,41 @@ def test_verifier_applies_tighter_caller_memory_to_replay_before_loading_parent(
     monkeypatch.setattr(evidence, "prepare_source", unexpected_parent_load)
     with pytest.raises(ValueError, match="memory admission"):
         verify_execution_evidence(result.output_root, source_root=parent, source_limits=SourceLimits(memory_mib=128))
+
+
+def test_completion_writer_and_verifier_share_one_bound_beyond_the_plan_decoder(parent, tmp_path, monkeypatch):
+    """LN-2: a GradePlan-admitted batch can write >1 MiB of evidence; its own verifier must read it."""
+    from transformation_portal.core.execution_plan import MAX_PLAN_BODY_BYTES
+    from transformation_portal.lux_depth_v6 import evidence
+
+    result = run(prepare(request(parent, tmp_path / "v6")))
+    completion = json.loads(result.evidence_path.read_bytes())
+    per_image = [record for record in completion["artifacts"] if record["path"].startswith("input-0000/")]
+    records = [record for record in completion["artifacts"] if "/" not in record["path"]]
+    for index in range(1024):
+        records += [{**record, "path": record["path"].replace("input-0000", f"input-{index:04d}")} for record in per_image]
+    scaled = {**completion, "artifacts": sorted(records, key=lambda item: item["path"]), "input_count": 1024}
+    large = canonicalize_json(scaled)
+    assert MAX_PLAN_BODY_BYTES < len(large) <= evidence.MAX_COMPLETION_BYTES
+    assert evidence.decode_completion(large) == scaled
+    assert evidence.encode_completion(scaled) == large
+
+    seen = []
+    decode = evidence.decode_completion
+
+    def spy(raw):
+        seen.append(raw)
+        return decode(raw)
+
+    monkeypatch.setattr(evidence, "decode_completion", spy)
+    verified = verify_execution_evidence(result.output_root, source_root=parent)
+    assert seen[0] == result.evidence_path.read_bytes()
+    assert verified.to_payload() == completion
+
+    monkeypatch.setattr(evidence, "MAX_COMPLETION_BYTES", len(large) - 1)
+    with pytest.raises(ValueError, match="completion evidence exceeds its byte limit"):
+        decode(large)
+    monkeypatch.setattr(evidence, "MAX_COMPLETION_BYTES", result.evidence_path.stat().st_size - 1)
+    with pytest.raises(ValueError, match="completion evidence exceeds its byte limit"):
+        run(prepare(request(parent, tmp_path / "refused")))
+    assert not (tmp_path / "refused" / "evidence.json").exists()

@@ -13,6 +13,7 @@ Key Features:
 """
 
 import logging
+import os
 import platform
 import subprocess
 from dataclasses import dataclass
@@ -22,6 +23,17 @@ from typing import Any, Dict, List, Optional, Tuple
 import torch
 
 logger = logging.getLogger(__name__)
+
+
+def _physical_core_count() -> int:
+    """Physical core count of this host (logical count if unknown, at least 1)."""
+    try:
+        import psutil
+
+        physical = psutil.cpu_count(logical=False)
+    except Exception:  # psutil missing or unable to probe this platform
+        physical = None
+    return max(1, physical or os.cpu_count() or 1)
 
 
 class DeviceType(Enum):
@@ -354,6 +366,10 @@ class DeviceManager:
                 eff_cores = int(eff_result.stdout.strip())
 
                 return perf_cores, eff_cores
+            else:
+                # Off macOS there is no P/E split: report the real physical core
+                # count as performance cores and no efficiency cores.
+                return _physical_core_count(), 0
         except Exception as e:
             logger.debug(f"Could not get core counts: {e}")
 

@@ -35,6 +35,7 @@ Example:
 
 from __future__ import annotations
 
+import copy
 import logging
 import time
 from dataclasses import dataclass, field
@@ -52,6 +53,27 @@ from transformation_portal.storage.cas_store import ArtifactStore
 from transformation_portal.storage.merkle_dag import MerkleDAG, MerkleNode
 
 logger = logging.getLogger(__name__)
+
+
+def _is_plain_json(value: Any) -> bool:
+    """Return True if ``value`` survives a JSON round trip unchanged.
+
+    Only dicts with string keys, lists, strings, ints, floats, bools and None
+    qualify; tuples, Paths and arbitrary objects do not, because they would
+    either change type on replay or not hash deterministically.
+    """
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return True
+    if isinstance(value, list):
+        return all(_is_plain_json(item) for item in value)
+    if isinstance(value, dict):
+        return all(isinstance(key, str) and _is_plain_json(item) for key, item in value.items())
+    return False
+
+
+def node_class_path(node_cls: Type) -> str:
+    """Stable ``module:qualname`` identifier of a node class."""
+    return f"{node_cls.__module__}:{node_cls.__qualname__}"
 
 
 class ExecutionEngineError(RuntimeError):
@@ -72,6 +94,8 @@ class ExecutionRecord:
         gpu_device: GPU device used (if any)
         success: Whether execution succeeded
         error: Error message if failed
+        manifest: Sandbox execution manifest (volatile, not part of the
+            Merkle hash)
     """
 
     node_id: str
@@ -83,6 +107,7 @@ class ExecutionRecord:
     gpu_device: Optional[int] = None
     success: bool = True
     error: Optional[str] = None
+    manifest: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -253,14 +278,16 @@ class ExecutionEngine:
         gpu_lease: Optional[GPULease] = None
         gpu_device: Optional[int] = None
 
-        # Acquire GPU if requested
+        # Acquire GPU if requested. A GPU was requested and a pool exists, so a
+        # failed lease must fail the node: running it unpinned would put it on
+        # whichever device the child picks, alongside the current lease holder.
         if use_gpu and self.gpu_pool:
             try:
                 gpu_lease = self.gpu_pool.acquire(timeout=30)
-                gpu_device = gpu_lease.device_id
-                logger.debug("Acquired GPU %d for node %s", gpu_device, node_id)
             except GPUPoolError as e:
-                logger.warning("Failed to acquire GPU: %s", e)
+                raise ExecutionEngineError(f"Node {node_id} requested a GPU but no lease was granted: {e}") from e
+            gpu_device = gpu_lease.device_id
+            logger.debug("Acquired GPU %d for node %s", gpu_device, node_id)
 
         try:
             # Build sandbox config
@@ -316,15 +343,22 @@ class ExecutionEngine:
                         # Auto-register input
                         input_hashes.append(self.register_input(sha))
 
+                # Only deterministic, replay-relevant data goes into the hashed
+                # metadata. Wall-clock duration, the leased GPU and the sandbox
+                # manifest vary between identical runs and live on the
+                # ExecutionRecord instead. Inputs and constructor kwargs are
+                # recorded (when JSON-plain) so ReplayEngine can re-run the node.
+                kwargs = node_kwargs or {}
                 merkle_hash = self.dag.add_computation(
                     node_id=node_id,
                     inputs=input_hashes,
                     outputs=result.outputs,
                     metadata={
                         "node_type": node_cls.__name__,
-                        "duration_seconds": duration,
-                        "gpu_device": gpu_device,
-                        "manifest": result.manifest,
+                        "node_class": node_class_path(node_cls),
+                        "original_inputs": copy.deepcopy(inputs) if _is_plain_json(inputs) else None,
+                        "node_kwargs": copy.deepcopy(kwargs) if _is_plain_json(kwargs) else None,
+                        "use_gpu": bool(use_gpu),
                     },
                 )
 
@@ -343,6 +377,7 @@ class ExecutionEngine:
                 duration_seconds=duration,
                 gpu_device=gpu_device,
                 success=True,
+                manifest=result.manifest,
             )
             self._executions.append(record)
 

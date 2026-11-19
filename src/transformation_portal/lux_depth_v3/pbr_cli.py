@@ -75,6 +75,34 @@ def _compute_config_fingerprint(config: PBRConfig) -> str:
     return hashlib.sha256(config_str.encode()).hexdigest()[:16]
 
 
+# Depth encodings ``PBRProcessor.from_cached_depth`` can load, in preference order
+# (float ``.npy`` before the 16-bit quantized ``.png``).
+_BATCH_DEPTH_SUFFIX_PREFERENCE = (".npy", ".png")
+
+
+def _select_batch_depth_files(candidates: List[Path]) -> List[Path]:
+    """Reduce glob matches to one loadable depth file per scene.
+
+    The orchestrator writes ``<key>_depth.npy`` and ``<key>_depth.png`` (plus
+    sidecars such as ``<key>_depth.json``) for the same image, all of which match
+    the default ``*_depth.*`` pattern. Sidecars and other non-depth suffixes are
+    dropped, and each ``(directory, stem)`` keeps a single entry, preferring
+    ``.npy`` so a scene is processed once.
+    """
+    chosen: Dict[tuple[Path, str], Path] = {}
+    for candidate in sorted(candidates):
+        suffix = candidate.suffix.lower()
+        if suffix not in _BATCH_DEPTH_SUFFIX_PREFERENCE or not candidate.is_file():
+            continue
+        key = (candidate.parent, candidate.stem)
+        current = chosen.get(key)
+        if current is None or _BATCH_DEPTH_SUFFIX_PREFERENCE.index(suffix) < _BATCH_DEPTH_SUFFIX_PREFERENCE.index(
+            current.suffix.lower()
+        ):
+            chosen[key] = candidate
+    return sorted(chosen.values())
+
+
 @app.command()
 def generate(
     depth: Optional[Path] = typer.Option(None, "--depth", "-d", help="Path to single depth file (.npy or .png)"),
@@ -99,7 +127,12 @@ def generate(
     ao_bias: Optional[float] = typer.Option(None, "--ao-bias", help="AO bias (0.0-1.0, lower=darker) (overrides preset)"),
     # Batch file selection controls
     pattern: str = typer.Option(
-        "*_depth.*", "--pattern", help="Glob pattern for batch depth file selection (default: *_depth.*)"
+        "*_depth.*",
+        "--pattern",
+        help=(
+            "Glob pattern for batch depth file selection (default: *_depth.*). Only .npy/.png matches are "
+            "processed, one per scene (.npy preferred over .png)"
+        ),
     ),
     recursive: bool = typer.Option(False, "--recursive", "-r", help="Recursively search for depth files in subdirectories"),
     # Information/listing
@@ -287,8 +320,8 @@ def generate(
         else:
             depth_files = list(depth_dir.glob(pattern))
 
-        # Sort for deterministic ordering
-        depth_files = sorted(depth_files)
+        # One loadable depth file per scene, sorted for deterministic ordering
+        depth_files = _select_batch_depth_files(depth_files)
 
         # Apply max_files limit
         if max_files and len(depth_files) > max_files:

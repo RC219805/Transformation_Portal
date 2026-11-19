@@ -35,13 +35,13 @@ from transformation_portal.lux_depth_v4.color_runtime import (
 )
 from transformation_portal.lux_depth_v4.evidence import _inventory
 from transformation_portal.lux_depth_v4.io import directory_path, pinned_directory, snapshot
-from transformation_portal.lux_depth_v4.photography import decode_master
+from transformation_portal.lux_depth_v4.photography import DecodedPixelLimitError, decode_master
 from transformation_portal.lux_depth_v5.evidence import _array
 
 from . import depth_pro_backend as backend
 from .color import GradeRecipe, RenderRecipe
 from .depth_pro_products import model_input_bytes, native_image_products
-from .evidence import VerifiedGradeEvidence
+from .evidence import MAX_COMPLETION_BYTES, VerifiedGradeEvidence, decode_completion, encode_completion
 from .pipeline import LuxDepthV6Result
 from .plan import MAX_PLAN_BYTES, OutputLimits, digest
 from .source import SourceLimits
@@ -267,7 +267,18 @@ def _binding(root: Path, path: Path, input_id: str, input_color: str, limits: So
     admitted_pixels = min(limits.max_pixels, max(0, available // 512))
     if admitted_pixels < 1:
         raise ValueError("Depth Pro working-memory budget is insufficient")
-    master = decode_master(raw, source_name=path.name, input_color=input_color, max_pixels=admitted_pixels)
+    try:
+        master = decode_master(raw, source_name=path.name, input_color=input_color, max_pixels=admitted_pixels)
+    except DecodedPixelLimitError as exc:
+        pixels = exc.height * exc.width
+        if exc.height <= 0 or exc.width <= 0 or pixels > limits.max_pixels:
+            raise
+        # The working-memory reserve, not max_pixels, refused this geometry.
+        required_mib = -(-(pixels * 512 + len(raw) + 8 * 1024**3) // 1024**2)
+        raise ValueError(
+            f"Depth Pro geometry exceeds pixel/working-memory admission: {exc.width}x{exc.height} "
+            f"({pixels} pixels) requires --memory-mib >= {required_mib}"
+        ) from exc
     return {
         **record,
         "input_id": input_id,
@@ -483,7 +494,7 @@ def run(prepared: PreparedNativeDepthPro, *, cancellation: Callable[[], bool] | 
             ):
                 raise ValueError("Depth Pro runtime changed during execution")
             _verify_artifacts(root, plan, prepared.input_root, records, check, completed=False)
-            evidence = canonicalize_json(
+            evidence = encode_completion(
                 {
                     "schema": EVIDENCE_SCHEMA,
                     "plan_sha256": plan.sha256,
@@ -621,8 +632,8 @@ def verify(
             guarded = payload
         check = _guard(guarded, cancellation)
         check()
-        evidence_raw, evidence_record = snapshot(root, root / "evidence.json", maximum_bytes=MAX_PLAN_BYTES)
-        evidence = decode_bounded_json_object(evidence_raw)
+        evidence_raw, evidence_record = snapshot(root, root / "evidence.json", maximum_bytes=MAX_COMPLETION_BYTES)
+        evidence = decode_completion(evidence_raw)
         if (
             set(evidence) != {"schema", "plan_sha256", "artifacts", "input_count", "production_acceptance"}
             or evidence["schema"] != EVIDENCE_SCHEMA

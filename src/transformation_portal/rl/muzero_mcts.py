@@ -56,13 +56,17 @@ class MuZeroNode:
 def ucb_score(parent: MuZeroNode, child: MuZeroNode, config: MCTSConfig) -> float:
     """Compute UCB score for action selection.
 
-    Uses PUCT formula from AlphaZero/MuZero.
+    Uses PUCT formula from AlphaZero/MuZero. The value term is the
+    action value ``Q(s, a) = r + discount * V(s')``: the reward predicted
+    for the transition into ``child`` plus the discounted value backed up
+    from it (``backpropagate`` stores ``V(s')`` in ``child.value_sum``).
+    Unvisited children score ``Q = 0``.
     """
     exploration_bonus = math.log((parent.visit_count + config.c_puct + 1) / config.c_puct) + config.c_puct
     exploration_bonus *= math.sqrt(parent.visit_count) / (child.visit_count + 1)
 
     prior_score = exploration_bonus * child.prior
-    value_score = child.value()
+    value_score = child.reward + config.discount * child.value() if child.visit_count > 0 else 0.0
 
     return prior_score + value_score
 
@@ -132,25 +136,9 @@ def backpropagate(
         value = node.reward + discount * value
 
 
-def run_mcts(
-    model: "MuZeroModel",
-    obs: "torch.Tensor",
-    config: MCTSConfig | None = None,
-) -> tuple[int, dict[int, float]]:
-    """Run MCTS search from observation.
-
-    Args:
-        model: MuZero model for inference
-        obs: Initial observation [1, obs_dim]
-        config: MCTS configuration
-
-    Returns:
-        Tuple of (best_action, action_visit_counts)
-    """
+def _search(model: "MuZeroModel", obs: "torch.Tensor", config: MCTSConfig) -> MuZeroNode:
+    """Build the search tree from ``obs`` and return its root."""
     import torch
-
-    if config is None:
-        config = MCTSConfig()
 
     # Initial inference at root
     s, p, v = model.initial_inference(obs)
@@ -184,6 +172,41 @@ def run_mcts(
         # BACKUP
         backpropagate(path, v2.item(), config.discount)
 
+    return root
+
+
+def run_mcts(
+    model: "MuZeroModel",
+    obs: "torch.Tensor",
+    config: MCTSConfig | None = None,
+) -> tuple[int, dict[int, float]]:
+    """Run MCTS search from observation.
+
+    Args:
+        model: MuZero model for inference
+        obs: Initial observation [1, obs_dim]
+        config: MCTS configuration
+
+    Returns:
+        Tuple of (best_action, action_visit_counts)
+    """
+    import torch
+
+    if config is None:
+        config = MCTSConfig()
+
+    # Search is pure inference: no autograd graphs and no train-mode layers
+    # (dropout / batch-norm) while planning; restore the caller's mode after.
+    was_training = bool(getattr(model, "training", False))
+    if was_training and hasattr(model, "eval"):
+        model.eval()
+    try:
+        with torch.no_grad():
+            root = _search(model, obs, config)
+    finally:
+        if was_training and hasattr(model, "train"):
+            model.train(True)
+
     # Select action with most visits
     visit_counts = {action: child.visit_count for action, child in root.children.items()}
     best_action = max(visit_counts, key=lambda a: visit_counts[a])
@@ -197,12 +220,36 @@ def get_action_probs(
 ) -> dict[int, float]:
     """Convert visit counts to action probabilities.
 
+    Probabilities are proportional to ``N(a) ** (1 / temperature)``.
+    ``temperature == 0`` is greedy: the most-visited actions share the
+    mass equally. When no action has been visited the distribution is
+    uniform.
+
     Args:
         visit_counts: Visit count per action
         temperature: Temperature for softmax (0 = greedy, 1 = proportional)
 
     Returns:
         Action probability distribution
+
+    Raises:
+        ValueError: If ``temperature`` is negative or not finite.
     """
-    total = sum(v ** (1 / temperature) for v in visit_counts.values())
-    return {a: (v ** (1 / temperature)) / total for a, v in visit_counts.items()}
+    if not math.isfinite(temperature) or temperature < 0:
+        raise ValueError(f"temperature must be a finite non-negative number, got {temperature!r}")
+    if not visit_counts:
+        return {}
+    max_count = max(visit_counts.values())
+    if max_count <= 0:
+        uniform = 1.0 / len(visit_counts)
+        return {a: uniform for a in visit_counts}
+    if temperature == 0:
+        best = [a for a, v in visit_counts.items() if v == max_count]
+        share = 1.0 / len(best)
+        return {a: (share if v == max_count else 0.0) for a, v in visit_counts.items()}
+    # Scale by the maximum before exponentiating so small temperatures
+    # underflow towards the greedy distribution instead of overflowing.
+    exponent = 1.0 / temperature
+    weights = {a: (max(v, 0) / max_count) ** exponent for a, v in visit_counts.items()}
+    total = sum(weights.values())
+    return {a: w / total for a, w in weights.items()}

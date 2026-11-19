@@ -15,19 +15,30 @@ This document describes the exclusion patterns, rationale, and usage.
 
 ### Path-Based Exclusions
 
-These directory patterns are excluded anywhere in the file path:
+These directory patterns are excluded anywhere **below the input directory**
+(the examples are paths relative to `--input-dir`):
 
 | Pattern | Purpose | Example |
 |---------|---------|---------|
-| `/_non_source/` | Intermediate/derived files | `./renders/_non_source/temp.jpg` |
-| `/output/` | General output directory | `./output/result.jpg` |
-| `/depth/` | Depth map outputs | `./output/depth/depth_map.png` |
-| `/pbr/` | PBR map outputs | `./output/pbr/normal.png` |
-| `/v2/` | V2 enhancement outputs | `./output/v2/enhanced.jpg` |
-| `/manifests/` | Processing manifests | `./output/manifests/manifest.json` |
-| `/logs/` | Processing logs | `./output/logs/processing.log` |
-| `/.depth_cache/` | Cached depth artifacts | `./.depth_cache/cached.bin` |
-| `/checkpoints/` | Model checkpoints | `./checkpoints/model.pt` |
+| `/_non_source/` | Intermediate/derived files | `renders/_non_source/temp.jpg` |
+| `/output/` | General output directory | `output/result.jpg` |
+| `/depth/` | Depth map outputs | `output/depth/depth_map.png` |
+| `/pbr/` | PBR map outputs | `output/pbr/normal.png` |
+| `/v2/` | V2 enhancement outputs | `output/v2/enhanced.jpg` |
+| `/manifests/` | Processing manifests | `output/manifests/manifest.json` |
+| `/logs/` | Processing logs | `output/logs/processing.log` |
+| `/.depth_cache/` | Cached depth artifacts | `.depth_cache/cached.bin` |
+| `/checkpoints/` | Model checkpoints | `checkpoints/model.pt` |
+| `/temp/` | Kept Materials V3 hand-off images (`--keep-intermediates`) | `prev_run/temp/kitchen_materials_v3_enhanced.png` |
+| `/reconstruction/` | Reconstruction bundles and their debug copies of the inputs | `prev_run/reconstruction/debug/inputs/kitchen.jpg` |
+| `/captioning/` | Advisory captioning proxies | `prev_run/captioning/kitchen_proxy.png` |
+
+Path and hidden-name rules look only at the part of each path below the input
+directory. Where the input directory itself lives does not matter: a dataset
+stored under a folder named `output/`, `v2/` or `.staging/` is discovered
+normally, and `--input-dir .`, `--input-dir ../shoot`, a relative path and an
+absolute path to the same directory all select the same files. Everything
+inside the run's own `--output-dir` is excluded as well, whatever it is called.
 
 ### Filename Suffix Exclusions
 
@@ -47,7 +58,8 @@ These suffixes (before file extension) are excluded:
 
 ### Hidden Files
 
-By default, hidden files and directories (starting with `.`) are excluded:
+By default, hidden files and directories (starting with `.`) below the input
+directory are excluded:
 - `.DS_Store` (macOS metadata)
 - `.cache/` (cache directories)
 - `.git/` (version control)
@@ -225,6 +237,9 @@ Test cases include:
 - `test_exclude_hidden_files` - Hidden files excluded
 - `test_strict_mode_fails_on_artifacts` - Strict mode validation
 - `test_exclude_patterns_case_insensitive` - Case-insensitive matching
+- `TestDiscoveryIsRelativeToTheInputRoot` - Rules are anchored at the input
+  directory: its ancestors and spelling never change the result, and
+  `temp/`, `reconstruction/` and `captioning/` outputs are excluded
 
 ---
 
@@ -267,7 +282,10 @@ config = DiscoveryConfig(exclude_hidden=False)
 1. Check input directory: `ls -la ./input_images/`
 2. Verify image extensions: `.jpg`, `.png`, `.tif`
 3. Run with `--verbose` for DEBUG logging
-4. Ensure files aren't excluded by patterns
+4. Ensure files aren't excluded by patterns. Only folders below the input
+   directory count; a source folder named `temp/`, `output/` or `depth/`
+   inside it is skipped and has to be renamed or passed as its own
+   `--input-dir`
 
 ### "Strict mode error"
 

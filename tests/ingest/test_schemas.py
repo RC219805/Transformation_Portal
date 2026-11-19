@@ -160,6 +160,32 @@ class TestExifMetadata:
         )
         assert metadata.bit_depth == 8
 
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "camera_make",
+            "camera_model",
+            "lens_model",
+            "shutter_speed",
+            "white_balance",
+            "color_space",
+            "datetime_original",
+        ],
+    )
+    @pytest.mark.parametrize("value", [6300, 0.004, True])
+    def test_text_fields_stay_strict_in_the_sidecar_schema(self, field, value):
+        """D-14: the schema that validates sidecar files must keep rejecting numbers in text fields.
+
+        exiftool's numeric-looking values are turned into text where the
+        exiftool payload is parsed (``_parse_exif_fields``), not here.
+        """
+        with pytest.raises(ValueError, match="valid string"):
+            ExifMetadata(all_tags={}, **{field: value})
+
+    def test_text_fields_keep_string_values(self):
+        metadata = ExifMetadata(all_tags={}, camera_model="Canon EOS R5", shutter_speed="1/250")
+        assert (metadata.camera_model, metadata.shutter_speed) == ("Canon EOS R5", "1/250")
+
     def test_invalid_focal_length_string_still_rejected(self):
         """Test malformed focal length strings fail validation."""
         with pytest.raises(ValueError, match="Invalid focal_length"):

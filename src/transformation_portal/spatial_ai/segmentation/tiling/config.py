@@ -39,6 +39,15 @@ class MergeConfig:
 
 @dataclass
 class ValidationConfig:
+    """Seam validation of the merged tiles.
+
+    A run whose merged pairs exceed ``seam_discontinuity_threshold`` is re-tiled
+    up to ``max_retries`` times. ``auto_increase_overlap`` doubles ``overlap_px``
+    for each retry, up to half the tile size. Tiling is deterministic, so no
+    retry is made when the overlap cannot grow (``auto_increase_overlap`` off or
+    the limit reached). The run fails when no retry is left.
+    """
+
     enabled: bool = True
     seam_discontinuity_threshold: float = 0.25
     max_retries: int = 1

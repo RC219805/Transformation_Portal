@@ -167,10 +167,9 @@ def detect_gamma_encoding(
 ) -> bool:
     """Detect if tensor appears to be gamma-encoded rather than linear.
 
-    Uses statistical heuristics to detect gamma encoding:
-    - Gamma-encoded images have darker mean (values concentrated near 0)
-    - Linear images have more uniform distribution
-    - Compares midpoint (0.5 linear → ~0.73 gamma-2.2 encoded)
+    Uses a single statistical heuristic: gamma encoding brightens the image
+    (linear 0.5 → ~0.73 gamma-2.2 encoded), so a mean well above the typical
+    linear scene mean (~0.3-0.5) suggests gamma encoding.
 
     This is a heuristic check, not perfect, but catches common cases.
 
@@ -212,20 +211,11 @@ def detect_gamma_encoding(
         )
         return True
 
-    # Additional check: median vs mean ratio
-    # Gamma encoding creates characteristic skew
-    # Linear images have more uniform distribution (mean ≈ median)
-    # Gamma-encoded images shift towards higher values (mean > median)
-    # Threshold 1.3 is empirically chosen to
-    # detect typical gamma curves (2.0-2.4)
-    MEAN_MEDIAN_RATIO_THRESHOLD = 1.3
-    median_val = np.median(tensor)
-    if median_val > 0 and (mean_val / median_val) > MEAN_MEDIAN_RATIO_THRESHOLD:
-        logger.warning(
-            "Mean/median ratio %.3f" " suggests gamma encoding",
-            mean_val / median_val,
-        )
-        return True
+    # No mean/median skew rule: scene-referred linear data is right-skewed
+    # (mean well above median) and gamma encoding *compresses* that skew, so a
+    # "mean/median > threshold means gamma" rule flags linear images and passes
+    # their gamma-encoded counterparts. Reliable linearity evidence comes from
+    # the source format / metadata (RAW, linear TIFF), not this statistic.
 
     return False
 

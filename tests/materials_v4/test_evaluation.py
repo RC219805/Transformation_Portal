@@ -121,6 +121,20 @@ def test_record_order_does_not_change_any_metric_or_identity():
     assert first == second
 
 
+@pytest.mark.parametrize("confidence", [0.0, 0.29, 0.57, 0.58, 0.999, 1.0])
+def test_calibration_bin_membership_matches_declared_bin_edges(confidence):
+    # LN-6: 0.29 * 100 == 28.999999999999996 used to land in the [0.28, 0.29) bin.
+    report = evaluate_dataset(
+        _payload(_record(0, confidence=confidence), _record(1, confidence=confidence), calibration_bins=100)
+    )
+    occupied = [entry for entry in report["calibration"]["bins"] if entry["count"]]
+    assert len(occupied) == 1
+    entry = occupied[0]
+    assert entry["count"] == 2
+    assert entry["lower"] <= confidence
+    assert confidence < entry["upper"] or (entry["upper_inclusive"] and confidence == entry["upper"])
+
+
 def test_missing_masks_and_scores_never_become_perfect_metrics():
     records = [_record(index, predicted_mask=None, target_mask=None, confidence=None) for index in range(2)]
     report = evaluate_dataset(_payload(*records))

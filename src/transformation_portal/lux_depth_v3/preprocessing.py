@@ -44,6 +44,39 @@ SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp
 DIMENSION_MULTIPLE = 14
 MIN_DIMENSION = 14
 
+# Pillow decodes single-channel 16-bit sources (PNG/TIFF) into these modes.
+# ``Image.convert("RGB")`` clips them to 0..255 instead of scaling them.
+_PIL_UINT16_MODES = frozenset({"I;16", "I;16L", "I;16B", "I;16N"})
+
+
+def _pil_high_bit_gray_samples(image: Image.Image) -> Optional[np.ndarray]:
+    """Return native uint16 samples for a high-bit-depth single-channel image.
+
+    Returns ``None`` for every mode ``convert("RGB")`` already maps faithfully,
+    so ordinary 8-bit inputs keep their exact historical decode. Float modes
+    and 32-bit integer samples outside 0..255 have no recorded scale and are
+    rejected rather than silently clipped.
+    """
+    mode = image.mode
+    if mode in _PIL_UINT16_MODES:
+        return np.asarray(image).astype(np.uint16)
+    if mode == "F":
+        raise ValueError("Floating-point grayscale images have no defined display scale; convert to 8/16-bit")
+    if mode == "I":
+        samples = np.asarray(image)
+        if samples.size and (int(samples.min()) < 0 or int(samples.max()) > 255):
+            raise ValueError("32-bit integer grayscale images have no defined display scale; convert to 8/16-bit")
+    return None
+
+
+def pil_to_rgb8(image: Image.Image) -> Image.Image:
+    """Convert a decoded PIL image to 8-bit RGB without clipping 16-bit grayscale."""
+    samples = _pil_high_bit_gray_samples(image)
+    if samples is None:
+        return image.convert("RGB")
+    gray = _geometry_proxy_uint8(samples)
+    return Image.fromarray(np.repeat(gray[..., None], 3, axis=2), mode="RGB")
+
 
 def validate_image_format(image_path: Union[str, Path]) -> Path:
     """Validate image format and integrity.
@@ -152,7 +185,8 @@ def preprocess_image(
             decoded_rgb = decode_for_lux_depth(image_path, cast(Any, ingest_cfg))
             return preprocess_from_linear_ingest(decoded_rgb, target_size=target_size)
 
-        pil_img = Image.open(image_path).convert("RGB")
+        with Image.open(image_path) as opened:
+            pil_img = pil_to_rgb8(opened)
     elif isinstance(image, np.ndarray):
         # Convert numpy array to PIL for consistent processing
         if image.ndim == 2:
@@ -542,7 +576,7 @@ def _preprocess_image_snapshot(
                 else:
                     with Image.open(snapshot) as image:
                         image.load()
-                        rgb = np.array(image.convert("RGB"), dtype=np.uint8, copy=True)
+                        rgb = np.array(pil_to_rgb8(image), dtype=np.uint8, copy=True)
             except Exception as exc:
                 raise ValueError(f"Image file corrupt or invalid: {path}") from exc
             final_stat = os.fstat(source.fileno())
@@ -855,9 +889,14 @@ def preprocess_image_linear(
                     img_array = img_array[:, :, :3]
             else:
                 # Use PIL for other formats (JPEG, PNG, etc.)
-                pil_img = Image.open(image_path).convert("RGB")
-                original_w, original_h = pil_img.size  # PIL returns (W, H)
-                img_array = np.array(pil_img, dtype=np.float32) / 255.0
+                with Image.open(image_path) as opened:
+                    original_w, original_h = opened.size  # PIL returns (W, H)
+                    gray16 = _pil_high_bit_gray_samples(opened)
+                    if gray16 is not None:
+                        # Keep 16-bit grayscale precision instead of clipping.
+                        img_array = np.stack([gray16.astype(np.float32) / 65535.0] * 3, axis=-1)
+                    else:
+                        img_array = np.array(opened.convert("RGB"), dtype=np.float32) / 255.0
 
     elif isinstance(image, np.ndarray):
         # Handle numpy array input
@@ -979,13 +1018,19 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> None:
         raise ValueError(f"Invalid image file: {input_path}") from exc
 
     try:
-        # exif_transpose returns None if no transpose needed, else new image
-        corrected = exif_transpose(img)
+        # exif_transpose(img) always returns an image (never None), so decide
+        # from the orientation tag itself: only values 2-8 require a transpose.
+        try:
+            orientation = img.getexif().get(0x0112, 1)
+        except Exception:
+            orientation = 1
+        needs_transpose = orientation in (2, 3, 4, 5, 6, 7, 8)
+        corrected = exif_transpose(img) if needs_transpose else None
 
         if corrected is None:
             # No rotation needed - for JPEG, copy byte-for-byte to avoid lossy re-encode
-            img.close()
             if input_path.suffix.lower() in {".jpg", ".jpeg"} and input_path != output_path:
+                img.close()
                 shutil.copy2(input_path, output_path)
                 logger.debug("No EXIF rotation needed, copied file: %s -> %s", input_path, output_path)
                 return
@@ -994,10 +1039,9 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> None:
                 logger.debug("No EXIF rotation needed, file unchanged: %s", input_path)
                 return
             else:
-                # Non-JPEG or same path - use PIL to copy (may re-encode)
+                # Non-JPEG to a new path - copy through PIL (may re-encode).
+                # Copy before closing: a closed image can no longer be loaded.
                 corrected = img.copy()
-                img.close()
-                img = Image.open(input_path)  # Re-open to get fresh copy
 
         # Extract and preserve EXIF data with normalized orientation
         exif_data = None

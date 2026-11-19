@@ -13,7 +13,11 @@ dry-run success path, the print-filter-graph branch, the real-run success and
 
 from __future__ import annotations
 
+import importlib.util
+import shutil
 import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -57,8 +61,8 @@ def video_paths(tmp_path):
 def lut_file(tmp_path):
     """A real (empty) .cube file so build_filter_graph's existence check passes.
 
-    The preset LUTs live under an external assets/ tree that is not committed,
-    so reaching the filter-graph stage requires overriding with --custom-lut.
+    The preset LUTs are git-tracked under <repo>/assets/luts/; these tests pin a
+    tmp LUT with --custom-lut so the filter graph does not depend on them.
     """
     lut = tmp_path / "look.cube"
     lut.write_text("# minimal cube placeholder\n")
@@ -141,11 +145,102 @@ def test_build_config_applies_choice_and_tint_overrides() -> None:
     assert config["deband"] == "of"
 
 
+@pytest.mark.parametrize("preset_key", sorted(grader.PRESETS))
+def test_build_config_keeps_preset_deband_and_halation_when_flags_omitted(preset_key) -> None:
+    # M-12: argparse defaults used to overwrite the preset with deband="of", halation 0.0 / radius 18.0.
+    preset = grader.PRESETS[preset_key]
+    config = grader.build_config(grader.parse_arguments(["in.mov", "out.mov", "--preset", preset_key]))
+    assert config["deband"] == preset.deband
+    assert config["halation_intensity"] == preset.halation_intensity
+    assert config["halation_radius"] == preset.halation_radius
+    assert config["halation_threshold"] == preset.halation_threshold
+
+
+@pytest.mark.parametrize("preset_key", sorted(grader.PRESETS))
+def test_preset_deband_is_a_known_deband_preset(preset_key) -> None:
+    deband = grader.PRESETS[preset_key].deband
+    assert deband is None or deband in grader.DEBAND_PRESETS
+
+
+def test_signature_estate_graph_carries_its_deband_and_halation(lut_file) -> None:
+    args = grader.parse_arguments(["in.mov", "out.mov", "--preset", "signature_estate", "--custom-lut", str(lut_file)])
+    graph, _ = grader.build_filter_graph(grader.build_config(args))
+    assert grader.DEBAND_PRESETS["soft"] in graph
+    assert "gblur=sigma=20.00:steps=2" in graph
+    assert "blend=all_expr='A+(0.140*B)'" in graph
+
+
+def test_explicit_flags_still_override_preset_deband_and_halation() -> None:
+    args = grader.parse_arguments(
+        ["in.mov", "out.mov", "--deband", "off", "--halation-intensity", "0", "--halation-radius", "4"]
+    )
+    config = grader.build_config(args)
+    assert config["deband"] == "off"
+    assert config["halation_intensity"] == 0.0
+    assert config["halation_radius"] == 4.0
+
+
+@pytest.mark.parametrize("name", sorted(grader.DEBAND_PRESETS))
+def test_deband_strengths_are_within_gradfun_range(name) -> None:
+    # gradfun rejects strength outside [0.51, 64] (ffmpeg exits 222 for the old soft=0.45).
+    strength = float(grader.DEBAND_PRESETS[name].split("strength=")[1].split(":")[0])
+    assert 0.51 <= strength <= 64.0
+
+
 def test_build_config_merges_enabled_tone_map_plan() -> None:
     args = grader.parse_arguments(["in.mov", "out.mov"])
     plan = grader.ToneMapPlan(enabled=True, note="x", config={"tone_map_peak": 600.0}, metadata=(None, None, None))
     config = grader.build_config(args, tone_map_plan=plan)
     assert config["tone_map_peak"] == 600.0
+
+
+# --------------------------------------------------------------------------- #
+# "off" switches (M-11): "off" is accepted, "of" stays a legacy alias
+# --------------------------------------------------------------------------- #
+
+
+def _hdr_probe() -> dict:
+    probe = _probe()
+    probe["streams"][0].update({"color_trc": "smpte2084", "color_primaries": "bt2020", "color_space": "bt2020nc"})
+    return probe
+
+
+@pytest.mark.parametrize("value", ["off", "of"])
+def test_tone_map_off_spellings_disable_tone_mapping_on_hdr_source(
+    stub_environment, monkeypatch, video_paths, lut_file, value, capsys
+) -> None:
+    monkeypatch.setattr(grader, "probe_source", lambda path: _hdr_probe())
+    src, out = video_paths
+    argv = [str(src), str(out), "--dry-run", "--print-filter-graph", "--custom-lut", str(lut_file), "--tone-map", value]
+
+    args = grader.parse_arguments(argv)
+    plan = grader.plan_tone_mapping(args, _hdr_probe())
+    assert not plan.enabled
+    assert "disabled" in plan.note.lower()
+
+    rc = grader.main(argv)
+    assert rc == 0
+    stdout = capsys.readouterr().out
+    assert "tonemap=" not in stdout
+    # A disabled tone map must not re-tag the untouched HDR signal as BT.709.
+    assert "-color_primaries" not in stdout
+    assert "-color_trc" not in stdout
+
+
+def test_build_filter_graph_ignores_off_tone_map_value(lut_file) -> None:
+    graph, _ = grader.build_filter_graph({"lut": lut_file, "tone_map": "off", "tone_map_peak": 1000.0})
+    assert "tonemap=" not in graph
+    assert "zscale=" not in graph
+
+
+@pytest.mark.parametrize(
+    ("flag", "filter_name"), [("--denoise", "hqdn3d="), ("--sharpen", "unsharp="), ("--deband", "gradfun=")]
+)
+@pytest.mark.parametrize("value", ["off", "of"])
+def test_stage_off_spellings_are_accepted_and_skip_the_stage(lut_file, flag, filter_name, value) -> None:
+    args = grader.parse_arguments(["in.mov", "out.mov", "--custom-lut", str(lut_file), flag, value])
+    graph, _ = grader.build_filter_graph(grader.build_config(args))
+    assert filter_name not in graph
 
 
 # --------------------------------------------------------------------------- #
@@ -231,18 +326,79 @@ def test_main_parameter_validation_matrix(stub_environment, video_paths, lut_fil
     assert needle in capsys.readouterr().err
 
 
-def test_main_filter_graph_failure_returns_5(stub_environment, video_paths, capsys) -> None:
-    # No --custom-lut: the default preset points at an uncommitted asset LUT, so
-    # build_filter_graph raises FileNotFoundError -> main returns 5.
+def test_main_filter_graph_failure_returns_5(stub_environment, video_paths, tmp_path, capsys) -> None:
+    # A LUT that does not exist makes build_filter_graph raise FileNotFoundError -> main returns 5.
     src, out = video_paths
-    rc = grader.main([str(src), str(out), "--dry-run"])
+    rc = grader.main([str(src), str(out), "--dry-run", "--custom-lut", str(tmp_path / "missing.cube")])
     assert rc == 5
-    assert "Failed to build filter graph" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "Failed to build filter graph" in err
+    assert "LUT file not found" in err
+
+
+# --------------------------------------------------------------------------- #
+# Preset LUT resolution (H-06)
+# --------------------------------------------------------------------------- #
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize("preset_key", sorted(grader.PRESETS))
+def test_preset_luts_resolve_to_git_tracked_repo_assets(preset_key) -> None:
+    # The preset LUTs are git-tracked at <repo>/assets/luts/, not next to the module.
+    lut = grader.PRESETS[preset_key].lut
+    assert lut.is_relative_to(_REPO_ROOT / "assets" / "luts")
+    assert lut.is_file()
+
+
+@pytest.mark.parametrize("preset_key", sorted(grader.PRESETS))
+def test_main_preset_without_custom_lut_builds_graph(stub_environment, video_paths, capsys, preset_key) -> None:
+    # Earlier the default preset LUT path pointed at processors/assets/ (absent), so every
+    # preset run without --custom-lut exited 5; a source checkout must grade with the presets.
+    src, out = video_paths
+    rc = grader.main([str(src), str(out), "--dry-run", "--preset", preset_key])
+    captured = capsys.readouterr()
+    assert rc == 0, captured.err
+    assert "lut3d=file=" in captured.out
+    assert str(grader.PRESETS[preset_key].lut) in captured.out
+
+
+def test_preset_lut_missing_from_installed_package_names_custom_lut(tmp_path) -> None:
+    # An installed wheel has no assets/luts/ tree: the preset run must fail with an actionable error.
+    installed = tmp_path / "lib" / "python3" / "site-packages" / "transformation_portal" / "processors"
+    installed.mkdir(parents=True)
+    module_path = installed / "luxury_video_master_grader.py"
+    shutil.copyfile(grader.__file__, module_path)
+    spec = importlib.util.spec_from_file_location("_installed_luxury_video_master_grader", module_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+        config = module.build_config(module.parse_arguments(["in.mov", "out.mov"]))
+        with pytest.raises(FileNotFoundError) as excinfo:
+            module.build_filter_graph(config)
+    finally:
+        sys.modules.pop(spec.name, None)
+
+    message = str(excinfo.value)
+    assert message.startswith("LUT file not found: ")
+    # site-packages/transformation_portal/processors/ -> parents[3] is lib/python3/, which has no assets tree.
+    assert str((tmp_path / "lib" / "python3" / "assets" / "luts").resolve()) in message
+    assert "--custom-lut" in message
 
 
 def test_main_frame_rate_error_returns_6(stub_environment, video_paths, lut_file, capsys) -> None:
     src, out = video_paths
     rc = grader.main([str(src), str(out), "--dry-run", "--custom-lut", str(lut_file), "--target-fps", "not-a-rate"])
+    assert rc == 6
+    assert "Frame-rate configuration error" in capsys.readouterr().err
+
+
+def test_main_infinite_frame_rate_returns_6(stub_environment, video_paths, lut_file, capsys) -> None:
+    # L-07: "--target-fps inf" raised an uncaught OverflowError instead of the frame-rate exit code.
+    src, out = video_paths
+    rc = grader.main([str(src), str(out), "--dry-run", "--custom-lut", str(lut_file), "--target-fps", "inf"])
     assert rc == 6
     assert "Frame-rate configuration error" in capsys.readouterr().err
 

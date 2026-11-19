@@ -164,7 +164,7 @@ class DepthAnythingV2Model:
         elif self.backend in [ModelBackend.PYTORCH_CPU, ModelBackend.PYTORCH_MPS]:
             self._load_pytorch_model()
         else:
-            raise NotImplementedError(f"Backend {self.backend} not implemented")
+            raise NotImplementedError(f"Backend {self.backend} not implemented (@specialist)")
 
     def _load_pytorch_model(self):
         """Load PyTorch model using transformers."""

@@ -85,6 +85,7 @@ class MuZeroTransformer(nn.Module):
         self.obs_dim = obs_dim
         self.action_dim = action_dim
         self.d_model = d_model
+        self.n_heads = n_heads
 
         # Input projections
         self.obs_proj = nn.Linear(obs_dim, d_model)
@@ -140,7 +141,10 @@ class MuZeroTransformer(nn.Module):
         Args:
             obs_seq: Observation sequence [B, T, obs_dim]
             action_seq: Action sequence [B, T]
-            mask: Optional attention mask [B, T]
+            mask: Optional boolean padding mask [B, T]; ``True`` marks padded
+                positions (PyTorch key-padding convention). Attention is always
+                causal; padded positions are never attended to by real ones, and
+                predictions come from each row's last non-padded position.
 
         Returns:
             Dictionary with policy, value, reward, next_state predictions
@@ -153,16 +157,37 @@ class MuZeroTransformer(nn.Module):
         x = obs_emb + act_emb
         x = self.pos(x)
 
-        # Create causal mask if not provided
-        if mask is None:
-            seq_len = x.size(1)
-            mask = torch.triu(torch.ones(seq_len, seq_len, device=x.device), diagonal=1).bool()
+        batch, seq_len = x.size(0), x.size(1)
+        # The causal mask is always applied; True blocks attention.
+        attn_mask = torch.triu(torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool), diagonal=1)
+        last_index: torch.Tensor | None = None
+        if mask is not None:
+            if mask.dtype != torch.bool or tuple(mask.shape) != (batch, seq_len):
+                raise ValueError(
+                    f"mask must be a boolean padding mask of shape [B, T] = [{batch}, {seq_len}], "
+                    f"got dtype={mask.dtype} shape={tuple(mask.shape)}"
+                )
+            padded = mask.to(x.device)
+            valid = ~padded
+            if not bool(valid.any(dim=1).all()):
+                raise ValueError("mask pads every position of at least one sequence")
+            # Block padded keys per row, but always let a position attend to
+            # itself so fully padded query rows (e.g. left padding under the
+            # causal mask) do not produce NaN that leaks into real positions.
+            eye = torch.eye(seq_len, device=x.device, dtype=torch.bool)
+            row_mask = (attn_mask.unsqueeze(0) | padded.unsqueeze(1)) & ~eye
+            attn_mask = row_mask.repeat_interleave(self.n_heads, dim=0)
+            positions = torch.arange(seq_len, device=x.device).expand(batch, -1)
+            last_index = torch.where(valid, positions, torch.full_like(positions, -1)).max(dim=1).values
 
         # Transform
-        h = self.transformer(x, mask=mask)
+        h = self.transformer(x, mask=attn_mask)
 
-        # Use last position for predictions
-        last = h[:, -1]
+        # Use the last (non-padded) position for predictions
+        if last_index is None:
+            last = h[:, -1]
+        else:
+            last = h[torch.arange(batch, device=h.device), last_index]
 
         return {
             "policy": F.softmax(self.policy_head(last), dim=-1),

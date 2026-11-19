@@ -12,6 +12,7 @@ All metrics support both numpy arrays and torch tensors.
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Union
 
@@ -39,15 +40,24 @@ def _torch_tensor_to_numpy(img: "torch.Tensor") -> np.ndarray:
         return np.asarray(tensor.tolist(), dtype=np.float32)
 
 
-def _to_numpy(img: ImageLike) -> np.ndarray:
-    """Convert image to numpy array.
+# Torch counterparts of the 8/16-bit unsigned image dtypes handled by ``_bit_depth_divisor``.
+_TORCH_BIT_DEPTH_DIVISORS = {"torch.uint8": 255.0, "torch.uint16": 65535.0}
 
-    Args:
-        img: Image as numpy array, torch tensor, or path
 
-    Returns:
-        Numpy array in [0, 1] range
+def _bit_depth_divisor(dtype: np.dtype) -> Optional[float]:
+    """Return the full-scale value of an 8/16-bit unsigned image dtype, else ``None``.
+
+    The range of uint8/uint16 image data is fixed by the dtype, never by the pixel content.
+    Wider or signed integers are generic containers (``np.asarray`` of Python ints is int64),
+    so, like floats, they keep the content convention applied by ``_range_divisors``.
     """
+    if dtype.kind == "u" and dtype.itemsize <= 2:
+        return float(np.iinfo(dtype).max)
+    return None
+
+
+def _raw_array(img: ImageLike) -> np.ndarray:
+    """Load ``img`` as a numpy array without changing its value range (paths load as 8-bit RGB)."""
     if isinstance(img, Path):
         try:
             import cv2
@@ -55,56 +65,98 @@ def _to_numpy(img: ImageLike) -> np.ndarray:
             arr = cv2.imread(str(img))
             if arr is None:
                 raise ValueError(f"Failed to load image: {img}")
-            arr = cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
-            return arr.astype(np.float32) / 255.0
+            return cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
         except ImportError:
             from PIL import Image
 
             pil_img = Image.open(img).convert("RGB")
-            return np.array(pil_img).astype(np.float32) / 255.0
+            return np.array(pil_img)
 
     if hasattr(img, "detach") and hasattr(img, "cpu") and hasattr(img, "numpy"):  # torch.Tensor
-        arr = _torch_tensor_to_numpy(img)
-    else:
-        arr = np.asarray(img)
-
-    # Normalize to [0, 1] if needed
-    if arr.dtype == np.uint8:
-        arr = arr.astype(np.float32) / 255.0
-    elif arr.max() > 1.0:
-        arr = arr.astype(np.float32) / 255.0
-
-    return arr.astype(np.float32)
+        return _torch_tensor_to_numpy(img)
+    return np.asarray(img)
 
 
-def _to_torch(img: ImageLike) -> "torch.Tensor":
-    """Convert image to torch tensor.
+def _range_divisors(known: list[Optional[float]], peaks: list[Optional[float]]) -> list[float]:
+    """Return the divisor that maps each member of an image pair into [0, 1].
+
+    ``known`` holds the full-scale value fixed by a bit-depth dtype (``None`` when the
+    dtype fixes nothing, e.g. floats); ``peaks`` holds the maximum of each such member.
+    Data whose range the dtype does not fix follows the pinned convention that values
+    above 1.0 are 0-255 data. The decision is made once for the whole pair, so both
+    members are always scaled identically, and it is taken only when every one of them
+    exceeds 1.0: dividing an image that lies in [0, 1] by 255 would shrink the error and
+    inflate PSNR/SSIM, whereas leaving a 0-255 member unscaled can only make it score worse.
+    """
+    unknown_peaks = [peak for divisor, peak in zip(known, peaks) if divisor is None]
+    content_divisor = 255.0 if unknown_peaks and all(peak is not None and peak > 1.0 for peak in unknown_peaks) else 1.0
+    return [divisor if divisor is not None else content_divisor for divisor in known]
+
+
+def _numpy_member(img: ImageLike) -> tuple[np.ndarray, Optional[float], Optional[float]]:
+    """Return ``(raw array, dtype full-scale value, content peak)`` for one image."""
+    arr = _raw_array(img)
+    known = _bit_depth_divisor(arr.dtype)
+    return arr, known, None if known is not None else float(arr.max())
+
+
+def _scaled(arr: np.ndarray, divisor: float) -> np.ndarray:
+    """Return ``arr`` as float32 divided by ``divisor``."""
+    scaled = arr.astype(np.float32)
+    return scaled / divisor if divisor != 1.0 else scaled
+
+
+def _to_numpy(img: ImageLike) -> np.ndarray:
+    """Convert image to numpy array.
 
     Args:
         img: Image as numpy array, torch tensor, or path
 
     Returns:
-        Torch tensor in [0, 1] range, shape (C, H, W)
+        Numpy array in [0, 1] range (uint8/uint16 are scaled by their dtype's full-scale value)
     """
+    arr, known, peak = _numpy_member(img)
+    (divisor,) = _range_divisors([known], [peak])
+    return _scaled(arr, divisor)
+
+
+def _to_numpy_pair(img1: ImageLike, img2: ImageLike) -> tuple[np.ndarray, np.ndarray]:
+    """Convert a prediction/target pair to numpy arrays in [0, 1], scaled consistently."""
+    arr1, known1, peak1 = _numpy_member(img1)
+    arr2, known2, peak2 = _numpy_member(img2)
+    divisor1, divisor2 = _range_divisors([known1, known2], [peak1, peak2])
+    return _scaled(arr1, divisor1), _scaled(arr2, divisor2)
+
+
+def _to_torch_pair(img1: ImageLike, img2: ImageLike) -> tuple["torch.Tensor", "torch.Tensor"]:
+    """Convert a prediction/target pair to torch tensors in [0, 1], shape (C, H, W), scaled consistently."""
     import torch
 
-    if isinstance(img, torch.Tensor):
-        tensor = img.float()
-        # Ensure [0, 1] range
-        if tensor.max() > 1.0:
-            tensor = tensor / 255.0
-        # Ensure (C, H, W) format
-        if tensor.ndim == 3 and tensor.shape[-1] in (1, 3, 4):
-            tensor = tensor.permute(2, 0, 1)
-        return tensor
+    members: list[tuple[Union[np.ndarray, "torch.Tensor"], Optional[float], Optional[float]]] = []
+    for img in (img1, img2):
+        if isinstance(img, torch.Tensor):
+            known = _TORCH_BIT_DEPTH_DIVISORS.get(str(img.dtype))
+            tensor = img.float()
+            members.append((tensor, known, None if known is not None else float(tensor.max())))
+        else:
+            members.append(_numpy_member(img))
 
-    arr = _to_numpy(img)
-
-    # Convert (H, W, C) to (C, H, W)
-    if arr.ndim == 3 and arr.shape[-1] in (1, 3, 4):
-        arr = np.transpose(arr, (2, 0, 1))
-
-    return torch.from_numpy(arr).float()
+    divisors = _range_divisors([known for _, known, _ in members], [peak for _, _, peak in members])
+    tensors = []
+    for (data, _, _), divisor in zip(members, divisors):
+        if isinstance(data, torch.Tensor):
+            tensor = data / divisor if divisor != 1.0 else data
+            # Ensure (C, H, W) format
+            if tensor.ndim == 3 and tensor.shape[-1] in (1, 3, 4):
+                tensor = tensor.permute(2, 0, 1)
+        else:
+            arr = _scaled(data, divisor)
+            # Convert (H, W, C) to (C, H, W)
+            if arr.ndim == 3 and arr.shape[-1] in (1, 3, 4):
+                arr = np.transpose(arr, (2, 0, 1))
+            tensor = torch.from_numpy(arr).float()
+        tensors.append(tensor)
+    return tensors[0], tensors[1]
 
 
 # ============================================================================
@@ -130,8 +182,7 @@ def psnr(
     Returns:
         PSNR value in dB
     """
-    arr1 = _to_numpy(img1)
-    arr2 = _to_numpy(img2)
+    arr1, arr2 = _to_numpy_pair(img1, img2)
 
     # Ensure same shape
     if arr1.shape != arr2.shape:
@@ -197,8 +248,7 @@ def ssim(
     Returns:
         SSIM value
     """
-    arr1 = _to_numpy(img1)
-    arr2 = _to_numpy(img2)
+    arr1, arr2 = _to_numpy_pair(img1, img2)
 
     # Try using skimage if available
     try:
@@ -216,19 +266,53 @@ def ssim(
     except ImportError:
         pass
 
-    # Fallback: simplified SSIM
-    C1 = (0.01 * data_range) ** 2
-    C2 = (0.03 * data_range) ** 2
+    # Fallback without scikit-image: the same windowed SSIM (skimage's defaults).
+    return _windowed_ssim(arr1, arr2, win_size=win_size, data_range=data_range)
 
-    mu1 = np.mean(arr1)
-    mu2 = np.mean(arr2)
-    sigma1_sq = np.var(arr1)
-    sigma2_sq = np.var(arr2)
-    sigma12 = np.mean((arr1 - mu1) * (arr2 - mu2))
 
-    ssim_val = ((2 * mu1 * mu2 + C1) * (2 * sigma12 + C2)) / ((mu1**2 + mu2**2 + C1) * (sigma1_sq + sigma2_sq + C2))
+def _windowed_ssim(arr1: np.ndarray, arr2: np.ndarray, *, win_size: int, data_range: float) -> float:
+    """Mean windowed SSIM (Wang et al. 2004) with scikit-image's default parameters.
 
-    return float(ssim_val)
+    Local statistics come from a ``win_size`` uniform window with the sample-covariance
+    correction, the map is cropped by the window half-width and averaged; 3-D inputs are
+    channel-last and the per-channel means are averaged. This matches
+    ``skimage.metrics.structural_similarity(..., gaussian_weights=False)``, so the score does
+    not depend on whether scikit-image is installed. A single global window is *not* SSIM:
+    it scores a heavily blurred or row-shuffled image close to 1.0.
+    """
+    from scipy.ndimage import uniform_filter
+
+    if arr1.shape != arr2.shape:
+        raise ValueError(f"Image shapes don't match: {arr1.shape} vs {arr2.shape}")
+    if win_size < 3 or win_size % 2 == 0:
+        raise ValueError(f"win_size must be an odd integer >= 3, got {win_size}")
+
+    channels_last = arr1.ndim == 3
+    spatial_shape = arr1.shape[:-1] if channels_last else arr1.shape
+    if arr1.ndim < 2 or min(spatial_shape) < win_size:
+        raise ValueError(f"win_size {win_size} exceeds the image size {arr1.shape}; pass a smaller odd win_size")
+
+    x_all = arr1.astype(np.float64)
+    y_all = arr2.astype(np.float64)
+    pairs = [(x_all[..., c], y_all[..., c]) for c in range(arr1.shape[-1])] if channels_last else [(x_all, y_all)]
+
+    c1 = (0.01 * data_range) ** 2
+    c2 = (0.03 * data_range) ** 2
+    window_pixels = win_size ** len(spatial_shape)
+    cov_norm = window_pixels / (window_pixels - 1.0)
+    pad = (win_size - 1) // 2
+    crop = tuple(slice(pad, dim - pad) for dim in spatial_shape)
+
+    channel_means = []
+    for x, y in pairs:
+        mu_x = uniform_filter(x, size=win_size)
+        mu_y = uniform_filter(y, size=win_size)
+        var_x = cov_norm * (uniform_filter(x * x, size=win_size) - mu_x * mu_x)
+        var_y = cov_norm * (uniform_filter(y * y, size=win_size) - mu_y * mu_y)
+        cov_xy = cov_norm * (uniform_filter(x * y, size=win_size) - mu_x * mu_y)
+        ssim_map = ((2 * mu_x * mu_y + c1) * (2 * cov_xy + c2)) / ((mu_x**2 + mu_y**2 + c1) * (var_x + var_y + c2))
+        channel_means.append(float(ssim_map[crop].mean()))
+    return float(np.mean(channel_means))
 
 
 # ============================================================================
@@ -237,6 +321,20 @@ def ssim(
 
 
 _lpips_model: Optional["lpips.LPIPS"] = None
+
+
+def lpips_available() -> bool:
+    """Return whether ``lpips_score`` can compute a real LPIPS distance (lpips and torch import).
+
+    ``lpips_score`` returns 0.0 -- the "identical" distance -- when they are missing, so callers
+    that aggregate LPIPS must check this first and report the metric as unavailable instead.
+    """
+    try:
+        import lpips  # noqa: F401
+        import torch  # noqa: F401
+    except ImportError:
+        return False
+    return True
 
 
 def lpips_score(
@@ -256,7 +354,9 @@ def lpips_score(
         net: Network backbone ("alex", "vgg", "squeeze")
 
     Returns:
-        LPIPS distance (lower = more similar)
+        LPIPS distance (lower = more similar). When lpips/torch are not installed this
+        returns 0.0, which is indistinguishable from "identical": check ``lpips_available()``
+        before treating the value as a measurement.
     """
     global _lpips_model
 
@@ -273,8 +373,7 @@ def lpips_score(
         if torch.cuda.is_available():
             _lpips_model = _lpips_model.cuda()
 
-    tensor1 = _to_torch(img1)
-    tensor2 = _to_torch(img2)
+    tensor1, tensor2 = _to_torch_pair(img1, img2)
 
     # LPIPS expects (N, C, H, W) and range [-1, 1]
     if tensor1.ndim == 3:
@@ -300,6 +399,24 @@ def lpips_score(
 # ============================================================================
 
 
+def _binary_mask(mask: ImageLike, threshold: float) -> np.ndarray:
+    """Binarise a segmentation mask.
+
+    Bool and integer masks (``{0, 1}`` / ``{0, 255}`` masks, class-id maps, and mask files,
+    which load as 8-bit) hold labels, not intensities: any non-zero value is foreground and
+    they never go through image range normalisation, which would divide a ``{0, 1}`` uint8
+    mask by 255 and empty it. Float masks are soft masks: they keep the image range
+    convention and are compared against ``threshold``.
+    """
+    if not isinstance(mask, (np.ndarray, Path)) and hasattr(mask, "is_floating_point") and not mask.is_floating_point():
+        # torch bool/integer tensor: binarise before a conversion that may fall back to float32
+        return _torch_tensor_to_numpy(mask > 0) > 0
+    arr = _raw_array(mask)
+    if arr.dtype.kind in "biu":
+        return arr > 0
+    return _to_numpy(arr) > threshold
+
+
 def segmentation_iou(
     mask1: ImageLike,
     mask2: ImageLike,
@@ -313,23 +430,20 @@ def segmentation_iou(
     Args:
         mask1: First mask (prediction)
         mask2: Second mask (ground truth)
-        threshold: Binarization threshold for soft masks
+        threshold: Binarization threshold for soft (float) masks; bool and integer
+            masks count every non-zero value as foreground
 
     Returns:
         IoU score
     """
-    arr1 = _to_numpy(mask1)
-    arr2 = _to_numpy(mask2)
+    mask1_bin = _binary_mask(mask1, threshold)
+    mask2_bin = _binary_mask(mask2, threshold)
 
     # Handle multi-channel masks (take first channel or max)
-    if arr1.ndim == 3:
-        arr1 = arr1[..., 0] if arr1.shape[-1] > 1 else arr1.squeeze()
-    if arr2.ndim == 3:
-        arr2 = arr2[..., 0] if arr2.shape[-1] > 1 else arr2.squeeze()
-
-    # Binarize
-    mask1_bin = arr1 > threshold
-    mask2_bin = arr2 > threshold
+    if mask1_bin.ndim == 3:
+        mask1_bin = mask1_bin[..., 0] if mask1_bin.shape[-1] > 1 else mask1_bin.squeeze()
+    if mask2_bin.ndim == 3:
+        mask2_bin = mask2_bin[..., 0] if mask2_bin.shape[-1] > 1 else mask2_bin.squeeze()
 
     intersection = np.logical_and(mask1_bin, mask2_bin).sum()
     union = np.logical_or(mask1_bin, mask2_bin).sum()
@@ -353,21 +467,19 @@ def dice_coefficient(
     Args:
         mask1: First mask
         mask2: Second mask
-        threshold: Binarization threshold
+        threshold: Binarization threshold for soft (float) masks; bool and integer
+            masks count every non-zero value as foreground
 
     Returns:
         Dice coefficient
     """
-    arr1 = _to_numpy(mask1)
-    arr2 = _to_numpy(mask2)
+    mask1_bin = _binary_mask(mask1, threshold)
+    mask2_bin = _binary_mask(mask2, threshold)
 
-    if arr1.ndim == 3:
-        arr1 = arr1[..., 0]
-    if arr2.ndim == 3:
-        arr2 = arr2[..., 0]
-
-    mask1_bin = arr1 > threshold
-    mask2_bin = arr2 > threshold
+    if mask1_bin.ndim == 3:
+        mask1_bin = mask1_bin[..., 0]
+    if mask2_bin.ndim == 3:
+        mask2_bin = mask2_bin[..., 0]
 
     intersection = np.logical_and(mask1_bin, mask2_bin).sum()
     total = mask1_bin.sum() + mask2_bin.sum()
@@ -392,8 +504,13 @@ def normalize_score(value: float, min_val: float, max_val: float) -> float:
         max_val: Maximum expected value
 
     Returns:
-        Normalized value in [0, 1]
+        Normalized value in [0, 1]; a NaN value scores 0.0 (fail closed),
+        while +/-inf keep their ordered meaning (e.g. PSNR of identical
+        images is +inf and maps to 1.0).
     """
+    if math.isnan(value):
+        # ``min(1.0, nan)`` is 1.0, so NaN would otherwise clamp to a perfect score.
+        return 0.0
     if max_val == min_val:
         return 0.5
 

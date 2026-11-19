@@ -316,7 +316,7 @@ class GaussianBackend:
             f"GaussianBackend production checkpoint loading is pending SHA verification. "
             f"model_revision='{self.model_revision}' is a non-placeholder revision but "
             "checkpoint integration into the optimization loop is not yet implemented. "
-            "Run: python scripts/validation/verify_3dgs_artifacts.py"
+            "Run: python scripts/validation/verify_3dgs_artifacts.py (@specialist)"
         )
 
     def reconstruct(
@@ -348,6 +348,8 @@ class GaussianBackend:
             if self.native_recipe != NATIVE_DEFAULT_RECIPE and iterations > MAX_NATIVE_SHUFFLED_UPDATES:
                 raise ValueError(f"Shuffled native recipes require 1..{MAX_NATIVE_SHUFFLED_UPDATES} optimizer updates")
         else:
+            if isinstance(iterations, bool) or not isinstance(iterations, (int, np.integer)) or iterations < 1:
+                raise ValueError(f"Gaussian reconstruction requires a positive integer iteration count, got {iterations!r}")
             self._load_model()
 
         start_time = time.time()
@@ -451,7 +453,8 @@ class GaussianBackend:
         Returns:
             Initial GaussianSplat.
         """
-        if use_depth_prior and reconstruction_input.depth_maps is not None:
+        depth_guided = use_depth_prior and reconstruction_input.depth_maps is not None
+        if depth_guided:
             # Depth-guided initialization (best quality)
             positions, colors = self._initialize_from_depth(
                 reconstruction_input.images,
@@ -485,7 +488,9 @@ class GaussianBackend:
             scales=scales,
             rotations=rotations,
             opacities=opacities,
-            metadata={"initialization": "depth" if use_depth_prior else "sfm"},
+            # Record the initializer that actually ran: without depth maps the
+            # fixed-depth fallback runs even when the depth prior was requested.
+            metadata={"initialization": "depth" if depth_guided else "sfm"},
         )
 
     def _initialize_from_depth(
@@ -508,10 +513,16 @@ class GaussianBackend:
         """
         all_positions = []
         all_colors = []
+        invalid_depth_pixels = 0
 
         for i, (img, depth, cam) in enumerate(zip(images, depth_maps, cameras)):
             H, W = depth.shape
             mask = masks[i] if masks is not None else np.ones((H, W), dtype=bool)
+            # Zero, negative and non-finite depth marks pixels without a measurement:
+            # unprojecting them would place splats at or behind the camera centre.
+            valid_depth = np.isfinite(depth) & (depth > 0)
+            invalid_depth_pixels += int(np.count_nonzero(mask & ~valid_depth))
+            mask = mask & valid_depth
 
             # Create pixel grid
             u, v = np.meshgrid(np.arange(W), np.arange(H))
@@ -546,10 +557,20 @@ class GaussianBackend:
 
         positions = np.concatenate(all_positions, axis=0).astype(np.float32)
         colors = np.concatenate(all_colors, axis=0).astype(np.float32)
+        if invalid_depth_pixels:
+            logger.warning(f"Skipped {invalid_depth_pixels} pixels without a finite positive depth during initialization")
+            if len(positions) == 0:
+                raise ValueError("Depth-guided initialization found no pixel with a finite positive depth")
 
         # Subsample if too many points
         if len(positions) > self.MAX_GAUSSIANS:
-            indices = np.random.choice(len(positions), self.MAX_GAUSSIANS, replace=False)
+            # The optimizer seeds the global RNGs only after initialization, so a
+            # seeded backend draws this subsample from its own seeded generator.
+            if self.optimization_seed is None:
+                indices = np.random.choice(len(positions), self.MAX_GAUSSIANS, replace=False)
+            else:
+                subsample_rng = np.random.default_rng(self.optimization_seed)
+                indices = subsample_rng.choice(len(positions), self.MAX_GAUSSIANS, replace=False)
             positions = positions[indices]
             colors = colors[indices]
 
@@ -824,30 +845,32 @@ class GaussianBackend:
                     break
 
             # Compute final RMSE
-            final_loss = loss_history[-1] if loss_history else 0.0
-            training_final_loss = final_loss
+            training_final_loss = loss_history[-1]
             if self.implementation == "torch_native":
                 scales = scale_parameter.exp().detach()
-                # Report the saved, post-update scene with every initialized splat,
-                # rather than the previous step's loss or a capped subset.
-                with torch.no_grad():
-                    losses = []
-                    for target, camera in zip(target_images, cameras):
-                        rendered = render_gaussians_native(
-                            positions,
-                            colors,
-                            scales,
-                            rotations,
-                            opacities,
-                            _numpy_array_to_tensor(camera.intrinsics, device),
-                            _numpy_array_to_tensor(camera.extrinsics, device),
-                            (camera.height, camera.width),
-                            device=device,
-                        )
-                        losses.append(compute_rgb_loss(rendered, target))
-                    final_loss = torch.stack(losses).mean().item()
-                if not np.isfinite(final_loss):
-                    raise RuntimeError("torch_native saved scene produced a nonfinite final loss")
+            # Report the saved, post-update scene with every initialized splat, rendered
+            # as render_view renders it, rather than the previous step's loss or a capped subset.
+            final_render = render_gaussians_native if self.implementation == "torch_native" else render_gaussians
+            final_render_options = {} if self.implementation == "torch_native" else {"use_rotation": False}
+            with torch.no_grad():
+                losses = []
+                for target, camera in zip(target_images, cameras):
+                    rendered = final_render(
+                        positions,
+                        colors,
+                        scales,
+                        rotations,
+                        opacities,
+                        _numpy_array_to_tensor(camera.intrinsics, device),
+                        _numpy_array_to_tensor(camera.extrinsics, device),
+                        (camera.height, camera.width),
+                        device=device,
+                        **final_render_options,
+                    )
+                    losses.append(compute_rgb_loss(rendered, target))
+                final_loss = torch.stack(losses).mean().item()
+            if self.implementation == "torch_native" and not np.isfinite(final_loss):
+                raise RuntimeError("torch_native saved scene produced a nonfinite final loss")
             final_rmse = np.sqrt(final_loss)  # RMSE from MSE
 
             # Convergence status must follow Scene3D contract:
@@ -885,10 +908,10 @@ class GaussianBackend:
                     "final_loss": final_loss,
                     "optimization_max_gaussians": self.optimization_max_gaussians,
                     "loss_history": loss_history[:100],  # Store first 100 for analysis
+                    "last_pre_update_training_loss": training_final_loss,
+                    "rmse_scope": "all_training_views_post_update",
                     **(
                         {
-                            "last_pre_update_training_loss": training_final_loss,
-                            "rmse_scope": "all_training_views_post_update",
                             "gradient_accumulation_views": len(target_images),
                             "position_prior_weight": NATIVE_POSITION_PRIOR_WEIGHT,
                             "log_scale_prior_weight": NATIVE_LOG_SCALE_PRIOR_WEIGHT,

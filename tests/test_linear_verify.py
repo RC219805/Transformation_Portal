@@ -176,6 +176,22 @@ class TestDetectGammaEncoding:
         is_gamma = detect_gamma_encoding(arr, threshold=0.15)
         assert is_gamma, "High mean should suggest gamma encoding"
 
+    @pytest.mark.regression
+    @pytest.mark.parametrize("mu,sigma", [(np.log(0.08), 1.0), (np.log(0.05), 1.4)], ids=["interior", "high_contrast"])
+    def test_right_skewed_linear_scene_not_flagged_as_gamma(self, mu, sigma):
+        """LC-20: scene-referred linear data is right-skewed (mean >> median).
+
+        A mean/median skew rule flagged such linear images as gamma-encoded
+        (and rejected them under strict_gamma) while passing their gamma-encoded
+        counterpart, whose skew gamma encoding compresses.
+        """
+        rng = np.random.default_rng(0)
+        linear = np.clip(rng.lognormal(mu, sigma, size=(120, 160, 3)), 0, 1).astype(np.float32)
+        assert linear.mean() / np.median(linear) > 1.3  # the skew that tripped the old rule
+
+        assert not detect_gamma_encoding(linear)
+        verify_linear_ingest(linear, strict_gamma=True)  # must not raise
+
 
 class TestVerifyNoGamma:
     """Test gamma rejection (strict mode)."""

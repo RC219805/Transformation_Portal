@@ -12,7 +12,7 @@ Example:
     >>> signed = signer.sign({"node_cls": "ProcessNode", "inputs": {...}})
     >>>
     >>> # Worker side
-    >>> verifier = TaskVerifier(controller_public_key)
+    >>> verifier = TaskVerifier(authorized_keys={controller_public_key})
     >>> if verifier.verify(signed):
     ...     execute(signed.payload)
 """
@@ -33,6 +33,10 @@ class TaskSigningError(RuntimeError):
     """Raised for task signing/verification errors."""
 
 
+# Envelope fields that are signed in the same object as the task payload.
+_RESERVED_PAYLOAD_KEYS = frozenset({"_ts", "_nonce", "_metadata"})
+
+
 def _build_sign_payload(
     payload: Dict[str, Any],
     *,
@@ -40,7 +44,20 @@ def _build_sign_payload(
     nonce: str,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Build the canonical task payload used for signing and verification."""
+    """Build the canonical task payload used for signing and verification.
+
+    The envelope fields sit next to the payload's own keys, so a payload may
+    not use their names: such a key would be overwritten here and left outside
+    the signature, and an envelope field could be moved into the payload
+    without changing the signed bytes.
+
+    Raises:
+        TaskSigningError: If the payload uses a reserved envelope key
+    """
+    reserved = sorted(_RESERVED_PAYLOAD_KEYS.intersection(payload))
+    if reserved:
+        raise TaskSigningError(f"Task payload uses reserved signing keys: {', '.join(reserved)}")
+
     sign_payload = {
         **payload,
         "_ts": timestamp,
@@ -183,11 +200,15 @@ class TaskSigner:
         """Sign a task payload.
 
         Args:
-            payload: Task payload
+            payload: Task payload. The keys ``_ts``, ``_nonce`` and
+                ``_metadata`` are reserved for the signing envelope.
             metadata: Additional metadata (included in signature)
 
         Returns:
             SignedTask with all fields needed for verification
+
+        Raises:
+            TaskSigningError: If the payload uses a reserved key or signing fails
         """
         import secrets
 
@@ -276,16 +297,21 @@ class TaskVerifier:
         """Initialize task verifier.
 
         Args:
-            authorized_keys: Set of authorized public keys (base64)
+            authorized_keys: Set of authorized public keys (base64). With no
+                keys every task is rejected until one is added.
             max_age_seconds: Maximum task age for freshness check
             track_nonces: If True, track seen nonces for replay protection
-            max_nonce_cache: Maximum nonces to cache
+            max_nonce_cache: Maximum nonces to cache. A nonce is kept until
+                its task is older than ``max_age_seconds``; when the cache is
+                full of such nonces, further tasks are rejected rather than
+                an earlier one being forgotten.
         """
         self.authorized_keys = authorized_keys or set()
         self.max_age = max_age_seconds
         self.track_nonces = track_nonces
         self.max_nonce_cache = max_nonce_cache
-        self._seen_nonces: set[str] = set()
+        # nonce -> time until which its task still passes the freshness check
+        self._seen_nonces: dict[str, float] = {}
         self._verify_count = 0
         self._reject_count = 0
 
@@ -312,14 +338,16 @@ class TaskVerifier:
             task: SignedTask to verify
             check_freshness: Verify timestamp is recent
             check_nonce: Check for replay attacks
-            check_authorization: Check public key is authorized
+            check_authorization: Check public key is authorized. Passing False
+                accepts a valid signature from any key.
 
         Returns:
             True if task is valid
         """
         try:
-            # Check authorization
-            if check_authorization and self.authorized_keys:
+            # Check authorization. An empty key set authorizes nobody: the
+            # signature alone only proves the task matches the key it carries.
+            if check_authorization:
                 if task.public_key not in self.authorized_keys:
                     logger.warning("Unauthorized public key: %s...", task.public_key[:16])
                     self._reject_count += 1
@@ -351,13 +379,12 @@ class TaskVerifier:
                 self._reject_count += 1
                 return False
 
-            # Record nonce
-            if self.track_nonces:
-                self._seen_nonces.add(task.nonce)
-                # Trim cache if needed
-                if len(self._seen_nonces) > self.max_nonce_cache:
-                    # Remove oldest (arbitrary since set is unordered)
-                    self._seen_nonces.pop()
+            # Record nonce. A task whose nonce cannot be remembered could be
+            # replayed, so it is refused unless the caller waived the check.
+            if self.track_nonces and not self._remember_nonce(task) and check_nonce:
+                logger.warning("Nonce cache full: nonce=%s cannot be protected from replay", task.nonce[:8])
+                self._reject_count += 1
+                return False
 
             self._verify_count += 1
             logger.debug("Task verified: nonce=%s", task.nonce[:8])
@@ -367,6 +394,26 @@ class TaskVerifier:
             logger.error("Verification error: %s", e)
             self._reject_count += 1
             return False
+
+    def _remember_nonce(self, task: SignedTask) -> bool:
+        """Remember a verified task's nonce for as long as the task stays fresh.
+
+        Only nonces of tasks that are already too old to pass the freshness
+        check are forgotten to make room. Dropping any other entry would let
+        that task be replayed.
+
+        Returns:
+            False if the cache is full of nonces that are still needed
+        """
+        if task.nonce not in self._seen_nonces and len(self._seen_nonces) >= self.max_nonce_cache:
+            now = time.time()
+            for nonce in [nonce for nonce, fresh_until in self._seen_nonces.items() if fresh_until < now]:
+                del self._seen_nonces[nonce]
+            if len(self._seen_nonces) >= self.max_nonce_cache:
+                return False
+
+        self._seen_nonces[task.nonce] = task.timestamp + self.max_age
+        return True
 
     def _verify_signature(self, task: SignedTask) -> bool:
         """Verify task signature using Ed25519.
@@ -402,7 +449,7 @@ class TaskVerifier:
             return True
 
         except TaskSigningError as exc:
-            logger.warning("Task signature verification unavailable: %s", exc)
+            logger.warning("Task signature could not be verified: %s", exc)
             return False
         except Exception as e:
             logger.debug("Signature verification failed: %s", e)

@@ -72,6 +72,16 @@ class TestDepthCrafterCompute:
         assert result.original_image.dtype == np.uint8
         assert result.original_image.mean() > 100
 
+    def test_compute_scales_uint16_numpy_input_instead_of_saturating(self):
+        """A 16-bit frame maps its full range to uint8 rather than clipping to 255."""
+        backend = DepthCrafterBackend()
+        img_array = np.full((32, 32, 3), 32768, dtype=np.uint16)
+
+        result = backend.compute(img_array)
+
+        assert result.original_image.dtype == np.uint8
+        assert np.unique(result.original_image).tolist() == [128]
+
     def test_checkpoint_present_without_model_inference_skips_model_path(self, monkeypatch):
         """Checkpoint presence should not repeatedly call placeholder model inference."""
         backend = DepthCrafterBackend()
@@ -181,6 +191,30 @@ class TestTemporalFilter:
             backend.compute(img)
 
         assert backend.temporal_buffer_length == 3
+
+    def test_temporal_window_keeps_no_frame_copies(self):
+        """Only the EMA state may hold a depth frame; the window is a count (D-26)."""
+        backend = DepthCrafterBackend(max_buffer_size=30)
+
+        for i in range(6):
+            backend.compute(Image.fromarray(np.full((64, 48, 3), i * 40, dtype=np.uint8)))
+
+        def _array_bytes(value) -> int:
+            if isinstance(value, np.ndarray):
+                return value.nbytes
+            if isinstance(value, dict):
+                return sum(_array_bytes(item) for item in value.values())
+            if isinstance(value, (list, tuple, set, frozenset)) or type(value).__name__ == "deque":
+                return sum(_array_bytes(item) for item in value)
+            return 0
+
+        held = sum(_array_bytes(value) for value in vars(backend).values())
+        assert backend.temporal_buffer_length == 6
+        assert held == backend._ema_state.nbytes
+
+    def test_negative_buffer_size_is_rejected(self):
+        with pytest.raises(ValueError, match="non-negative"):
+            DepthCrafterBackend(max_buffer_size=-1)
 
     def test_alpha_zero_full_smoothing(self):
         """alpha=0 means full smoothing: always returns first frame."""

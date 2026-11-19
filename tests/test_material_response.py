@@ -73,3 +73,15 @@ class TestMaterialResponseValidator:
 
         with pytest.raises(ValueError, match="same shape"):
             validator.measure_specular_preservation(before, after)
+
+    def test_specular_preservation_accepts_numpy_arrays(self) -> None:
+        """L-14: "array-like" inputs include ndarrays, not only nested lists."""
+        np = pytest.importorskip("numpy")
+        validator = MaterialResponseValidator()
+        before = [[0.0, 1.0, 0.0, 1.0], [1.0, 0.0, 1.0, 0.0], [0.0, 1.0, 0.0, 1.0], [1.0, 0.0, 1.0, 0.0]]
+        after = [[2.0 * value for value in row] for row in before]
+
+        from_arrays = validator.measure_specular_preservation(np.asarray(before), np.asarray(after))
+
+        assert from_arrays == pytest.approx(validator.measure_specular_preservation(before, after))
+        assert from_arrays == pytest.approx(4.0, rel=1e-6)

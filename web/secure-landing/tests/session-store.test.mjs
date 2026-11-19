@@ -27,6 +27,7 @@ import {
   getSessionStore,
   resetSessionStoreSingleton
 } from "../lib/session-store/index.js";
+import { getDb } from "../lib/db.js";
 
 function withTempSessionDb(callback) {
   const tmpDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-session-store-"));
@@ -124,6 +125,90 @@ test("SqliteSessionStore login-attempt counters match the SQL surface", () => {
     store.resetLoginAttempts("user-a");
     assert.equal(store.countLoginFailures("user-a", windowStart), 0);
   });
+});
+
+test("SqliteSessionStore reserveLoginAttempt checks and records every bucket atomically", () => {
+  withTempSessionDb(() => {
+    const store = new SqliteSessionStore();
+    const now = Date.now();
+    const options = { attemptedAt: now, sinceMs: now - 60_000, limit: 2, remoteAddr: "127.0.0.1" };
+    assert.equal(store.reserveLoginAttempt(["addr-a", "account"], options), true);
+    assert.equal(store.reserveLoginAttempt(["addr-b", "account"], options), true);
+    // The shared account bucket is exhausted: refuse and record nothing.
+    assert.equal(store.reserveLoginAttempt(["addr-c", "account"], options), false);
+    assert.equal(store.countLoginFailures("account", options.sinceMs), 2);
+    assert.equal(store.countLoginFailures("addr-a", options.sinceMs), 1);
+    assert.equal(store.countLoginFailures("addr-c", options.sinceMs), 0);
+    // Failures outside the window do not count.
+    assert.equal(
+      store.reserveLoginAttempt(["account"], { ...options, sinceMs: now + 1 }),
+      true
+    );
+    assert.throws(() => store.reserveLoginAttempt([], options), /throttle key/);
+    assert.throws(() => store.reserveLoginAttempt(["ok", ""], options), /throttle key/);
+  });
+});
+
+test("SqliteSessionStore pruneExpiredSessions drops idle- and absolute-expired rows only", () => {
+  withTempSessionDb(() => {
+    const store = new SqliteSessionStore();
+    const now = Date.now();
+    store.persistSession(_sessionRow({ id: "live" }));
+    store.persistSession(_sessionRow({ id: "idle-expired", idle_expires_at: now - 1 }));
+    store.persistSession(_sessionRow({ id: "absolute-expired", absolute_expires_at: now - 1 }));
+    store.persistSession(_sessionRow({ id: "expires-now", idle_expires_at: now }));
+    store.pruneExpiredSessions(now);
+    assert.ok(store.getRawSessionRow("live"));
+    for (const id of ["idle-expired", "absolute-expired", "expires-now"]) {
+      assert.equal(store.getRawSessionRow(id), null, `${id} must be swept`);
+    }
+  });
+});
+
+test("minting a session sweeps expired rows whose cookies are never presented again", async () => {
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-session-sweep-"));
+  const dbPath = path.join(tmpDir, "sessions.db");
+  const previousDbPath = process.env.TP_FRONTDOOR_SESSION_DB;
+  const previousStore = process.env.TP_FRONTDOOR_SESSION_STORE;
+  process.env.TP_FRONTDOOR_SESSION_DB = dbPath;
+  process.env.TP_FRONTDOOR_SESSION_STORE = "sqlite";
+  resetSessionStoreSingleton();
+  const realNow = Date.now;
+  try {
+    const sessions = await import(`../lib/sessions.js?case=sweep-${realNow()}-${Math.random()}`);
+    const abandoned = await sessions.createAnonymousSession();
+    const operator = await sessions.rotateAuthenticatedSession(null, {
+      username: "admin",
+      accessEmail: "admin@example.com",
+      role: "admin"
+    });
+    const countRows = () => getDb(dbPath).prepare("SELECT COUNT(*) AS n FROM sessions").get().n;
+    assert.equal(countRows(), 2);
+
+    // Three days later both sessions are past idle and absolute expiry.
+    const skewed = realNow() + 3 * 24 * 3600 * 1000;
+    Date.now = () => skewed;
+    const fresh = await sessions.createAnonymousSession();
+    assert.equal(countRows(), 1, "expired rows must be swept when a new session is minted");
+    assert.equal(getSessionStore().getRawSessionRow(abandoned.id), null);
+    assert.equal(getSessionStore().getRawSessionRow(operator.id), null);
+    assert.ok(getSessionStore().getRawSessionRow(fresh.id));
+
+    Date.now = () => skewed + 3 * 24 * 3600 * 1000;
+    const rotated = await sessions.rotateAuthenticatedSession(null, {
+      username: "admin",
+      accessEmail: "admin@example.com",
+      role: "admin"
+    });
+    assert.equal(countRows(), 1, "authenticated rotation must also sweep expired rows");
+    assert.ok(getSessionStore().getRawSessionRow(rotated.id));
+  } finally {
+    Date.now = realNow;
+    process.env.TP_FRONTDOOR_SESSION_DB = previousDbPath;
+    process.env.TP_FRONTDOOR_SESSION_STORE = previousStore;
+    resetSessionStoreSingleton();
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
 });
 
 test("getSessionStore returns the same singleton until reset", () => {
@@ -314,6 +399,56 @@ test("RedisSessionStore.countLoginFailures filters by score window", async () =>
   assert.equal(await store.countLoginFailures("user-a", 1_500), 2);
   assert.equal(await store.countLoginFailures("user-a", 0), 3);
   assert.equal(await store.countLoginFailures("user-b", 0), 0);
+});
+
+test("RedisSessionStore.reserveLoginAttempt checks and records in one atomic script", async () => {
+  const calls = [];
+  const client = {
+    async eval(script, ...args) {
+      assert.match(script, /ZCOUNT/);
+      assert.match(script, /ZADD/);
+      calls.push(args);
+      return calls.length === 1 ? 1 : 0;
+    },
+    async zcount() {
+      assert.fail("the throttle check must not run outside the atomic script");
+    },
+    async zadd() {
+      assert.fail("the failure must not be recorded outside the atomic script");
+    }
+  };
+  const store = new RedisSessionStore({
+    redisUrl: "redis://fake",
+    keyPrefix: "tp:test:",
+    idleTimeoutMs: 60_000,
+    absoluteTimeoutMs: 3_600_000,
+    client
+  });
+  const options = { attemptedAt: 5_000, sinceMs: 1_000, limit: 5, remoteAddr: "127.0.0.1" };
+
+  assert.equal(await store.reserveLoginAttempt(["addr", "account"], options), true);
+  assert.equal(await store.reserveLoginAttempt(["addr", "account"], options), false);
+  const [numKeys, keyA, keyB, limit, sinceMs, attemptedAt, member, ttlMs] = calls[0];
+  assert.deepEqual(
+    [numKeys, keyA, keyB, limit, sinceMs, attemptedAt, ttlMs],
+    [2, "tp:test:login:addr", "tp:test:login:account", 5, 1_000, 5_000, 3_600_000]
+  );
+  assert.match(member, /^5000:/);
+  await assert.rejects(store.reserveLoginAttempt([], options), /throttle key/);
+  assert.equal(calls.length, 2);
+});
+
+test("RedisSessionStore.pruneExpiredSessions relies on key TTLs and issues no commands", async () => {
+  const fake = _makeFakeRedisClient();
+  const store = new RedisSessionStore({
+    redisUrl: "redis://fake",
+    keyPrefix: "tp:test:",
+    idleTimeoutMs: 60_000,
+    absoluteTimeoutMs: 3_600_000,
+    client: fake
+  });
+  await store.pruneExpiredSessions(Date.now());
+  assert.equal(fake.calls.length, 0);
 });
 
 test("RedisSessionStore.recordLoginAttempt rejects missing throttle_key", async () => {

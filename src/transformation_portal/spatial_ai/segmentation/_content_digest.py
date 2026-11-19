@@ -40,6 +40,7 @@ Tracks: N-3 (audit ``PORTAL_AUDIT_REPO_WIDE_2026-05-18.md`` finding
 from __future__ import annotations
 
 import hashlib
+import weakref
 from collections import OrderedDict
 from functools import lru_cache
 from pathlib import Path
@@ -149,19 +150,26 @@ def compute_array_sha256(array: np.ndarray) -> str:
 
 
 _ArrayCacheKey = Tuple[int, Tuple[int, ...], str]
+_ArrayCacheEntry = Tuple["weakref.ReferenceType[np.ndarray]", str]
 
 
 class ArrayDigestCache:
     """Per-owner bounded LRU memoization for ``compute_array_sha256``.
 
-    Keyed by ``(id(arr), arr.shape, arr.dtype.str)``. The ``id()``
-    component is safe for the cache owner's lifetime because:
+    Keyed by ``(id(arr), arr.shape, arr.dtype.str)``; each entry also
+    holds a weak reference to the array it was computed for. The
+    ``id()`` component alone is not an identity: CPython hands a freed
+    array's id to the next allocation of the same size almost every
+    time (sequential video frames, per-request buffers), so:
 
-    1. While ``arr`` is alive its id is unique; reuse only happens
-       after garbage collection.
-    2. The accompanying ``shape`` and ``dtype`` further narrow the key
-       so post-GC id reuse onto an array of identical shape/dtype is
-       the only collision class — extremely rare in image pipelines.
+    1. A hit requires the weak reference to resolve to the very array
+       being looked up; an entry whose array was garbage collected is
+       a miss and is recomputed, never returned for a new array that
+       inherited the id.
+    2. Identity is not content: mutating a cached array in place does
+       not invalidate its entry. Callers must not change an array's
+       contents between lookups (or must ``clear()`` the cache, or pass
+       ``override``).
     3. The cache is intentionally not module-level: ownership scopes
        its lifetime to the pipeline run, typically a backend instance.
     4. The cache is **bounded** (``maxsize`` entries, LRU eviction).
@@ -179,7 +187,7 @@ class ArrayDigestCache:
     def __init__(self, maxsize: int = _DEFAULT_ARRAY_DIGEST_CACHE_MAX) -> None:
         if maxsize <= 0:
             raise ValueError(f"ArrayDigestCache maxsize must be positive; got {maxsize!r}")
-        self._entries: "OrderedDict[_ArrayCacheKey, str]" = OrderedDict()
+        self._entries: "OrderedDict[_ArrayCacheKey, _ArrayCacheEntry]" = OrderedDict()
         self._maxsize = maxsize
 
     def get_or_compute(
@@ -192,16 +200,17 @@ class ArrayDigestCache:
             return "none"
         key = (id(array), tuple(array.shape), array.dtype.str)
         if override is not None:
-            self._entries[key] = override
+            self._entries[key] = (weakref.ref(array), override)
             self._entries.move_to_end(key)
             self._evict_if_needed()
             return override
         cached = self._entries.get(key)
-        if cached is not None:
+        if cached is not None and cached[0]() is array:
             self._entries.move_to_end(key)
-            return cached
+            return cached[1]
         computed = compute_array_sha256(array)
-        self._entries[key] = computed
+        self._entries[key] = (weakref.ref(array), computed)
+        self._entries.move_to_end(key)
         self._evict_if_needed()
         return computed
 

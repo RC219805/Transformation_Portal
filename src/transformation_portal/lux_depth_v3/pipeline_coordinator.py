@@ -860,6 +860,43 @@ def build_backend_metadata_for_attempts(
     )
 
 
+UNRESOLVED_BACKEND_ID = "none"
+
+
+def build_failed_backend_metadata(
+    attempts: List[Dict[str, Any]],
+    startup_backend_metadata: BackendSelectionMetadata,
+    depth_fallback: str,
+) -> BackendSelectionMetadata:
+    """Build per-image backend metadata when no depth backend produced a result.
+
+    Used by the ``skip`` / ``v2-auto`` recovery paths so the manifest does not
+    repeat the start-up ``success`` claim for an image whose every attempt failed.
+    """
+    requested = normalize_backend_provenance(
+        startup_backend_metadata.requested_backend or startup_backend_metadata.resolved_backend,
+    )
+    failed = [attempt for attempt in attempts if isinstance(attempt, dict) and attempt.get("status") == "failed"]
+    if failed:
+        summary = ", ".join(
+            f"{attempt.get('backend')} ({attempt.get('failure_kind', 'operational')}:"
+            f" {attempt.get('error_code', 'UNKNOWN')})"
+            for attempt in failed
+        )
+        reason = f"No depth backend produced a result; failed attempts: {summary}"
+    else:
+        reason = "No depth backend produced a result"
+    return BackendSelectionMetadata(
+        requested_backend=requested,
+        resolved_backend=UNRESOLVED_BACKEND_ID,
+        resolution_status="error",
+        resolution_reason=f"{reason}; depth_fallback={depth_fallback}",
+        model_id=UNRESOLVED_BACKEND_ID,
+        device=startup_backend_metadata.device,
+        attempts=list(attempts),
+    )
+
+
 def select_backend(
     requested: Optional[str],
     config: EnhanceConfig,

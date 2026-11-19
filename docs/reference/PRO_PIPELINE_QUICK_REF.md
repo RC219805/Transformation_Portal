@@ -54,7 +54,7 @@ python pro_pipeline.py version
 
 ### Other Options
 ```bash
---workers, -w      # Parallel workers for batch (default: 4)
+--workers, -w      # Recorded only: batch runs sequentially (default: 4)
 --keep-intermediates  # Keep intermediate outputs
 --dry-run          # Preview without processing
 ```
@@ -77,8 +77,8 @@ python pro_pipeline.py process image.jpg --preset architectural-hero --no-ai
 # Use standard quality
 python pro_pipeline.py process image.jpg --quality standard
 
-# Increase workers for batch
-python pro_pipeline.py batch ./renders --workers 8
+# Batch only the TIFF renders
+python pro_pipeline.py batch ./renders --pattern "*.{tif,tiff}"
 ```
 
 **For Quality:**

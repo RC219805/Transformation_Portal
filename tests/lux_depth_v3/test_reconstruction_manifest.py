@@ -204,3 +204,58 @@ def test_reconstruction_manifest_canonical_paths_require_captured_digests(tmp_pa
             tier="apex_research",
             paths_are_canonical=True,
         )
+
+
+def test_reconstruction_artifact_paths_keep_short_scene_ids_unchanged(tmp_path: Path) -> None:
+    from transformation_portal.lux_depth_v3.reconstruction_runner import diagnostics_artifact_path
+
+    assert reconstruction_manifest_path(scene_id="kitchen/a", output_dir=tmp_path).name == "kitchen__a_manifest.json"
+    assert (
+        diagnostics_artifact_path(scene_id="kitchen/a", output_dir=tmp_path).name
+        == "kitchen__a_reconstruction_diagnostics.json"
+    )
+
+
+def test_reconstruction_artifact_paths_fit_name_max_and_stay_distinct_for_long_scene_ids(tmp_path: Path) -> None:
+    from transformation_portal.lux_depth_v3.io_atomic import atomic_write_bytes
+    from transformation_portal.lux_depth_v3.reconstruction_runner import diagnostics_artifact_path
+
+    nested = "/".join(f"floor_plan_variant_{index:02d}" for index in range(11))
+    scene_ids = [nested + "/a", nested + "/b", "x" * 254 + "/a", "x" * 254 + "/b", "é" * 200]
+    for path_for in (reconstruction_manifest_path, diagnostics_artifact_path):
+        paths = [path_for(scene_id=scene_id, output_dir=tmp_path) for scene_id in scene_ids]
+        assert len({path.name for path in paths}) == len(scene_ids)
+        for path in paths:
+            assert len(path.name.encode("utf-8")) <= 255
+            assert path.name.endswith(("_manifest.json", "_reconstruction_diagnostics.json"))
+            atomic_write_bytes(path, b"{}\n")
+            assert path.read_bytes() == b"{}\n"
+
+
+@pytest.mark.parametrize("unit", ["a", "é", "中"])
+def test_reconstruction_manifest_name_changes_only_past_the_atomic_name_budget(tmp_path: Path, unit: str) -> None:
+    # 241 bytes is the longest published name whose ``.<name>.XXXXXXXX.tmp``
+    # staging sibling still fits NAME_MAX, so it is the longest that works today.
+    suffix = "_manifest.json"
+    unit_bytes = len(unit.encode("utf-8"))
+    longest_working = unit * ((241 - len(suffix)) // unit_bytes)
+    first_too_long = longest_working + unit * (1 + (241 - len(suffix)) % unit_bytes)
+
+    unchanged = reconstruction_manifest_path(scene_id=longest_working, output_dir=tmp_path).name
+    shortened = reconstruction_manifest_path(scene_id=first_too_long, output_dir=tmp_path).name
+
+    assert unchanged == longest_working + suffix
+    assert len((first_too_long + suffix).encode("utf-8")) > 241
+    assert shortened != first_too_long + suffix
+    assert shortened.endswith(suffix)
+    assert len(shortened.encode("utf-8")) <= 241
+
+
+def test_reconstruction_manifest_name_counts_undecodable_name_bytes_once(tmp_path: Path) -> None:
+    # An undecodable directory byte is one byte on disk; it reaches Python as a
+    # surrogateescape code point and must not be counted as three.
+    scene_id = b"\xff".decode("utf-8", "surrogateescape") * 100
+
+    name = reconstruction_manifest_path(scene_id=scene_id, output_dir=tmp_path).name
+
+    assert name == scene_id + "_manifest.json"

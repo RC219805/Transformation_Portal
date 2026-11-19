@@ -196,6 +196,23 @@ def test_native_bounded_admission(native_case, limits):
     assert not native_case.output_dir.exists()
 
 
+def test_native_working_memory_refusal_names_the_memory_budget(native_case):
+    # LN-9: the default 16 GiB budget admits under 16.8 MP; the refusal must name --memory-mib, not max_pixels.
+    (native_case.input_dir / "kitchen.png").unlink()
+    Image.new("RGB", (64, 40), (80, 110, 145)).save(native_case.input_dir / "kitchen.png")
+    raw_bytes = (native_case.input_dir / "kitchen.png").stat().st_size
+    required_mib = -(-(64 * 40 * 512 + raw_bytes + 8 * 1024**3) // 1024**2)
+    with pytest.raises(ValueError, match="pixel/working-memory admission") as excinfo:
+        native.prepare(replace(native_case, source_limits=SourceLimits(memory_mib=8193)))
+    assert f"--memory-mib >= {required_mib}" in str(excinfo.value)
+    assert "max_pixels" not in str(excinfo.value)
+    assert not native_case.output_dir.exists()
+    # The reported budget is sufficient, and the explicit max_pixels refusal is unchanged.
+    native.prepare(replace(native_case, source_limits=SourceLimits(memory_mib=required_mib)))
+    with pytest.raises(ValueError, match="exceed max_pixels"):
+        native.prepare(replace(native_case, source_limits=SourceLimits(max_pixels=10)))
+
+
 def test_native_output_reserve_and_tighter_replay_budget(native_case):
     with pytest.raises(ValueError, match="output byte admission"):
         native.prepare(replace(native_case, output_limits=OutputLimits(max_output_bytes=100)))
@@ -355,3 +372,25 @@ def test_native_original_aliases_fail_closed(native_case, link):
         alias.hardlink_to(source)
     with pytest.raises((ValueError, OSError, ArtifactEvidenceError)):
         native.prepare(native_case)
+
+
+def test_native_completion_uses_the_shared_completion_bound(native_case, monkeypatch):
+    """LN-2: Depth Pro completion is written and read under the V6 completion bound, not the 1 MiB plan decoder."""
+    from transformation_portal.lux_depth_v6 import evidence
+
+    result = native.run(native.prepare(native_case))
+    seen = []
+    decode = native.decode_completion
+
+    def spy(raw):
+        seen.append(raw)
+        return decode(raw)
+
+    monkeypatch.setattr(native, "decode_completion", spy)
+    native.verify(result.output_root, source_root=native_case.input_dir)
+    assert seen == [result.evidence_path.read_bytes()]
+    monkeypatch.setattr(evidence, "MAX_COMPLETION_BYTES", result.evidence_path.stat().st_size - 1)
+    output = native_case.output_dir.with_name("refused")
+    with pytest.raises(ValueError, match="completion evidence exceeds its byte limit"):
+        native.run(native.prepare(replace(native_case, output_dir=output)))
+    assert not (output / "evidence.json").exists()

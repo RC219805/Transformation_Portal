@@ -83,20 +83,24 @@ EXCLUDED_PATTERNS = (re.compile(r"TODO_REPLACE", re.IGNORECASE),)  # Security sc
 # Self-exclude: this scanner file contains TODO examples in docs
 SELF_EXCLUDE_FILE = "scripts/validation/scan_todo_inventory.py"
 
-# Excluded file paths (relative to project root)
-EXCLUDED_PATH_PATTERNS = (
-    "docs/",  # Historical documentation markers
-    "__pycache__/",
-    ".git/",
-    ".next/",
-    ".next-build-verify/",
-    ".next-smoke-",
-    ".next-codex-",
-    "node_modules/",
-    ".venv/",
-    ".runtime/",
-    ".egg-info/",
+# Excluded directories, matched against whole components of the path relative to
+# the project root (never as substrings of the absolute path, which would let a
+# checkout location such as ``~/docs/<repo>`` or a package named ``apidocs`` hide
+# every marker from the gate).
+EXCLUDED_DIR_NAMES = frozenset(
+    {
+        "docs",  # Historical documentation markers
+        "__pycache__",
+        ".git",
+        ".next",
+        ".next-build-verify",
+        "node_modules",
+        ".venv",
+        ".runtime",
+    }
 )
+EXCLUDED_DIR_PREFIXES = (".next-smoke-", ".next-codex-")
+EXCLUDED_DIR_SUFFIXES = (".egg-info",)
 
 
 class TodoType(str, Enum):
@@ -237,18 +241,30 @@ def _atomic_write_text(path: Path, content: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _repo_relative_parts(path: Path) -> tuple[str, ...]:
+    """Return the components of ``path`` relative to the project root."""
+    if path.is_absolute():
+        try:
+            return path.relative_to(PROJECT_ROOT).parts
+        except ValueError:
+            return path.parts
+    return path.parts
+
+
+def _is_excluded_dir_name(name: str) -> bool:
+    """Check whether a single directory component is excluded from scanning."""
+    return name in EXCLUDED_DIR_NAMES or name.startswith(EXCLUDED_DIR_PREFIXES) or name.endswith(EXCLUDED_DIR_SUFFIXES)
+
+
 def _is_excluded_path(path: Path) -> bool:
     """Check if a path should be excluded from scanning."""
-    posix_path = path.as_posix()
+    parts = _repo_relative_parts(path)
 
     # Self-exclude: this scanner file contains TODO examples in documentation
-    if SELF_EXCLUDE_FILE in posix_path:
+    if "/".join(parts) == SELF_EXCLUDE_FILE:
         return True
 
-    for pattern in EXCLUDED_PATH_PATTERNS:
-        if pattern in posix_path:
-            return True
-    return False
+    return any(_is_excluded_dir_name(name) for name in parts[:-1])
 
 
 def _is_excluded_content(line: str) -> bool:
@@ -348,8 +364,12 @@ class NotImplementedVisitor(ast.NodeVisitor):
         if isinstance(exc, ast.Call):
             if isinstance(exc.func, ast.Name) and exc.func.id == "NotImplementedError":
                 is_not_implemented = True
-                if exc.args and isinstance(exc.args[0], ast.Constant):
-                    message = str(exc.args[0].value)
+                if exc.args:
+                    first_arg = exc.args[0]
+                    # Non-literal messages (f-strings, concatenation, variables) still
+                    # carry a message; render their source so they are never mistaken
+                    # for a bare abstract stub.
+                    message = str(first_arg.value) if isinstance(first_arg, ast.Constant) else ast.unparse(first_arg)
 
         if is_not_implemented:
             is_abstract = _is_abstract_method_pattern(message)
@@ -520,6 +540,10 @@ def scan_repository() -> ScanResult:
             result.files_scanned += 1
         except Exception as e:
             result.errors.append(f"{path}: {e}")
+
+    # Fail closed: a scan that inspected nothing cannot vouch for governance.
+    if result.files_scanned == 0:
+        result.errors.append(f"no source files scanned under {PROJECT_ROOT}; refusing to report a vacuous pass")
 
     # Sort by path, then line number
     result.items.sort(key=lambda x: (x.path.as_posix(), x.lineno))

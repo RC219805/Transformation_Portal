@@ -282,6 +282,44 @@ def test_verify_cli_succeeds_for_matching_v1_run_card_attestations(tmp_path: Pat
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.parametrize("extra_args", [(), ("--gpg",)], ids=["default", "gpg"])
+def test_verify_cli_fails_when_no_attestation_exists(tmp_path: Path, extra_args: tuple[str, ...]) -> None:
+    """A run card without any sidecar has nothing to verify; that must not be reported as success."""
+    run_card_path = _write_run_card_v2(tmp_path)
+    assert not list(tmp_path.glob("*attestation*"))
+
+    result = _run_tool("--run-card", str(run_card_path), *extra_args)
+
+    assert result.returncode == 5, result.stdout + result.stderr
+    assert "nothing was verified" in result.stderr
+    assert result.stdout == ""
+
+
+def test_verify_cli_states_that_signatures_were_not_verified_without_gpg(tmp_path: Path) -> None:
+    run_card_path, _, _, _ = _build_inputs(tmp_path)
+
+    result = _run_tool("--run-card", str(run_card_path))
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "native attestation: run-card binding verified; signature NOT verified (--gpg not set)",
+        "DSSE attestation: run-card statement binding verified; signature NOT verified (--gpg not set); "
+        "Sigstore bundle not checked",
+    ]
+
+
+def test_verify_cli_reports_only_the_attestation_that_was_examined(tmp_path: Path) -> None:
+    run_card_path, _, dsse_path, _ = _build_inputs(tmp_path)
+    dsse_path.unlink()
+
+    result = _run_tool("--run-card", str(run_card_path))
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "native attestation: run-card binding verified; signature NOT verified (--gpg not set)"
+    ]
+
+
 def test_verify_cli_rejects_native_attestation_self_hash_mismatch(tmp_path: Path) -> None:
     run_card_path, native_path, _, _ = _build_inputs(tmp_path)
     attestation = json.loads(native_path.read_text(encoding="utf-8"))
@@ -316,6 +354,10 @@ def test_verify_cli_accepts_gpg_and_sigstore_bundle_when_helpers_exist(tmp_path:
     )
 
     assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "native attestation: run-card binding verified; GPG signature verified",
+        "DSSE attestation: run-card statement binding verified; GPG signature verified; Sigstore bundle verified",
+    ]
 
 
 def test_verify_cli_rejects_unrelated_native_clearsign_even_when_self_hash_is_allowed_missing(
@@ -380,6 +422,57 @@ def test_verify_cli_rejects_native_missing_or_ambiguous_validsig(tmp_path: Path,
 
     assert result.returncode == 5
     assert "exactly one VALIDSIG record" in result.stderr
+
+
+def test_verify_cli_rejects_dsse_signed_by_a_key_other_than_the_recorded_keyid(tmp_path: Path) -> None:
+    """The DSSE keyid names one key while the verified signature came from another keyring key."""
+    run_card_path, native_path, _, _ = _build_inputs(tmp_path)
+    native_path.unlink()
+    fake_gpg = _write_fake_gpg(tmp_path)
+
+    result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        "--require-dsse",
+        "--gpg",
+        path_prepend=fake_gpg,
+        env_updates={"TP_FAKE_GPG_RESOLVED_FINGERPRINT": "B" * 40},
+    )
+
+    assert result.returncode == 5
+    assert "detached signature primary fingerprint does not match recorded key_id" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "status_mode, expected_reason",
+    [
+        ("revoked_key", "the signing key has been revoked"),
+        ("expired_key", "the signing key has expired"),
+    ],
+)
+@pytest.mark.parametrize("attestation_kind", ["native", "dsse"])
+def test_verify_cli_rejects_signatures_made_by_revoked_or_expired_keys(
+    tmp_path: Path,
+    attestation_kind: str,
+    status_mode: str,
+    expected_reason: str,
+) -> None:
+    """GnuPG exits 0 for these verdicts, so only the status keyword can reject them."""
+    run_card_path, native_path, dsse_path, _ = _build_inputs(tmp_path)
+    (dsse_path if attestation_kind == "native" else native_path).unlink()
+    fake_gpg = _write_fake_gpg(tmp_path)
+
+    result = _run_tool(
+        "--run-card",
+        str(run_card_path),
+        f"--require-{attestation_kind}",
+        "--gpg",
+        path_prepend=fake_gpg,
+        env_updates={"TP_FAKE_GPG_STATUS_MODE": status_mode},
+    )
+
+    assert result.returncode == 5
+    assert expected_reason in result.stderr
 
 
 def test_verify_cli_rejects_explicit_sigstore_bundle_without_dsse_attestation(tmp_path: Path) -> None:

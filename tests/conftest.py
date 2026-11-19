@@ -34,6 +34,26 @@ from typing import Any
 
 import pytest
 
+# Native thread pools (OpenMP, OpenBLAS, MKL, numexpr, Accelerate) default to one
+# thread per core *per process*. Under pytest-xdist every worker starts its own
+# pool, so `-n auto` oversubscribes the machine by a factor of the core count
+# and spin-waiting makes small numeric kernels pathologically slow (a KMeans
+# fit on a few thousand pixels goes from ~0.1s to several seconds). CI pins
+# these to 1 in the workflow environment; mirror that for local xdist workers.
+# setdefault keeps any explicit operator choice, and this must run before numpy
+# is imported below so the BLAS runtime reads it at load time.
+_NATIVE_THREAD_POOL_ENV = (
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS",
+)
+
+if os.environ.get("PYTEST_XDIST_WORKER"):
+    for _thread_env_name in _NATIVE_THREAD_POOL_ENV:
+        os.environ.setdefault(_thread_env_name, "1")
+
 
 def pytest_configure(config):
     """Configure pytest session.
@@ -302,6 +322,48 @@ def _cached_bool(key: str, compute: "Callable[[], bool]") -> bool:
     if key not in _AVAILABILITY_CACHE:
         _AVAILABILITY_CACHE[key] = bool(compute())
     return _AVAILABILITY_CACHE[key]
+
+
+def posix_permissions_enforced() -> bool:
+    """Check whether POSIX mode bits actually deny access to this process.
+
+    chmod-based negative tests (an unreadable file, a read-only directory) only
+    exercise the denial path when the kernel enforces discretionary access
+    control for the current user. root, CAP_DAC_OVERRIDE containers, Windows and
+    some network filesystems bypass the mode bits, so such tests must skip there
+    instead of asserting on a denial that can never happen.
+
+    This is a functional probe rather than an ``euid == 0`` check so that it is
+    also correct for capability-based containers and permissive filesystems.
+
+    Returns:
+        True if a mode-0 file cannot be opened by this process, False otherwise.
+    """
+
+    def _compute() -> bool:
+        if os.name == "nt":
+            return False
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            probe = Path(tmp) / "permission-probe"
+            probe.write_bytes(b"probe")
+            probe.chmod(0)
+            try:
+                with probe.open("rb"):
+                    return False
+            except PermissionError:
+                return True
+            finally:
+                probe.chmod(0o600)
+
+    return _cached_bool("posix_permissions_enforced", _compute)
+
+
+requires_enforced_posix_permissions = pytest.mark.skipif(
+    not posix_permissions_enforced(),
+    reason="POSIX mode bits are not enforced for this user/platform (root, CAP_DAC_OVERRIDE or Windows)",
+)
 
 
 def has_depth_anything_v3() -> bool:

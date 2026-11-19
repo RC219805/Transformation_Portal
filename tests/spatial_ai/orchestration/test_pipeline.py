@@ -521,6 +521,85 @@ class TestSpatialAIPipelinePresetLoading:
         assert config.ingest == {"strict_ingest": True, "emit_exr": True}
         assert config.segmentation == {"backend": "sam2", "cache_policy": "read_write"}
 
+    def test_dict_to_config_treats_empty_yaml_sections_as_defaults(self):
+        """Empty YAML stage sections (parsed as None) enable the stage with defaults (P-2)."""
+        data = yaml.safe_load("tier: apex_research\npipeline:\n  ingest:\n  segment:\n  materials:\n  reconstruct:\n")
+        assert data["pipeline"] == {"ingest": None, "segment": None, "materials": None, "reconstruct": None}
+
+        config = SpatialAIPipeline._dict_to_config(data)
+
+        assert config.stages == ["ingest", "segmentation", "materials", "reconstruction"]
+        assert config.ingest == {}
+        assert config.segmentation == {"cache_policy": "read_write"}
+        assert config.materials == {"allow_research_materials": False, "allow_unattested_materials": False}
+        assert config.reconstruction == {}
+
+    def test_dict_to_config_accepts_empty_pipeline_section(self):
+        """An empty 'pipeline:' section parses as None and means no stages (P-2)."""
+        config = SpatialAIPipeline._dict_to_config({"tier": "standard", "pipeline": None})
+
+        assert config.stages == []
+        assert config.ingest == {}
+
+    @pytest.mark.parametrize("section", ["ingest", "segment", "materials", "reconstruction"])
+    def test_dict_to_config_rejects_non_mapping_sections(self, section):
+        """A stage section that is not a mapping fails with a clear configuration error (P-2)."""
+        with pytest.raises(ValueError, match="must be a mapping"):
+            SpatialAIPipeline._dict_to_config({"tier": "standard", "pipeline": {section: ["oops"]}})
+
+    @pytest.mark.parametrize("section", ["segmentation", "segment", "reconstruction", "reconstruct"])
+    @pytest.mark.parametrize("value", [False, 0, "", []])
+    def test_dict_to_config_rejects_falsy_non_mapping_aliased_sections(self, section, value):
+        """A falsy non-mapping value is rejected under either spelling of an aliased stage (P-2).
+
+        ``segmentation: false`` used to fall through the alias lookup and silently
+        enable the stage with defaults, while ``segment: false`` was rejected.
+        """
+        with pytest.raises(ValueError, match=f"'{section}' must be a mapping"):
+            SpatialAIPipeline._dict_to_config({"tier": "apex_research", "pipeline": {section: value}})
+
+    def test_dict_to_config_keeps_alias_precedence(self):
+        """A non-empty canonical section wins; an empty one falls back to its alias (P-2)."""
+        both = SpatialAIPipeline._dict_to_config(
+            {
+                "tier": "apex_research",
+                "pipeline": {
+                    "segmentation": {"backend": "sam2"},
+                    "segment": {"backend": "ignored"},
+                    "reconstruction": {"iterations": 10},
+                    "reconstruct": {"iterations": 99},
+                },
+            }
+        )
+        assert both.segmentation == {"backend": "sam2", "cache_policy": "read_write"}
+        assert both.reconstruction == {"iterations": 10}
+
+        fallback = SpatialAIPipeline._dict_to_config(
+            {
+                "tier": "apex_research",
+                "pipeline": {
+                    "segmentation": None,
+                    "segment": {"backend": "sam2"},
+                    "reconstruction": {},
+                    "reconstruct": {"iterations": 99},
+                },
+            }
+        )
+        assert fallback.segmentation == {"backend": "sam2", "cache_policy": "read_write"}
+        assert fallback.reconstruction == {"iterations": 99}
+
+    def test_process_runs_ingest_with_empty_yaml_section(self, tmp_path):
+        """A pipeline built from 'ingest:' (None) runs ingest instead of crashing (P-2)."""
+        tifffile = pytest.importorskip("tifffile")
+        tif = tmp_path / "in.tif"
+        tifffile.imwrite(tif, (np.random.default_rng(0).random((8, 8, 3)) * 65535).astype(np.uint16))
+
+        pipeline = SpatialAIPipeline({"tier": "standard", "pipeline": {"ingest": None}})
+        result = pipeline.process(tif, tmp_path / "out", save_intermediates=False)
+
+        assert result.stages_completed == ["ingest"]
+        assert result.linear_image is not None
+
 
 class TestSpatialAIPipelineIngestStage:
     """Test ingest stage execution."""
@@ -834,6 +913,46 @@ class TestSpatialAIPipelineMaterialsStage:
         assert "segment_0" in result
         assert "segment_1" in result
 
+    def test_run_materials_accepts_classifier_phrase_labels(self, tmp_path):
+        """Classifier labels such as "wood floor" are not hint categories and must not fail the stage."""
+        config = PipelineConfig(
+            tier="standard",
+            stages=["materials"],
+            materials={"backend": "heuristic", "material_hints": True},
+            resource_limits=ResourceLimits(device_preference=["cpu"]),
+        )
+        pipeline = SpatialAIPipeline(config)
+
+        ingest_result = MagicMock(spec=LinearIngestResult)
+        ingest_result.linear_rgb = np.random.default_rng(0).random((24, 24, 3)).astype(np.float32)
+        ingest_result.gamma = 1.0
+
+        masks = np.zeros((3, 24, 24), dtype=bool)
+        masks[0, :8] = True
+        masks[1, 8:16] = True
+        masks[2, 16:] = True
+        labels = ["wood floor", "brushed steel", "frosted glass"]
+        seg_result = SegmentationResult(
+            masks=masks,
+            scores=np.full((3,), 0.9, dtype=np.float32),
+            metadata=[
+                MaskMetadata(
+                    area=24 * 8, bbox=(0, 8 * idx, 24, 8), stability_score=0.9, material_label=label, material_confidence=0.8
+                )
+                for idx, label in enumerate(labels)
+            ],
+        )
+
+        result = pipeline._run_materials(
+            ingest_result=ingest_result,
+            seg_result=seg_result,
+            output_dir=tmp_path,
+            save_intermediates=False,
+        )
+
+        assert list(result) == ["segment_0", "segment_1", "segment_2"]
+        assert [result[seg_id].metadata.material_hint for seg_id in result] == ["wood", None, "glass"]
+
     def test_run_materials_saves_intermediates(self, tmp_path):
         """Test materials saves textures plus diagnostics/provenance sidecars."""
         config = PipelineConfig(
@@ -1037,6 +1156,43 @@ class TestSpatialAIPipelineReconstructionStage:
             )
 
 
+class TestMultiviewImageLoading:
+    """P-1: the multi-view loader scales samples by their type's range, not by 255."""
+
+    @staticmethod
+    def _load(tmp_path: Path, array: np.ndarray, name: str) -> np.ndarray:
+        from PIL import Image
+
+        path = tmp_path / name
+        Image.fromarray(array).save(path)
+        request = MagicMock(images=None, image_paths=[path])
+        pipeline = SpatialAIPipeline(PipelineConfig(tier="standard", stages=["ingest"]))
+        (loaded,) = pipeline._load_multiview_images(request)
+        return loaded
+
+    def test_16bit_gray_png_is_scaled_to_unit_range(self, tmp_path):
+        loaded = self._load(tmp_path, np.full((4, 4), 40000, dtype=np.uint16), "gray16.png")
+
+        assert loaded.shape == (4, 4, 3) and loaded.dtype == np.float32
+        np.testing.assert_allclose(loaded, 40000 / 65535, rtol=1e-6)
+
+    def test_8bit_rgb_png_scaling_is_unchanged(self, tmp_path):
+        rgb = np.arange(48, dtype=np.uint8).reshape(4, 4, 3)
+        loaded = self._load(tmp_path, rgb, "rgb8.png")
+
+        np.testing.assert_array_equal(loaded, rgb.astype(np.float32) / 255.0)
+
+    def test_float_tiff_is_not_divided_by_255(self, tmp_path):
+        values = np.linspace(0.0, 2.0, 16, dtype=np.float32).reshape(4, 4)
+        loaded = self._load(tmp_path, values, "float.tif")
+
+        np.testing.assert_array_equal(loaded[..., 0], values)
+
+    def test_signed_integer_samples_fail_closed(self, tmp_path):
+        with pytest.raises(ValueError, match="Unsupported pixel format"):
+            self._load(tmp_path, np.full((4, 4), 7, dtype=np.int32), "int32.tif")
+
+
 class TestSpatialAIPipelineE2E:
     """Test end-to-end pipeline execution."""
 
@@ -1138,6 +1294,12 @@ class TestSpatialAIPipelineE2E:
         mock_ingest.input_size = (128, 128)
         mock_ingest.linear_rgb = np.random.rand(128, 128, 3).astype(np.float32)
         mock_ingest.gamma = 1.0
+        # Materials provenance records these two fields. Left as spec'd
+        # auto-attributes they are MagicMocks, which JSON canonicalisation
+        # chases through to_dict() until RecursionError (20s, 3 GB), after which
+        # the pipeline logs a warning and silently skips provenance.json.
+        mock_ingest.input_path = input_path
+        mock_ingest.content_hash = "sha256:" + "0" * 64
 
         mock_seg = MagicMock(spec=SegmentationResult)
         mock_seg.masks = [np.ones((128, 128), dtype=bool)]
@@ -1188,6 +1350,16 @@ class TestSpatialAIPipelineE2E:
         assert result.stages_completed == ["ingest", "segmentation", "materials"]
         assert result.materials is not None
         assert len(result.materials) == 1
+
+        # save_intermediates=True must leave the per-segment evidence on disk.
+        provenance_files = list(output_dir.rglob("provenance.json"))
+        diagnostics_files = list(output_dir.rglob("diagnostics.json"))
+        assert len(provenance_files) == 1
+        assert len(diagnostics_files) == 1
+        provenance = json.loads(provenance_files[0].read_text(encoding="utf-8"))
+        assert provenance["input_content_hash"] == "sha256:" + "0" * 64
+        assert provenance["input_path"] == str(input_path)
+        assert provenance["input_size"] == [128, 128]
 
     def test_process_saves_summary(self, tmp_path):
         """Test pipeline saves summary when save_intermediates=True."""
@@ -1433,6 +1605,33 @@ class TestSpatialAIPipelineProgressTracking:
             )
 
         assert result.execution_time >= 0.0
+
+    def test_process_counts_its_own_stages_after_multiview_run(self, tmp_path):
+        """process() must not inherit the stage count process_multiview() pinned on the tracker.
+
+        Regression (O-1): process_multiview() sets the shared tracker to its two stages
+        (reconstruction + export) and nothing restored the configured count, so a later
+        process() on the same pipeline reported progress against the wrong total (above
+        100 % for three or more stages).
+        """
+        config = PipelineConfig(tier="standard", stages=["ingest"])
+        pipeline = SpatialAIPipeline(config)
+        # State left behind by process_multiview() (which needs torch to run for real).
+        pipeline.progress_tracker.total_stages = 2
+
+        input_path = tmp_path / "input.tiff"
+        input_path.touch()
+
+        mock_result = MagicMock(spec=LinearIngestResult)
+        mock_result.input_size = (32, 32)
+        mock_result.linear_rgb = np.random.rand(32, 32, 3).astype(np.float32)
+
+        with patch("transformation_portal.spatial_ai.orchestration.pipeline.LinearDecoder") as MockDecoder:
+            MockDecoder.return_value.decode.return_value = mock_result
+            pipeline.process(input_path=input_path, output_dir=tmp_path / "output", save_intermediates=False)
+
+        assert pipeline.progress_tracker.total_stages == 1
+        assert pipeline.progress_tracker.get_progress_percent() == 100.0
 
 
 class TestGraphModeExecution:

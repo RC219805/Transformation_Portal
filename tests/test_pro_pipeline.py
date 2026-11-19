@@ -549,6 +549,24 @@ class TestProPipeline:
         assert stats["processed"] == 1
         assert stats["failed"] == 1
 
+    def test_batch_same_stem_inputs_keep_separate_outputs(self, pipeline_config, tmp_path):
+        """M-02: kitchen.png and kitchen.tif must not overwrite each other's output."""
+        bright = tmp_path / "kitchen.png"
+        dark = tmp_path / "kitchen.tif"
+        Image.new("RGB", (64, 64), color=(250, 250, 250)).save(bright)
+        Image.new("RGB", (64, 64), color=(10, 10, 10)).save(dark)
+
+        pipeline = ProPipeline(pipeline_config)
+        stats = pipeline.batch_process([bright, dark])
+
+        first, second = stats["results"]
+        assert stats["processed"] == 2
+        assert first != second
+        assert first.name.startswith("kitchen_") and not first.name.startswith("kitchen_tif")
+        assert second.name.startswith("kitchen_tif_")
+        assert first.exists() and second.exists()
+        assert np.asarray(Image.open(first)).mean() > np.asarray(Image.open(second)).mean() + 100
+
     def test_output_filename_generation(self, pipeline_config, temp_image_file):
         """Test output filename generation with presets."""
         # Test with architectural hero preset
@@ -605,6 +623,78 @@ class TestProPipeline:
         # Check values
         assert stats["processed"] == 2
         assert stats["avg_time"] > 0
+
+
+def test_process_image_scales_16bit_greyscale_input(tmp_path):
+    """Regression for H-05: a 16-bit grey PNG (mode I;16) was clipped at 255 and came out white."""
+    source = tmp_path / "grey16.png"
+    Image.fromarray(np.full((8, 8), 32896, dtype=np.uint16)).save(source)
+    config = ProPipelineConfig(
+        input_path=source, output_dir=tmp_path / "out", preset=PipelinePreset.CUSTOM, device="cpu", output_format="png"
+    )
+    for stage in (config.depth_stage, config.ai_stage, config.material_stage, config.grading_stage, config.finishing_stage):
+        stage.enabled = False
+
+    result = ProPipeline(config).process_image(source)
+
+    assert result is not None
+    with Image.open(result) as out:
+        assert out.mode == "RGB"
+        assert np.array_equal(np.asarray(out), np.full((8, 8, 3), 128, dtype=np.uint8))
+
+
+def test_five_stage_run_does_not_darken_mid_grey_noise(tmp_path):
+    """Regression for L-03: every stage truncated ``arr * 255`` to uint8, so a 5-stage run
+    on symmetric mid-grey noise lost about two levels of mean brightness (127.57 -> 125.56)."""
+    rng = np.random.default_rng(0)
+    noise = np.clip(rng.normal(127.5, 30, (128, 128, 1)).repeat(3, 2), 0, 255).round().astype(np.uint8)
+    source = tmp_path / "noise.png"
+    Image.fromarray(noise).save(source)
+    config = ProPipelineConfig(
+        input_path=source, output_dir=tmp_path / "out", preset=PipelinePreset.CUSTOM, device="cpu", output_format="png"
+    )
+
+    result = ProPipeline(config).process_image(source)
+
+    assert result is not None
+    with Image.open(result) as out:
+        shift = np.asarray(out).astype(np.float64).mean() - noise.mean()
+    assert abs(shift) < 0.25
+
+
+class TestUnsharpStagesStaySpatial:
+    """The clarity / micro-contrast / sharpen stages are unsharp masks over the spatial axes only.
+
+    Regression for H-04: ``gaussian_filter(img, sigma=s)`` on an HxWx3 array also blurred the
+    colour-channel axis, so the "blurred" base was nearly grey and the stages pushed flat colour
+    patches towards saturation (RGB(204,102,51) became RGB(215,99,42) in the depth stage).
+    """
+
+    STAGES = ("_apply_depth_stage", "_apply_material_stage", "_apply_finishing_stage")
+
+    @pytest.mark.parametrize("stage_name", STAGES)
+    @pytest.mark.parametrize("preset", [PipelinePreset.CUSTOM, PipelinePreset.ARCHITECTURAL_HERO])
+    def test_flat_colour_patch_is_left_untouched(self, tmp_path, stage_name, preset):
+        config = ProPipelineConfig(input_path=tmp_path / "in.png", output_dir=tmp_path / "out", preset=preset, device="cpu")
+        pipeline = ProPipeline(config)
+        flat = Image.fromarray(np.tile(np.array([[[204, 102, 51]]], dtype=np.uint8), (32, 32, 1)))
+
+        out = np.asarray(getattr(pipeline, stage_name)(flat, tmp_path / "in.png")).astype(np.int16)
+
+        # One level of slack for the float -> uint8 conversion; channel mixing moved it by 2-11 levels.
+        assert np.abs(out - np.array([204, 102, 51], dtype=np.int16)).max() <= 1
+
+    @pytest.mark.parametrize("stage_name", STAGES)
+    def test_stage_still_sharpens_a_spatial_edge(self, pipeline_config, tmp_path, stage_name):
+        pipeline = ProPipeline(pipeline_config)
+        arr = np.full((32, 32, 3), 64, dtype=np.uint8)
+        arr[:, 16:] = 192
+        out = np.asarray(getattr(pipeline, stage_name)(Image.fromarray(arr), tmp_path / "in.png")).astype(np.int16)
+
+        # Unsharp masking overshoots on both sides of the edge and leaves channels equal on grey input.
+        assert out[:, 16:18].max() > 192
+        assert out[:, 14:16].min() < 64
+        assert np.array_equal(out[..., 0], out[..., 1]) and np.array_equal(out[..., 1], out[..., 2])
 
 
 class TestPresets:
@@ -693,6 +783,64 @@ class TestErrorHandling:
         assert pipeline.stats["images_failed"] == 1
 
 
+class TestSourceMetadataPreservation:
+    """M-07: ``preserve_metadata=True`` must carry the source ICC profile, DPI and EXIF."""
+
+    @staticmethod
+    def _tagged_jpeg(path):
+        from PIL import ImageCms
+
+        icc = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+        img = Image.new("RGB", (32, 32), color=(120, 90, 60))
+        exif = img.getexif()
+        exif[0x0110] = "Camera"
+        img.save(path, icc_profile=icc, dpi=(300, 300), exif=exif, quality=95)
+        return icc
+
+    @pytest.mark.parametrize("fmt", ["jpg", "png"])
+    def test_gamma_encoded_output_keeps_icc_dpi_and_exif(self, tmp_path, fmt):
+        source = tmp_path / "tagged.jpg"
+        icc = self._tagged_jpeg(source)
+        config = ProPipelineConfig(input_path=source, output_dir=tmp_path / "out", output_format=fmt, device="cpu")
+
+        result = ProPipeline(config).process_image(source)
+
+        assert result is not None
+        with Image.open(result) as output:
+            assert output.info.get("icc_profile") == icc
+            assert tuple(round(v) for v in output.info["dpi"]) == (300, 300)
+            assert output.getexif().get(0x0110) == "Camera"
+
+    def test_linear_tiff_keeps_dpi_but_not_the_gamma_icc_profile(self, tmp_path):
+        pytest.importorskip("tifffile")
+        source = tmp_path / "tagged.jpg"
+        self._tagged_jpeg(source)
+        config = ProPipelineConfig(
+            input_path=source, output_dir=tmp_path / "out", output_format="tif", linear_output=True, device="cpu"
+        )
+
+        result = ProPipeline(config).process_image(source)
+
+        assert result is not None
+        with Image.open(result) as output:
+            assert tuple(round(v) for v in output.info["dpi"]) == (300, 300)
+            assert not output.info.get("icc_profile")
+
+    def test_preserve_metadata_false_drops_source_metadata(self, tmp_path):
+        source = tmp_path / "tagged.jpg"
+        self._tagged_jpeg(source)
+        config = ProPipelineConfig(
+            input_path=source, output_dir=tmp_path / "out", output_format="jpg", preserve_metadata=False, device="cpu"
+        )
+
+        result = ProPipeline(config).process_image(source)
+
+        assert result is not None
+        with Image.open(result) as output:
+            assert not output.info.get("icc_profile")
+            assert output.getexif().get(0x0110) is None
+
+
 class TestCLI:
     """Tests for CLI interface (typer commands)."""
 
@@ -705,6 +853,75 @@ class TestCLI:
         assert batch is not None
         assert list_presets is not None
         assert version is not None
+
+    def test_batch_exits_nonzero_when_every_image_fails(self, tmp_path):
+        """M-08: a batch in which every image failed must not exit 0."""
+        from typer.testing import CliRunner
+
+        from transformation_portal.pipelines.pro_pipeline import app
+
+        bad_dir = tmp_path / "bad"
+        bad_dir.mkdir()
+        (bad_dir / "a.jpg").write_bytes(b"not an image")
+        (bad_dir / "b.png").write_bytes(b"also not an image")
+
+        result = CliRunner().invoke(app, ["batch", str(bad_dir), "--out", str(tmp_path / "out"), "--format", "png"])
+
+        assert result.exit_code == 1, result.output
+        assert "all 2 images failed" in (result.stdout or "") + (result.stderr or "")
+
+    @pytest.mark.parametrize("command", ["process", "batch"])
+    def test_format_short_flag_is_dash_f(self, tmp_path, command):
+        """Regression for L-04: ``--format`` had the bare ``-`` as its short flag, so ``-f png`` exited 2."""
+        from typer.testing import CliRunner
+
+        from transformation_portal.pipelines.pro_pipeline import app
+
+        source = tmp_path / "in"
+        source.mkdir()
+        Image.new("RGB", (8, 8), color=(10, 20, 30)).save(source / "a.png")
+        target = source / "a.png" if command == "process" else source
+        out = tmp_path / "out"
+
+        result = CliRunner().invoke(
+            app, [command, str(target), "--out", str(out), "-f", "png", "--preset", "custom", "--no-ai", "--no-depth"]
+        )
+
+        assert result.exit_code == 0, result.output
+        assert sorted(p.suffix for p in out.iterdir()) == [".png"]
+
+    def test_batch_honours_pattern(self, tmp_path, monkeypatch):
+        """Regression for L-04: ``batch --pattern`` was accepted but ignored (every image was processed)."""
+        from typer.testing import CliRunner
+
+        from transformation_portal.pipelines import pro_pipeline
+
+        source = tmp_path / "in"
+        source.mkdir()
+        for name in ("a.png", "b.tif", "c.TIFF", "d.jpg"):
+            Image.new("RGB", (4, 4)).save(source / name)
+        seen = []
+        monkeypatch.setattr(
+            pro_pipeline.ProPipeline,
+            "batch_process",
+            lambda self, paths: seen.extend(sorted(p.name for p in paths)) or {"processed": len(paths), "failed": 0},
+        )
+
+        result = CliRunner().invoke(
+            pro_pipeline.app, ["batch", str(source), "--out", str(tmp_path / "out"), "--pattern", "*.{tif,TIFF}"]
+        )
+
+        assert result.exit_code == 0, result.output
+        assert seen == ["b.tif", "c.TIFF"]
+
+    def test_batch_default_pattern_keeps_historical_discovery(self, tmp_path):
+        from transformation_portal.pipelines.pro_pipeline import _DEFAULT_BATCH_PATTERN, _discover_batch_inputs
+
+        for name in ("a.png", "b.JPG", "c.tiff", "d.webp", "e.txt"):
+            (tmp_path / name).write_bytes(b"x")
+        (tmp_path / "dir.png").mkdir()
+
+        assert sorted(p.name for p in _discover_batch_inputs(tmp_path, _DEFAULT_BATCH_PATTERN)) == ["a.png", "b.JPG", "c.tiff"]
 
     def test_preset_enum_values(self):
         """Test that preset enum has expected values."""

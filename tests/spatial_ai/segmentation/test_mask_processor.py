@@ -272,6 +272,85 @@ class TestTemporalTracking:
         with pytest.raises(ValueError, match="must match"):
             processor.track_temporal(current_masks, prev_masks, prev_ids)
 
+    @staticmethod
+    def _frame(*origins):
+        masks = np.zeros((len(origins), 32, 32), dtype=bool)
+        for i, (y, x) in enumerate(origins):
+            masks[i, y : y + 6, x : x + 6] = True
+        return masks
+
+    def test_track_departed_object_id_is_not_reissued(self):
+        """S-8: an ID seen two frames ago must not be handed to a new object."""
+        processor = MaskProcessor(min_area=1, iou_threshold=0.5)
+        frame0 = self._frame((0, 0), (10, 10), (20, 20))
+        ids0 = np.array([0, 1, 2], dtype=np.int32)
+        frame1 = self._frame((0, 0))
+        ids1 = processor.track_temporal(frame1, frame0, ids0)
+        np.testing.assert_array_equal(ids1, np.array([0], dtype=np.int32))
+
+        frame2 = self._frame((0, 0), (25, 2))
+        ids2 = processor.track_temporal(frame2, frame1, ids1)
+
+        assert ids2[0] == 0
+        assert ids2[1] not in {0, 1, 2}
+        assert ids2[1] == 3
+
+    def test_track_empty_frame_mid_sequence_does_not_restart_ids(self):
+        processor = MaskProcessor(min_area=1, iou_threshold=0.5)
+        frame0 = self._frame((0, 0), (10, 10))
+        processor.track_temporal(frame0, frame0.copy(), np.array([4, 5], dtype=np.int32))
+
+        empty = np.zeros((0, 32, 32), dtype=bool)
+        reappeared = processor.track_temporal(self._frame((20, 20)), empty, np.array([], dtype=np.int32))
+
+        np.testing.assert_array_equal(reappeared, np.array([6], dtype=np.int32))
+
+
+class TestIouMatrix:
+    """The vectorized IoU matrix must equal the pairwise definition bit for bit."""
+
+    @staticmethod
+    def _pairwise(masks_a, masks_b):
+        expected = np.zeros((masks_a.shape[0], masks_b.shape[0]), dtype=np.float32)
+        for i in range(masks_a.shape[0]):
+            for j in range(masks_b.shape[0]):
+                intersection = (masks_a[i] & masks_b[j]).sum()
+                union = (masks_a[i] | masks_b[j]).sum()
+                expected[i, j] = intersection / union if union > 0 else 0.0
+        return expected
+
+    def test_matches_pairwise_definition(self):
+        rng = np.random.default_rng(3)
+        masks_a = rng.random((7, 45, 61)) < 0.3
+        masks_b = rng.random((5, 45, 61)) < 0.6
+        masks_a[0] = False
+        masks_b[0] = False  # empty union with masks_a[0]
+
+        result = MaskProcessor()._compute_iou_matrix(masks_a, masks_b)
+
+        assert result.dtype == np.float32
+        assert np.array_equal(result, self._pairwise(masks_a, masks_b))
+        assert result[0, 0] == 0.0
+
+    def test_matches_pairwise_definition_across_pixel_chunks(self, monkeypatch):
+        from transformation_portal.spatial_ai.segmentation import mask_processor as mask_processor_module
+
+        monkeypatch.setattr(mask_processor_module, "_IOU_EXACT_CHUNK_PIXELS", 97)
+        rng = np.random.default_rng(4)
+        masks_a = rng.random((4, 30, 40)) < 0.5
+        masks_b = rng.random((6, 30, 40)) < 0.5
+
+        result = MaskProcessor()._compute_iou_matrix(masks_a, masks_b)
+
+        assert np.array_equal(result, self._pairwise(masks_a, masks_b))
+
+    def test_empty_inputs(self):
+        masks = np.zeros((3, 8, 8), dtype=bool)
+        empty = np.zeros((0, 8, 8), dtype=bool)
+
+        assert MaskProcessor()._compute_iou_matrix(masks, empty).shape == (3, 0)
+        assert MaskProcessor()._compute_iou_matrix(empty, masks).shape == (0, 3)
+
 
 class TestResolveOverlaps:
     """Test overlap resolution."""

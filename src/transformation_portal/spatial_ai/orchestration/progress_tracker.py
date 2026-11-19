@@ -139,8 +139,16 @@ class ProgressTracker:
         self._completed_stages: int = 0
 
     def start_pipeline(self) -> None:
-        """Mark pipeline start."""
+        """Mark pipeline start.
+
+        Clears the state of any earlier run so that a reused tracker reports
+        this run's elapsed time, completed stages and stage metrics only.
+        """
         self._pipeline_start_time = time.time()
+        self._pipeline_end_time = None
+        self._current_stage = None
+        self._stage_metrics = {}
+        self._completed_stages = 0
         event = ProgressEvent(
             event_type=ProgressEventType.PIPELINE_START,
             stage=None,
@@ -173,11 +181,14 @@ class ProgressTracker:
         # Estimate remaining time
         estimated_remaining = None
         if self.enable_time_estimation and name in self.historical_times:
-            # Sum of remaining stages' historical times
+            # Sum of the historical times of every known stage that has not
+            # completed yet in this run, the one starting now included.
             remaining_stages = self.total_stages - self._completed_stages
             if remaining_stages > 0:
                 estimated_remaining = sum(
-                    self.historical_times.get(s, 0) for s in self._stage_metrics if s not in self._stage_metrics
+                    duration
+                    for stage_name, duration in self.historical_times.items()
+                    if not (stage_name in self._stage_metrics and self._stage_metrics[stage_name].is_complete)
                 )
 
         event = ProgressEvent(

@@ -65,6 +65,31 @@ EXIT_GAMMA_VIOLATION = int(IngestExitCode.GAMMA_VIOLATION)
 EXIT_SCHEMA_DRIFT = int(IngestExitCode.SCHEMA_DRIFT)
 EXIT_OTHER_FAILURE = int(IngestExitCode.OTHER_FAILURE)
 
+# ``error_type`` values attached to the messages ``validate_schema`` returns.
+# Classification reads these instead of searching the message text, because the
+# messages interpolate sidecar values (a sha256 of "gamma" must not become a
+# gamma violation).
+ERROR_TYPE_SCHEMA_DRIFT = "schema_drift"
+ERROR_TYPE_SCHEMA_VERSION_MISMATCH = "schema_version_mismatch"
+ERROR_TYPE_SCHEMA_VALIDATION_FAILED = "schema_validation_failed"
+# Pydantic error type raised for unknown fields under ConfigDict(extra="forbid").
+_PYDANTIC_EXTRA_FORBIDDEN = "extra_forbidden"
+
+
+class ValidationMessage(str):
+    """A ``validate_schema`` error message that also carries its error type.
+
+    It compares, hashes and prints as the plain message, so callers that treat
+    the result as ``List[str]`` see no difference.
+    """
+
+    error_type: str
+
+    def __new__(cls, message: str, error_type: str = ERROR_TYPE_SCHEMA_VALIDATION_FAILED) -> "ValidationMessage":
+        instance = super().__new__(cls, message)
+        instance.error_type = error_type
+        return instance
+
 
 def classify_validation_error_typed(error: object) -> IngestError:
     """Classify raw validation error payload into a typed ingest error."""
@@ -81,6 +106,8 @@ def classify_validation_error_typed(error: object) -> IngestError:
         return BitDepthViolation(error_msg)
     if error_type == "gamma_violation" or error_code == "gamma_violation":
         return GammaViolation(error_msg)
+    if error_type == ERROR_TYPE_SCHEMA_VALIDATION_FAILED or error_code == ERROR_TYPE_SCHEMA_VALIDATION_FAILED:
+        return SchemaValidationFailure(error_msg)
 
     if (
         "drift" in error_msg_lower
@@ -210,12 +237,15 @@ def validate_schema(
             data_dict = json.loads(data)
         else:
             # File path
-            with open(data, "r") as f:
+            with open(data, "r", encoding="utf-8") as f:
                 data_dict = json.load(f)
     elif isinstance(data, dict):
         data_dict = data
     else:
         raise ValueError("Invalid data type: " f"{type(data)}. Expected dict, " "str, or Path.")
+    if not isinstance(data_dict, dict):
+        # Valid JSON whose root is a list, string, number or null.
+        return [ValidationMessage("Sidecar root must be a JSON object", ERROR_TYPE_SCHEMA_VALIDATION_FAILED)]
 
     # Select schema class
     schema_class: type
@@ -226,14 +256,19 @@ def validate_schema(
     else:
         raise ValueError(f"Invalid schema_type: {schema_type}." " Must be 'provenance' or 'manifest'.")
 
-    errors = []
+    errors: List[str] = []
 
     # Check schema version
     schema_version = data_dict.get("schema_version")
     if not schema_version:
-        errors.append("Missing required field: schema_version")
+        errors.append(ValidationMessage("Missing required field: schema_version", ERROR_TYPE_SCHEMA_VALIDATION_FAILED))
     elif schema_version != "1.0.2":
-        errors.append(f"Unsupported schema version: " f"{schema_version}. This validator " "supports version 1.0.2 only.")
+        errors.append(
+            ValidationMessage(
+                f"Unsupported schema version: {schema_version}. This validator supports version 1.0.2 only.",
+                ERROR_TYPE_SCHEMA_VERSION_MISMATCH,
+            )
+        )
 
     # Validate with Pydantic (includes drift detection via extra="forbid")
     try:
@@ -243,14 +278,17 @@ def validate_schema(
             field_path = ".".join(str(loc) for loc in error["loc"])
             error_msg = error["msg"]
             error_type = error["type"]
+            category = (
+                ERROR_TYPE_SCHEMA_DRIFT if error_type == _PYDANTIC_EXTRA_FORBIDDEN else ERROR_TYPE_SCHEMA_VALIDATION_FAILED
+            )
 
             # Format error message
             if error_type == "value_error.missing":
-                errors.append(f"Missing required field: {field_path}")
+                errors.append(ValidationMessage(f"Missing required field: {field_path}", category))
             elif error_type.startswith("type_error"):
-                errors.append(f"Type mismatch at {field_path}: {error_msg}")
+                errors.append(ValidationMessage(f"Type mismatch at {field_path}: {error_msg}", category))
             else:
-                errors.append(f"Validation error at {field_path}: {error_msg}")
+                errors.append(ValidationMessage(f"Validation error at {field_path}: {error_msg}", category))
 
     return errors
 

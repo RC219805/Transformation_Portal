@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -22,6 +25,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+from transformation_portal.core import execution_wrapper
 from transformation_portal.core.cas_dag_executor import (
     CASDAGConfig,
     CASDAGExecutor,
@@ -95,12 +99,154 @@ class TestFileLock:
         """Test lock timeout behavior."""
         lock_path = tmp_path / "test.lock"
 
-        # Create existing lock
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_path.write_text(str(time.time()))
+        # Lock held by another owner
+        holder = FileLock(lock_path, timeout=5.0)
+        assert holder.acquire() is True
+        try:
+            lock = FileLock(lock_path, timeout=0.1)
+            assert lock.acquire() is False
+        finally:
+            holder.release()
 
-        lock = FileLock(lock_path, timeout=0.1)
-        assert lock.acquire() is False
+    def test_waiter_cannot_take_a_lock_held_longer_than_twice_its_timeout(self, tmp_path):
+        """A long critical section is still exclusive: lock age is not staleness."""
+        lock_path = tmp_path / "test.lock"
+        holder = FileLock(lock_path, timeout=0.05)
+        assert holder.acquire() is True
+        try:
+            time.sleep(0.15)  # held for more than 2x the waiter's timeout
+
+            waiter = FileLock(lock_path, timeout=0.05)
+            assert waiter.acquire() is False
+            assert lock_path.exists()
+        finally:
+            holder.release()
+
+    def test_release_keeps_a_lock_file_now_held_by_someone_else(self, tmp_path):
+        """release() only removes the lock file it still owns."""
+        lock_path = tmp_path / "test.lock"
+        first = FileLock(lock_path, timeout=0.05)
+        assert first.acquire() is True
+        lock_path.unlink()  # e.g. an operator clearing the locks directory
+        second = FileLock(lock_path, timeout=0.05)
+        assert second.acquire() is True
+        try:
+            first.release()
+
+            assert lock_path.exists()
+            assert FileLock(lock_path, timeout=0.05).acquire() is False
+        finally:
+            second.release()
+        assert not lock_path.exists()
+
+    @pytest.mark.parametrize("leftover", ["", "not-a-timestamp", "fresh"], ids=["empty", "garbage", "fresh-timestamp"])
+    def test_lock_file_left_by_a_dead_holder_does_not_block(self, tmp_path, leftover):
+        """A lock file nobody holds is free, whatever it contains."""
+        lock_path = tmp_path / "test.lock"
+        lock_path.write_text(str(time.time()) if leftover == "fresh" else leftover)
+
+        lock = FileLock(lock_path, timeout=0.05)
+        try:
+            assert lock.acquire() is True
+        finally:
+            lock.release()
+        assert not lock_path.exists()
+
+    def test_second_acquire_on_a_held_instance_times_out_and_keeps_the_lock(self, tmp_path):
+        """The lock is not reentrant, and a failed re-acquire does not drop it."""
+        lock_path = tmp_path / "test.lock"
+        lock = FileLock(lock_path, timeout=0.05)
+        assert lock.acquire() is True
+        try:
+            time.sleep(0.15)
+            assert lock.acquire() is False
+            assert FileLock(lock_path, timeout=0.05).acquire() is False
+        finally:
+            lock.release()
+        assert not lock_path.exists()
+
+    def test_lock_dies_with_its_holder_process(self, tmp_path):
+        """Ownership is an OS lock: it ends when the holding process is killed."""
+        pytest.importorskip("fcntl")
+        lock_path = tmp_path / "test.lock"
+        source_root = Path(execution_wrapper.__file__).resolve().parents[2]
+        holder_script = (
+            "import sys, time\n"
+            "from pathlib import Path\n"
+            "from transformation_portal.core.execution_wrapper import FileLock\n"
+            "lock = FileLock(Path(sys.argv[1]), timeout=5.0)\n"
+            "assert lock.acquire()\n"
+            "print('held', flush=True)\n"
+            "time.sleep(60)\n"
+        )
+        holder = subprocess.Popen(
+            [sys.executable, "-c", holder_script, str(lock_path)],
+            stdout=subprocess.PIPE,
+            text=True,
+            env={**os.environ, "PYTHONPATH": str(source_root)},
+        )
+        try:
+            assert holder.stdout is not None
+            assert holder.stdout.readline().strip() == "held"
+            assert FileLock(lock_path, timeout=0.1).acquire() is False
+
+            holder.kill()
+            holder.wait(timeout=10)
+
+            survivor = FileLock(lock_path, timeout=5.0)
+            assert survivor.acquire() is True
+            survivor.release()
+        finally:
+            if holder.poll() is None:
+                holder.kill()
+                holder.wait(timeout=10)
+            if holder.stdout is not None:
+                holder.stdout.close()
+
+
+class TestFileLockWithoutFcntl:
+    """The exclusive-create fallback keeps mutual exclusion without stealing."""
+
+    @pytest.fixture(autouse=True)
+    def _without_fcntl(self, monkeypatch):
+        monkeypatch.setattr(execution_wrapper, "_FCNTL", None)
+
+    def test_acquire_release_roundtrip(self, tmp_path):
+        lock_path = tmp_path / "locks" / "test.lock"
+        lock = FileLock(lock_path, timeout=0.05)
+
+        assert lock.acquire() is True
+        assert lock_path.exists()
+        assert FileLock(lock_path, timeout=0.05).acquire() is False
+
+        lock.release()
+        assert not lock_path.exists()
+
+    def test_held_lock_is_never_reclaimed_by_age(self, tmp_path):
+        lock_path = tmp_path / "test.lock"
+        holder = FileLock(lock_path, timeout=0.05)
+        assert holder.acquire() is True
+        try:
+            time.sleep(0.15)
+
+            assert FileLock(lock_path, timeout=0.05).acquire() is False
+            assert lock_path.exists()
+        finally:
+            holder.release()
+
+    def test_release_keeps_a_lock_file_created_by_someone_else(self, tmp_path):
+        lock_path = tmp_path / "test.lock"
+        first = FileLock(lock_path, timeout=0.05)
+        assert first.acquire() is True
+        lock_path.unlink()
+        second = FileLock(lock_path, timeout=0.05)
+        assert second.acquire() is True
+
+        first.release()
+        assert lock_path.exists()
+
+        second.release()
+        assert not lock_path.exists()
 
 
 class SimpleStage:
@@ -669,8 +815,33 @@ class TestCASExecutionResult:
         assert stats["speedup_estimate"] == float("inf")
 
 
+class FixedOutputStage(DAGStageForTesting):
+    """DAG stage that returns the same artifacts on every run."""
+
+    def __init__(self, name: str, artifacts: Dict[str, Any], deps: List[str] = None):
+        super().__init__(name, deps)
+        self._artifacts = artifacts
+
+    def compute(self, context: StageContext) -> StageResult:
+        self.call_count += 1
+        return StageResult(
+            stage_name=self.name,
+            stage_version=self.version,
+            status=StageStatus.COMPLETED,
+            artifacts=dict(self._artifacts),
+        )
+
+
 class TestVerifyDAGDeterminism:
     """Tests for verify_dag_determinism function."""
+
+    @pytest.fixture
+    def executor(self, tmp_path):
+        with patch(
+            "transformation_portal.core.execution_identity.get_env_fingerprint",
+            return_value="sha256:fixed_env",
+        ):
+            yield CASDAGExecutor(ArtifactStore(tmp_path / "cas"), tmp_path / "cache", CASDAGConfig(enable_caching=True))
 
     def test_deterministic_dag(self, tmp_path):
         """Test verification passes for deterministic DAG."""
@@ -682,7 +853,7 @@ class TestVerifyDAGDeterminism:
         executor = CASDAGExecutor(store, cache_dir, config)
 
         graph = StageGraph("test")
-        stage = DAGStageForTesting("deterministic")
+        stage = FixedOutputStage("deterministic", {"deterministic_output": 1})
         graph.add_stage(stage)
 
         context = StageContext()
@@ -702,6 +873,37 @@ class TestVerifyDAGDeterminism:
                 assert is_det is True
                 assert len(hashes["deterministic"]) == 2
                 assert hashes["deterministic"][0] == hashes["deterministic"][1]
+
+    def test_stage_with_different_output_on_each_run_is_not_deterministic(self, executor):
+        """Outputs are compared, including those of the last stage in the DAG."""
+        graph = StageGraph("test")
+        # DAGStageForTesting returns its call counter, so every run differs.
+        graph.add_stage(DAGStageForTesting("counter"))
+
+        is_det, hashes = verify_dag_determinism(executor, graph, StageContext(), runs=3)
+
+        assert is_det is False
+        assert len(set(hashes["counter"])) == 3
+
+    def test_only_the_nondeterministic_stage_is_reported(self, executor):
+        graph = StageGraph("test")
+        graph.add_stage(FixedOutputStage("stable", {"stable_output": np.arange(6, dtype=np.float32).reshape(2, 3)}))
+        graph.add_stage(DAGStageForTesting("counter"))
+
+        is_det, hashes = verify_dag_determinism(executor, graph, StageContext(), runs=2)
+
+        assert is_det is False
+        assert len(set(hashes["stable"])) == 1
+        assert len(set(hashes["counter"])) == 2
+
+    def test_outputs_that_cannot_be_hashed_are_not_reported_as_deterministic(self, executor):
+        graph = StageGraph("test")
+        graph.add_stage(FixedOutputStage("opaque", {"opaque_output": object()}))
+
+        is_det, _ = verify_dag_determinism(executor, graph, StageContext(), runs=2)
+
+        assert is_det is False
+        assert executor.config.enable_caching is True  # restored after verification
 
 
 class TestCacheHitCompatibilityRegression:
@@ -991,6 +1193,120 @@ class TestNumpyInputIdentityRegression:
         ids2 = executor._compute_input_ids({"arr": arr2})
 
         assert ids1[0] == ids2[0], "Identical arrays should have same input ID"
+
+
+class _RecordingStage:
+    """Stage that counts executions and derives its outputs from the inputs."""
+
+    name = "recording_stage"
+    version = "1.0.0"
+
+    def __init__(self, fn):
+        self._fn = fn
+        self.call_count = 0
+
+    def execute(self, inputs: Dict[str, Any], config: Any) -> Dict[str, Any]:
+        self.call_count += 1
+        return self._fn(inputs)
+
+
+class TestInputIdentityBindsNamesAndContent:
+    """Regression tests for cache identity collisions between different inputs.
+
+    The execution identity used to be an unordered bag of per-value hashes with
+    a ``str(value)`` fallback, so different inputs resolved to one cache entry
+    and the second call was served the first call's output.
+    """
+
+    @pytest.fixture
+    def executor(self, tmp_path):
+        with patch(
+            "transformation_portal.core.execution_identity.get_env_fingerprint",
+            return_value="sha256:fixed_env",
+        ):
+            yield CASExecutor(ArtifactStore(tmp_path / "cas"), tmp_path / "cache")
+
+    def test_swapped_inputs_are_not_served_from_cache(self, executor):
+        stage = _RecordingStage(lambda inputs: {"diff": inputs["a"] - inputs["b"]})
+        x = np.full((4, 4), 10.0, dtype=np.float32)
+        y = np.full((4, 4), 3.0, dtype=np.float32)
+
+        first = executor.execute(stage, {"a": x, "b": y}, {})
+        second = executor.execute(stage, {"a": y, "b": x}, {})
+
+        assert first.execution_identity.cas_id != second.execution_identity.cas_id
+        assert second.cache_hit is False
+        assert stage.call_count == 2
+        assert float(first.outputs["diff"][0, 0]) == 7.0
+        assert float(second.outputs["diff"][0, 0]) == -7.0
+
+    def test_renamed_input_key_is_a_cache_miss(self, executor):
+        stage = _RecordingStage(lambda inputs: {"keys": sorted(inputs)})
+        x = np.zeros((2, 2), dtype=np.float32)
+
+        executor.execute(stage, {"image": x}, {})
+        second = executor.execute(stage, {"mask": x}, {})
+
+        assert second.cache_hit is False
+        assert second.outputs["keys"] == ["mask"]
+
+    def test_sequence_of_arrays_is_identified_by_content(self, executor):
+        stage = _RecordingStage(lambda inputs: {"total": float(sum(float(frame.sum()) for frame in inputs["frames"]))})
+        blank = np.zeros((64, 64), dtype=np.float32)
+        marked = np.zeros((64, 64), dtype=np.float32)
+        marked[20:40, 20:40] = 1.0
+        # NumPy summarises large arrays, so the two reprs are indistinguishable.
+        assert str([blank]) == str([marked])
+
+        executor.execute(stage, {"frames": [blank]}, {})
+        second = executor.execute(stage, {"frames": [marked]}, {})
+
+        assert second.cache_hit is False
+        assert second.outputs["total"] == 400.0
+
+    @pytest.mark.parametrize(
+        ("first_value", "second_value"),
+        [("abc", b"abc"), (21, "21"), (None, "None")],
+        ids=["text-vs-bytes", "int-vs-text", "none-vs-text"],
+    )
+    def test_equal_looking_values_of_different_types_are_distinct(self, executor, first_value, second_value):
+        stage = _RecordingStage(lambda inputs: {"kind": type(inputs["value"]).__name__})
+
+        executor.execute(stage, {"value": first_value}, {})
+        second = executor.execute(stage, {"value": second_value}, {})
+
+        assert second.cache_hit is False
+        assert second.outputs["kind"] == type(second_value).__name__
+
+    def test_path_input_is_rejected_instead_of_identified_by_its_name(self, executor, tmp_path):
+        source = tmp_path / "input.bin"
+        source.write_bytes(b"version-1")
+        stage = _RecordingStage(lambda inputs: {"content": Path(inputs["path"]).read_bytes().decode()})
+
+        with pytest.raises(TypeError, match="materialize it explicitly"):
+            executor.execute(stage, {"path": source}, {})
+
+        assert stage.call_count == 0
+
+    def test_non_string_input_key_is_rejected(self, executor):
+        stage = _RecordingStage(lambda inputs: {"count": len(inputs)})
+
+        with pytest.raises(TypeError, match="string keys"):
+            executor.execute(stage, {1: "value"}, {})
+
+        assert stage.call_count == 0
+
+    def test_nested_mapping_with_arrays_is_cached_by_content(self, executor):
+        stage = _RecordingStage(lambda inputs: {"total": float(inputs["bundle"]["depth"].sum())})
+        ones = np.ones((3, 3), dtype=np.float32)
+
+        first = executor.execute(stage, {"bundle": {"depth": ones, "scale": 2.0}}, {})
+        repeat = executor.execute(stage, {"bundle": {"depth": ones.copy(), "scale": 2.0}}, {})
+        changed = executor.execute(stage, {"bundle": {"depth": ones * 2, "scale": 2.0}}, {})
+
+        assert (first.cache_hit, repeat.cache_hit, changed.cache_hit) == (False, True, False)
+        assert changed.outputs["total"] == 18.0
+        assert stage.call_count == 2
 
 
 class TestDAGExecutorNumpyIdentityRegression:

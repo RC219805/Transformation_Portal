@@ -122,6 +122,22 @@ def test_load_plugin_trust_store_rejects_malformed_trust_sets(
         load_plugin_trust_store(trust_store_path)
 
 
+def test_verify_manifest_signature_rejects_non_ascii_signature_with_signature_error(tmp_path: Path) -> None:
+    """T-11: a non-ASCII signature is a mismatch (PluginSignatureError), not an uncaught TypeError."""
+    trust_store_path = _write_json(tmp_path / "trust.json", {"keys": {"local-dev": "test-secret"}})
+    manifest = {
+        "name": "demo",
+        "version": "1.0.0",
+        "entry_point": "demo:Plugin",
+        "signature_algorithm": PLUGIN_SIGNATURE_ALGORITHM,
+        "signature_key_id": "local-dev",
+        "signature": "déadbeef",
+    }
+
+    with pytest.raises(PluginSignatureError, match="does not match trusted key"):
+        verify_manifest_signature(manifest, trust_store_path=trust_store_path)
+
+
 def test_verify_manifest_signature_rejects_unknown_key_id(tmp_path: Path) -> None:
     trust_store_path = _write_json(tmp_path / "trust.json", {"keys": {"trusted": "test-secret"}})
     manifest = {

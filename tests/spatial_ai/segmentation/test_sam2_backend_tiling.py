@@ -1,5 +1,6 @@
 """Tiling routing tests that do not require torch."""
 
+import weakref
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -21,6 +22,7 @@ from transformation_portal.spatial_ai.segmentation.tiling.types import (
     SoftMaskPatch,
     TileInstance,
     TileManifest,
+    TileSegmentationResult,
     TileSpec,
 )
 from transformation_portal.spatial_ai.segmentation.tiling.validator import SeamMergeValidator
@@ -621,6 +623,459 @@ def test_tiling_skips_non_overlapping_tile_pairs():
 
     assert result.masks.shape == (2, 8, 16)
     assert [item.area for item in result.metadata] == [64, 64]
+
+
+class _GroundTruthCropBackend:
+    """Report, per tile, the visible crop of full-image masks as full-tile patches (the SAM2 ``segment_tile`` shape)."""
+
+    name = "stub"
+    device = "cpu"
+
+    def __init__(self, masks_for_tile, *, tight=False):
+        self._masks_for_tile = masks_for_tile
+        self._tight = tight
+
+    def global_seed_pass(self, **kwargs):
+        del kwargs
+        return None
+
+    def segment_tile(self, **kwargs):
+        tile_spec = kwargs["tile_spec"]
+        box = tile_spec.bbox
+        instances = []
+        for idx, full_mask in enumerate(self._masks_for_tile(tile_spec)):
+            crop = full_mask[box.y0 : box.y1, box.x0 : box.x1]
+            if not crop.any():
+                continue
+            patch_bbox = BBox(0, 0, box.w, box.h)
+            if self._tight:
+                rows, cols = np.nonzero(crop)
+                patch_bbox = BBox(int(cols.min()), int(rows.min()), int(cols.max()) + 1, int(rows.max()) + 1)
+                crop = crop[patch_bbox.y0 : patch_bbox.y1, patch_bbox.x0 : patch_bbox.x1]
+            instances.append(
+                TileInstance(
+                    local_id=f"{tile_spec.tile_id}:{idx}",
+                    score=0.9,
+                    stability_score=0.9,
+                    soft_mask=SoftMaskPatch(bbox=patch_bbox, values=crop.astype(np.float32), space="prob"),
+                )
+            )
+        return tuple(instances)
+
+
+def _run_default_engine_on_ground_truth(masks_for_tile, *, width, height, tile_size_px=200, overlap_px=50):
+    config = SegmentationTilingConfig(enabled=True, tile_size_px=tile_size_px, overlap_px=overlap_px)
+    config.global_pass.enabled = False
+    engine = SAM2Backend.__new__(SAM2Backend)._build_default_tiled_engine()
+    return engine.run(
+        backend=_GroundTruthCropBackend(masks_for_tile),
+        seg_input=SegmentationInput(image=np.zeros((height, width, 3), dtype=np.float32), gamma=1.0, mode="auto"),
+        image_hash="abc",
+        config=config,
+    )
+
+
+def _rect_mask(height, width, rows, cols):
+    mask = np.zeros((height, width), dtype=bool)
+    mask[rows[0] : rows[1], cols[0] : cols[1]] = True
+    return mask
+
+
+def test_tiling_keeps_nested_part_and_whole_as_separate_instances_across_seam():
+    """A part inside the overlap band is 100 % contained in the other tile's whole mask; that is not agreement."""
+    height, width = 60, 300  # tiles [0, 200) and [150, 300); overlap band [150, 200)
+    sofa = _rect_mask(height, width, (10, 50), (20, 280))
+    cushion = _rect_mask(height, width, (20, 40), (160, 190))
+
+    result = _run_default_engine_on_ground_truth(lambda tile: [sofa, cushion], width=width, height=height)
+
+    assert result.masks.shape == (2, height, width)
+    assert np.array_equal(result.masks[0], sofa)
+    assert np.array_equal(result.masks[1], cushion)
+    assert [item.area for item in result.metadata] == [int(sofa.sum()), int(cushion.sum())]
+
+
+def test_tiling_unions_same_tile_parts_before_blending_across_tiles():
+    """One tile splits an object in two, the neighbour sees one mask: no confident pixel may be dropped."""
+    height, width = 60, 300
+    left_part = _rect_mask(height, width, (10, 50), (20, 170))
+    right_part = _rect_mask(height, width, (10, 50), (170, 200))
+    whole = left_part | right_part
+
+    def masks_for_tile(tile):
+        return [left_part, right_part] if tile.bbox.x0 == 0 else [whole]
+
+    result = _run_default_engine_on_ground_truth(masks_for_tile, width=width, height=height)
+
+    assert result.masks.shape == (1, height, width)
+    assert np.array_equal(result.masks[0], whole)
+    assert result.metadata[0].area == int(whole.sum())
+
+
+def test_tiling_reproduces_ground_truth_when_all_tiles_agree():
+    """Four tiles meeting in one corner, a whole with a nested part in the corner and an object seen by one tile."""
+    size = 300  # 2 x 2 tiles of 200 px with a 50 px overlap; all four share [150, 200) x [150, 200)
+    floor = _rect_mask(size, size, (20, 280), (20, 280))
+    rug = _rect_mask(size, size, (165, 185), (165, 185))
+    lamp = _rect_mask(size, size, (5, 15), (5, 15))
+
+    result = _run_default_engine_on_ground_truth(lambda tile: [floor, rug, lamp], width=size, height=size)
+
+    assert result.masks.shape == (3, size, size)
+    assert np.array_equal(result.masks[0], floor)
+    assert np.array_equal(result.masks[1], rug)
+    assert np.array_equal(result.masks[2], lamp)
+
+
+def _merge_ground_truth_directly(
+    masks_for_tile, *, width, height, tight, tile_size_px=200, overlap_px=50, instance_merge=None
+):
+    config = SegmentationTilingConfig(enabled=True, tile_size_px=tile_size_px, overlap_px=overlap_px)
+    if instance_merge is not None:
+        config.merge.instance_merge = instance_merge
+    manifest = UniformTilingPlanner().plan(
+        image_hash="abc", W=width, H=height, config=config, global_hints=None, prompts=None, mode="auto"
+    )
+    backend = _GroundTruthCropBackend(masks_for_tile, tight=tight)
+    tile_results = [
+        TileSegmentationResult(
+            image_hash="abc",
+            tile_id=tile.tile_id,
+            tile_spec=tile,
+            instances=backend.segment_tile(tile_spec=tile),
+            runtime_s=0.0,
+        )
+        for tile in manifest.tiles
+    ]
+    return BinaryUnionTileMerger().merge(
+        image_hash="abc",
+        W=width,
+        H=height,
+        manifest=manifest,
+        tile_results=tile_results,
+        global_hints=None,
+        merge_config=config.merge,
+    )
+
+
+def test_tiling_merge_does_not_depend_on_patch_crop():
+    """Full-tile patches (what SAM2 emits) and tight-bbox patches of the same masks merge identically.
+
+    Covers the band metrics (two tiles that see the same object shifted by five rows, plus a whole with a nested
+    part) and the per-tile vote (a tile that splits an object in two).
+    """
+    height, width = 60, 300
+    shifted_left = _rect_mask(height, width, (0, 15), (150, 200))
+    shifted_right = _rect_mask(height, width, (5, 20), (150, 200))
+    sofa = _rect_mask(height, width, (25, 58), (20, 280))
+    cushion = _rect_mask(height, width, (30, 50), (160, 190))
+    left_part = _rect_mask(height, width, (25, 58), (20, 170))
+    right_part = _rect_mask(height, width, (25, 58), (170, 200))
+
+    def masks_for_tile(tile):
+        if tile.bbox.x0 == 0:
+            return [shifted_left, sofa, cushion, left_part, right_part]
+        return [shifted_right, sofa, cushion, left_part | right_part]
+
+    full = _merge_ground_truth_directly(masks_for_tile, width=width, height=height, tight=False)
+    tight = _merge_ground_truth_directly(masks_for_tile, width=width, height=height, tight=True)
+
+    assert full[0].shape == tight[0].shape
+    assert np.array_equal(full[0], tight[0])
+    assert np.array_equal(full[1], tight[1])
+    assert full[3]["seam_metrics"] == tight[3]["seam_metrics"]
+    assert full[3]["seam_metrics"]["merged_pair_count"] > 0
+
+
+def test_tiling_merge_does_not_depend_on_patch_crop_when_a_zero_iou_merges():
+    """``iou_threshold=0`` with ``border_only`` off joins pairs that share no pixel, however the patches are cropped.
+
+    The patch-box shortcut of the pair loop is exact only while an empty intersection cannot join a pair. Tight
+    patches of two objects that never touch have disjoint boxes; full-tile patches of the same masks do not.
+    """
+    height, width = 60, 300  # tiles [0, 200) and [150, 300)
+    left_object = _rect_mask(height, width, (10, 30), (20, 60))
+    right_object = _rect_mask(height, width, (35, 55), (240, 280))
+    instance_merge = InstanceMergeConfig(iou_threshold=0.0, border_only=False)
+
+    def masks_for_tile(tile):
+        return [left_object] if tile.bbox.x0 == 0 else [right_object]
+
+    full = _merge_ground_truth_directly(masks_for_tile, width=width, height=height, tight=False, instance_merge=instance_merge)
+    tight = _merge_ground_truth_directly(masks_for_tile, width=width, height=height, tight=True, instance_merge=instance_merge)
+
+    assert full[0].shape == (1, height, width)
+    assert np.array_equal(full[0][0], left_object | right_object)
+    assert np.array_equal(tight[0], full[0])
+    assert np.array_equal(tight[1], full[1])
+    assert tight[2] == full[2]
+    assert tight[3] == full[3]
+    assert full[3]["seam_metrics"]["max_merged_discontinuity"] == 1.0
+
+
+def test_sam2_segment_tile_emits_tight_bool_patches_that_merge_like_full_tile_patches(tmp_path):
+    """SAM2Backend.segment_tile keeps each instance's tight bbox only, and the merge result is unchanged."""
+    height, width = 60, 300
+    shifted_left = _rect_mask(height, width, (0, 15), (150, 200))
+    shifted_right = _rect_mask(height, width, (5, 20), (150, 200))
+    sofa = _rect_mask(height, width, (25, 58), (20, 280))
+    cushion = _rect_mask(height, width, (30, 50), (160, 190))
+    left_part = _rect_mask(height, width, (25, 58), (20, 170))
+    right_part = _rect_mask(height, width, (25, 58), (170, 200))
+
+    def masks_for_tile(tile):
+        if tile.bbox.x0 == 0:
+            return [shifted_left, sofa, cushion, left_part, right_part]
+        return [shifted_right, sofa, cushion, left_part | right_part]
+
+    checkpoint = tmp_path / "sam2_test.pt"
+    checkpoint.touch()
+    backend = SAM2Backend(model_size="base", checkpoint_path=str(checkpoint), device="cpu")
+    config = SegmentationTilingConfig(enabled=True, tile_size_px=200, overlap_px=50)
+    manifest = UniformTilingPlanner().plan(
+        image_hash="abc", W=width, H=height, config=config, global_hints=None, prompts=None, mode="auto"
+    )
+    tile_results = []
+    for tile in manifest.tiles:
+        crops = [mask[tile.bbox.y0 : tile.bbox.y1, tile.bbox.x0 : tile.bbox.x1] for mask in masks_for_tile(tile)]
+        crops = [crop for crop in crops if crop.any()]
+        tile_seg = SegmentationResult(
+            masks=np.stack(crops),
+            scores=np.full((len(crops),), 0.9, dtype=np.float32),
+            metadata=[MaskMetadata(area=int(crop.sum()), bbox=(0, 0, 1, 1), stability_score=0.9) for crop in crops],
+        )
+        with patch.object(backend, "_segment_auto", return_value=tile_seg):
+            instances = backend.segment_tile(
+                tile_linear=np.zeros((tile.bbox.h, tile.bbox.w, 3), dtype=np.float32),
+                image_hash="abc",
+                tile_spec=tile,
+                mode="auto",
+                prompts=None,
+                global_hints=None,
+                rng_seed=0,
+            )
+        for instance, crop in zip(instances, crops, strict=True):
+            rows, cols = np.nonzero(crop)
+            patch_bbox = instance.soft_mask.bbox
+            assert (patch_bbox.x0, patch_bbox.y0, patch_bbox.x1, patch_bbox.y1) == (
+                cols.min(),
+                rows.min(),
+                cols.max() + 1,
+                rows.max() + 1,
+            )
+            assert instance.soft_mask.values.dtype == np.bool_
+            assert instance.soft_mask.values.base is None  # owns its pixels, not a view of the tile's mask stack
+            assert np.array_equal(
+                instance.soft_mask.values, crop[patch_bbox.y0 : patch_bbox.y1, patch_bbox.x0 : patch_bbox.x1]
+            )
+        tile_results.append(
+            TileSegmentationResult(image_hash="abc", tile_id=tile.tile_id, tile_spec=tile, instances=instances, runtime_s=0.0)
+        )
+
+    tight = BinaryUnionTileMerger().merge(
+        image_hash="abc",
+        W=width,
+        H=height,
+        manifest=manifest,
+        tile_results=tile_results,
+        global_hints=None,
+        merge_config=config.merge,
+    )
+    full = _merge_ground_truth_directly(masks_for_tile, width=width, height=height, tight=False)
+
+    assert np.array_equal(tight[0], full[0])
+    assert np.array_equal(tight[1], full[1])
+    assert tight[2] == full[2]
+    assert tight[3] == full[3]
+
+
+_SEAM_HEIGHT, _SEAM_WIDTH = 60, 700  # tiles of 400 px; with a 50 px overlap: [0, 400) and [350, 700)
+_SEAM_OBJECT_COLS = (360, 390)  # one small object inside the overlap band of the first two tiles
+_SEAM_OBJECT = _rect_mask(_SEAM_HEIGHT, _SEAM_WIDTH, (20, 40), _SEAM_OBJECT_COLS)
+
+
+class _SeamDisagreementBackend:
+    """The first tile and its neighbours place one small object 10 px apart; the two masks still share two thirds.
+
+    The merger joins the pair (IoU 0.5) and the seam validator rejects it (discontinuity 1/3). With
+    ``agree_from_overlap_px`` every tile reports the true object once the tiles overlap that much. The overlap of
+    every tile the engine asks for is recorded.
+    """
+
+    name = "stub"
+    device = "cpu"
+
+    def __init__(self, *, agree_from_overlap_px=None):
+        self._agree_from_overlap_px = agree_from_overlap_px
+        self.overlaps_seen = []
+
+    def global_seed_pass(self, **kwargs):
+        del kwargs
+        return None
+
+    def segment_tile(self, **kwargs):
+        tile_spec = kwargs["tile_spec"]
+        self.overlaps_seen.append(tile_spec.overlap_px)
+        box = tile_spec.bbox
+        col0, col1 = _SEAM_OBJECT_COLS
+        if self._agree_from_overlap_px is None or tile_spec.overlap_px < self._agree_from_overlap_px:
+            shift = -5 if box.x0 == 0 else 5
+            col0, col1 = col0 + shift, col1 + shift
+        crop = _rect_mask(_SEAM_HEIGHT, _SEAM_WIDTH, (20, 40), (col0, col1))[box.y0 : box.y1, box.x0 : box.x1]
+        if not crop.any():
+            return ()
+        return (
+            TileInstance(
+                local_id=f"{tile_spec.tile_id}:0",
+                score=0.9,
+                stability_score=0.9,
+                soft_mask=SoftMaskPatch(bbox=BBox(0, 0, box.w, box.h), values=crop.astype(np.float32), space="prob"),
+            ),
+        )
+
+
+def _seam_config(*, overlap_px=50, validation=None):
+    config = SegmentationTilingConfig(
+        enabled=True, tile_size_px=400, overlap_px=overlap_px, validation=validation or ValidationConfig()
+    )
+    config.global_pass.enabled = False
+    return config
+
+
+def _run_default_engine_on_seam_object(backend, config):
+    engine = SAM2Backend.__new__(SAM2Backend)._build_default_tiled_engine()
+    return engine.run(
+        backend=backend,
+        seg_input=SegmentationInput(image=np.zeros((_SEAM_HEIGHT, _SEAM_WIDTH, 3), dtype=np.float32), gamma=1.0, mode="auto"),
+        image_hash="abc",
+        config=config,
+    )
+
+
+def test_tiling_retries_with_doubled_overlap_when_seam_validation_fails():
+    """A pair the merger joined but the validator rejects is re-tiled (max_retries=1, auto_increase_overlap)."""
+    backend = _SeamDisagreementBackend(agree_from_overlap_px=100)
+    config = _seam_config()
+
+    result = _run_default_engine_on_seam_object(backend, config)
+
+    # Two tiles at the configured 50 px, then [0, 400) and [300, 700) at 100 px.
+    assert backend.overlaps_seen == [50, 50, 100, 100]
+    assert result.masks.shape == (1, _SEAM_HEIGHT, _SEAM_WIDTH)
+    assert np.array_equal(result.masks[0], _SEAM_OBJECT)
+    assert config.overlap_px == 50
+
+
+def test_tiling_releases_the_rejected_attempt_before_the_retry_segments():
+    """The retry must not run while the rejected attempt's (N, H, W) mask stack is still referenced."""
+
+    class _RecordingMerger(BinaryUnionTileMerger):
+        def __init__(self):
+            self.mask_stacks = []
+
+        def merge(self, **kwargs):
+            merged = super().merge(**kwargs)
+            self.mask_stacks.append(weakref.ref(merged[0]))
+            return merged
+
+    class _RetryObservingBackend(_SeamDisagreementBackend):
+        def __init__(self, merger):
+            super().__init__(agree_from_overlap_px=100)
+            self._merger = merger
+            self.rejected_stack_alive_during_retry = []
+
+        def segment_tile(self, **kwargs):
+            if kwargs["tile_spec"].overlap_px == 100:
+                self.rejected_stack_alive_during_retry.append(self._merger.mask_stacks[0]() is not None)
+            return super().segment_tile(**kwargs)
+
+    merger = _RecordingMerger()
+    backend = _RetryObservingBackend(merger)
+    engine = TiledSegmentationEngine(planner=UniformTilingPlanner(), merger=merger, validator=SeamMergeValidator())
+
+    result = engine.run(
+        backend=backend,
+        seg_input=SegmentationInput(image=np.zeros((_SEAM_HEIGHT, _SEAM_WIDTH, 3), dtype=np.float32), gamma=1.0, mode="auto"),
+        image_hash="abc",
+        config=_seam_config(),
+    )
+
+    assert len(merger.mask_stacks) == 2
+    assert backend.rejected_stack_alive_during_retry == [False, False]
+    assert np.array_equal(result.masks[0], _SEAM_OBJECT)
+
+
+def test_tiling_fails_closed_when_seam_validation_retries_are_exhausted():
+    backend = _SeamDisagreementBackend()
+
+    with pytest.raises(
+        RuntimeError,
+        match=r"SAM2 tiling validation failed after 1 retry \(overlap_px 50 -> 100\): .*0\.333 exceeds threshold 0\.250",
+    ):
+        _run_default_engine_on_seam_object(backend, _seam_config())
+
+    assert backend.overlaps_seen == [50, 50, 100, 100]
+
+
+def test_tiling_retry_overlap_stops_at_half_the_tile_size():
+    backend = _SeamDisagreementBackend()
+
+    with pytest.raises(RuntimeError, match=r"SAM2 tiling validation failed after 2 retries \(overlap_px 50 -> 200\): "):
+        _run_default_engine_on_seam_object(backend, _seam_config(validation=ValidationConfig(max_retries=5)))
+
+    assert backend.overlaps_seen == [50] * 2 + [100] * 2 + [200] * 3
+
+
+@pytest.mark.parametrize(
+    ("overlap_px", "validation", "tiles"),
+    [
+        (50, ValidationConfig(max_retries=0), 2),
+        (50, ValidationConfig(auto_increase_overlap=False), 2),
+        (200, ValidationConfig(), 3),
+    ],
+    ids=["no-retries-allowed", "overlap-increase-disabled", "overlap-already-half-the-tile"],
+)
+def test_tiling_does_not_repeat_an_identical_tiling_after_seam_validation_fails(overlap_px, validation, tiles):
+    backend = _SeamDisagreementBackend()
+
+    with pytest.raises(RuntimeError, match=r"SAM2 tiling validation failed: SAM2 tiling seam discontinuity"):
+        _run_default_engine_on_seam_object(backend, _seam_config(overlap_px=overlap_px, validation=validation))
+
+    assert backend.overlaps_seen == [overlap_px] * tiles
+
+
+def test_tiling_returns_the_merged_pair_without_retry_when_seam_validation_is_disabled():
+    backend = _SeamDisagreementBackend()
+
+    result = _run_default_engine_on_seam_object(backend, _seam_config(validation=ValidationConfig(enabled=False)))
+
+    assert backend.overlaps_seen == [50, 50]
+    assert result.masks.shape == (1, _SEAM_HEIGHT, _SEAM_WIDTH)
+
+
+@pytest.mark.parametrize(
+    ("width", "height", "expected"),
+    [
+        (1536, 1536, [(0, 0, 1536, 1536)]),
+        (1281, 1281, [(0, 0, 1281, 1281)]),
+        (2816, 1536, [(0, 0, 1536, 1536), (1280, 0, 2816, 1536)]),
+        (2817, 1300, [(0, 0, 1536, 1300), (1280, 0, 2816, 1300), (2560, 0, 2817, 1300)]),
+    ],
+    ids=["exactly-one-tile", "one-pixel-past-the-stride", "two-tiles-reach-the-edge", "edge-tile-still-needed"],
+)
+def test_planner_stops_at_the_first_tile_that_reaches_the_image_edge(width, height, expected):
+    """No tile lies wholly inside an earlier one (the 1x1 px and 256 px slivers past the edge tile)."""
+    config = SegmentationTilingConfig(enabled=True)  # 1536 px tiles, 256 px overlap, stride 1280
+    manifest = UniformTilingPlanner().plan(
+        image_hash="abc", W=width, H=height, config=config, global_hints=None, prompts=None, mode="auto"
+    )
+
+    assert [(t.bbox.x0, t.bbox.y0, t.bbox.x1, t.bbox.y1) for t in manifest.tiles] == expected
+    assert [t.tile_id for t in manifest.tiles] == [f"tile_{i}" for i in range(len(expected))]
+    covered = np.zeros((height, width), dtype=bool)
+    for tile in manifest.tiles:
+        covered[tile.bbox.y0 : tile.bbox.y1, tile.bbox.x0 : tile.bbox.x1] = True
+    assert covered.all()
 
 
 def test_stable_image_hash_is_deterministic_for_identical_input(tmp_path):

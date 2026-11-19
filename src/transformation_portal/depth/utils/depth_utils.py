@@ -13,7 +13,7 @@ import logging
 from typing import List, Optional, Tuple
 
 import numpy as np
-from scipy.ndimage import gaussian_filter, sobel
+from scipy.ndimage import gaussian_filter, median_filter, sobel
 
 try:
     import matplotlib
@@ -190,22 +190,33 @@ def create_depth_zones(
         boundaries = np.linspace(depth.min(), depth.max(), num_zones + 1)
 
     elif method == "log":
-        # Logarithmic quantization (more zones in foreground)
-        log_depth = np.log(depth + 1e-8)
+        # Logarithmic quantization (more zones in foreground). Zero/negative
+        # depth (always present after min-max normalisation) is floored at the
+        # smallest positive depth so it cannot stretch the log range to
+        # log(1e-8) and collapse every real pixel into the last zone.
+        positive = depth[depth > 0]
+        floor = positive.min() if positive.size else 0.0
+        log_depth = np.log(np.maximum(depth, floor) + 1e-8)
         log_boundaries = np.linspace(log_depth.min(), log_depth.max(), num_zones + 1)
         boundaries = np.exp(log_boundaries)
 
     else:
         raise ValueError(f"Unknown zoning method: {method}")
 
-    # Create hard zone masks
+    # Create hard zone masks. The first and last zones are open-ended so that
+    # every pixel lands in exactly one zone even when a boundary does not
+    # coincide with the data extremes (e.g. the log boundaries carry +1e-8).
     zone_masks = []
     for i in range(num_zones):
         lower = boundaries[i]
         upper = boundaries[i + 1]
 
-        if i == num_zones - 1:
-            mask = (depth >= lower) & (depth <= upper)
+        if num_zones == 1:
+            mask = ~np.isnan(depth)
+        elif i == 0:
+            mask = depth < upper
+        elif i == num_zones - 1:
+            mask = depth >= lower
         else:
             mask = (depth >= lower) & (depth < upper)
 
@@ -258,17 +269,25 @@ def smooth_depth(
 
         smoothed = cv2.bilateralFilter(depth_uint8, d=d, sigmaColor=sigma_color, sigmaSpace=sigma_space)
 
-        return smoothed.astype(np.float32) / 255.0
+        # Map back to the input's depth range (identity for depth already
+        # spanning exactly [0, 1]) instead of returning renormalised data.
+        lo = float(depth.min())
+        span = float(depth.max()) - lo
+        return smoothed.astype(np.float32) / 255.0 * np.float32(span) + np.float32(lo)
 
     elif method == "median":
         if not CV2_AVAILABLE:
             logger.warning("cv2 not available, falling back to gaussian smoothing")
             return gaussian_filter(depth, sigma=sigma)
 
-        # Median filter
-        ksize = int(sigma * 2) + 1
-        smoothed = cv2.medianBlur(depth, ksize)
-        return smoothed
+        # Median filter. The aperture must be odd; cv2.medianBlur accepts
+        # 16-bit / float32 input only for apertures 3 and 5 (8-bit for any),
+        # so other cases use scipy with replicate borders (identical result).
+        ksize = (int(sigma * 2) + 1) | 1
+        if depth.dtype == np.uint8 or (depth.dtype in (np.uint16, np.int16, np.float32) and ksize <= 5):
+            return cv2.medianBlur(depth, ksize)
+        size = (ksize, ksize) + (1,) * (depth.ndim - 2)
+        return median_filter(depth, size=size, mode="nearest")
 
     else:
         raise ValueError(f"Unknown smoothing method: {method}")
@@ -429,38 +448,53 @@ def inpaint_depth_holes(
         method: Inpainting method ('telea', 'ns')
 
     Returns:
-        Inpainted depth map
+        Inpainted depth map (float32, in the input's depth units; valid
+        pixels are returned unchanged and only holes are filled)
     """
     if not CV2_AVAILABLE:
         logger.warning("cv2 not available, returning depth with holes filled with mean value")
         # Simple fallback: fill holes with mean of valid values
         if mask is None:
-            mask = (depth == 0) | np.isnan(depth)
+            mask = (depth == 0) | ~np.isfinite(depth)
         else:
-            mask = mask.astype(bool)
+            mask = mask.astype(bool) | ~np.isfinite(depth)
         result = depth.copy()
         valid_mean = depth[~mask].mean() if (~mask).any() else 0
         result[mask] = valid_mean
         return result
 
-    # Auto-detect holes
-    if mask is None:
-        mask = ((depth == 0) | np.isnan(depth)).astype(np.uint8)
-    else:
-        mask = mask.astype(np.uint8)
-
-    # Convert to uint8 for OpenCV inpainting
-    depth_uint8 = (normalize_depth(depth) * 255).astype(np.uint8)
-
-    # Inpaint
     if method == "telea":
-        inpainted = cv2.inpaint(depth_uint8, mask, inpaintRadius=3, flags=cv2.INPAINT_TELEA)
+        flags = cv2.INPAINT_TELEA
     elif method == "ns":
-        inpainted = cv2.inpaint(depth_uint8, mask, inpaintRadius=3, flags=cv2.INPAINT_NS)
+        flags = cv2.INPAINT_NS
     else:
         raise ValueError(f"Unknown inpainting method: {method}")
 
-    return inpainted.astype(np.float32) / 255.0
+    # Auto-detect holes; non-finite pixels are always holes.
+    if mask is None:
+        hole = (depth == 0) | ~np.isfinite(depth)
+    else:
+        hole = mask.astype(bool) | ~np.isfinite(depth)
+
+    result = depth.astype(np.float32, copy=True)
+    if not (~hole).any():
+        logger.warning("Depth map has no valid pixels, returning zeros")
+        return np.zeros_like(result)
+
+    # Normalize over the valid pixels only (NaN holes would poison min/max),
+    # inpaint in 8-bit, then map the filled values back to the original range.
+    lo = float(result[~hole].min())
+    hi = float(result[~hole].max())
+    span = hi - lo
+    filled = np.where(hole, lo, result)
+    norm = (filled - lo) / span if span > 1e-8 else np.zeros_like(filled)
+    depth_uint8 = np.clip(norm * 255.0, 0, 255).astype(np.uint8)
+
+    inpainted = cv2.inpaint(depth_uint8, hole.astype(np.uint8), inpaintRadius=3, flags=flags)
+
+    # Valid pixels keep their exact input values; only holes are replaced.
+    result[hole] = inpainted[hole].astype(np.float32) / 255.0 * span + lo
+    return result
 
 
 def create_depth_of_field_map(

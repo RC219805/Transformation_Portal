@@ -153,6 +153,8 @@ class RealTimeMonitor:
         self.timestamps: List[float] = []
         self.processing_times: List[float] = []
         self._start_time = time.time()
+        # Lifetime count of record() calls; the lists above are windowed.
+        self._total_items = 0
 
     def record(self, processing_time: Optional[float] = None) -> None:
         """Record a processing event.
@@ -162,15 +164,17 @@ class RealTimeMonitor:
         """
         now = time.time()
         self.timestamps.append(now)
+        self._total_items += 1
 
         if processing_time is not None:
             self.processing_times.append(processing_time)
 
-        # Keep only recent window
+        # Keep only recent window (each list is windowed on its own length so
+        # records without a processing_time do not evict timed samples).
         if len(self.timestamps) > self.window_size:
             self.timestamps.pop(0)
-            if self.processing_times:
-                self.processing_times.pop(0)
+        if len(self.processing_times) > self.window_size:
+            self.processing_times.pop(0)
 
     @property
     def throughput(self) -> float:
@@ -211,11 +215,13 @@ class RealTimeMonitor:
         """Get current statistics.
 
         Returns:
-            Dictionary with monitoring statistics
+            Dictionary with monitoring statistics. ``items_processed`` is the
+            total number of ``record()`` calls since the monitor was created;
+            ``throughput`` and ``avg_processing_time`` are windowed.
         """
         return {
             "throughput": self.throughput,
             "avg_processing_time": self.avg_processing_time,
             "total_elapsed": self.total_elapsed,
-            "items_processed": len(self.timestamps),
+            "items_processed": self._total_items,
         }

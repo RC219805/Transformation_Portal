@@ -22,6 +22,7 @@ from transformation_portal.lux_depth_v3.preprocessing import (
     DIMENSION_MULTIPLE,
     SUPPORTED_EXTENSIONS,
     preprocess_image,
+    preprocess_image_linear,
     preprocess_image_snapshot,
     validate_image_format,
 )
@@ -489,6 +490,82 @@ class TestPreprocessImage:
         assert result.shape[1] >= DIMENSION_MULTIPLE
 
 
+def _uint16_gray_ramp() -> np.ndarray:
+    # 28x56 keeps dimensions multiples of 14 so no crop/pad alters the samples.
+    return np.tile(np.linspace(0, 65535, 56).round().astype(np.uint16), (28, 1))
+
+
+def _expected_rgb_from_uint16(samples: np.ndarray) -> np.ndarray:
+    gray = ((samples.astype(np.uint32) + 128) // 257).astype(np.uint8)
+    return np.repeat(gray[..., None], 3, axis=2).astype(np.float32) / 255.0
+
+
+class TestHighBitDepthGrayscale:
+    """Regression for LC-03: 16-bit grayscale must be scaled, not clipped to white."""
+
+    @pytest.mark.parametrize("suffix", [".png", ".tif"])
+    def test_uint16_grayscale_file_is_scaled(self, tmp_path, suffix):
+        samples = _uint16_gray_ramp()
+        path = tmp_path / f"gray16{suffix}"
+        Image.fromarray(samples).save(path)
+        with Image.open(path) as opened:
+            assert opened.mode.startswith("I;16")
+
+        legacy, legacy_shape = preprocess_image(path)
+        snapshot, snapshot_shape, _ = preprocess_image_snapshot(path)
+
+        expected = _expected_rgb_from_uint16(samples)
+        assert legacy_shape == snapshot_shape == samples.shape
+        assert np.array_equal(legacy, expected)
+        assert np.array_equal(snapshot, expected)
+        assert 0.45 < float(legacy.mean()) < 0.55
+
+    def test_float_grayscale_tiff_is_rejected_not_blackened(self, tmp_path):
+        path = tmp_path / "grayf32.tif"
+        Image.fromarray(np.tile(np.linspace(0, 1, 56, dtype=np.float32), (28, 1))).save(path)
+
+        with pytest.raises(ValueError, match="Floating-point grayscale"):
+            preprocess_image(path)
+        with pytest.raises(ValueError) as excinfo:
+            preprocess_image_snapshot(path)
+        assert "Floating-point grayscale" in str(excinfo.value.__cause__)
+
+    def test_8bit_grayscale_decode_is_unchanged(self, tmp_path):
+        gray = np.tile(np.arange(56, dtype=np.uint8) * 4, (28, 1))
+        path = tmp_path / "gray8.png"
+        Image.fromarray(gray).save(path)
+
+        result, _ = preprocess_image(path)
+        with Image.open(path) as opened:
+            historical = np.array(opened.convert("RGB"), dtype=np.float32) / 255.0
+        assert np.array_equal(result, historical)
+
+    def test_linear_pil_branch_keeps_uint16_grayscale_precision(self, tmp_path):
+        """LC-03: the APEX linear path's non-TIFF PIL branch divides 16-bit samples by 65535."""
+        samples = _uint16_gray_ramp()
+        path = tmp_path / "gray16.png"
+        Image.fromarray(samples).save(path)
+
+        result, shape = preprocess_image_linear(path, verify_linearity=False, apex_strict_formats=False)
+
+        assert shape == samples.shape
+        expected = samples.astype(np.float32) / 65535.0
+        for channel in range(3):
+            assert np.array_equal(result[..., channel], expected)
+
+    def test_linear_pil_branch_8bit_grayscale_is_unchanged(self, tmp_path):
+        """LC-03: ordinary 8-bit input on the linear PIL branch keeps the historical /255 decode."""
+        gray = np.tile(np.arange(56, dtype=np.uint8) * 4, (28, 1))
+        path = tmp_path / "gray8.png"
+        Image.fromarray(gray).save(path)
+
+        result, _ = preprocess_image_linear(path, verify_linearity=False, apex_strict_formats=False)
+
+        with Image.open(path) as opened:
+            historical = np.array(opened.convert("RGB"), dtype=np.float32) / 255.0
+        assert np.array_equal(result, historical)
+
+
 class TestDimensionEnforcement:
     """Test dimension enforcement edge cases."""
 
@@ -616,6 +693,71 @@ class TestNormalizeExifOrientation:
 
         with pytest.raises(ValueError, match="Invalid image file"):
             normalize_exif_orientation(corrupt_path, output_path)
+
+    @staticmethod
+    def _noisy_jpeg(path: Path, orientation: int | None = None) -> None:
+        pixels = (np.random.default_rng(0).random((48, 72, 3)) * 255).astype(np.uint8)
+        img = Image.fromarray(pixels)
+        if orientation is None:
+            img.save(path, quality=98, subsampling=0)
+        else:
+            exif = Image.Exif()
+            exif[0x0112] = orientation
+            img.save(path, quality=98, subsampling=0, exif=exif.tobytes())
+
+    @pytest.mark.parametrize("orientation", [None, 1])
+    def test_upright_jpeg_is_copied_byte_for_byte(self, tmp_path, orientation):
+        """LC-18: an upright JPEG must be copied, not lossily re-encoded."""
+        from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
+
+        input_path = tmp_path / "upright.jpg"
+        output_path = tmp_path / "out" / "upright.jpg"
+        self._noisy_jpeg(input_path, orientation)
+
+        normalize_exif_orientation(input_path, output_path)
+
+        assert output_path.read_bytes() == input_path.read_bytes()
+
+    def test_upright_jpeg_in_place_is_left_unchanged(self, tmp_path):
+        """LC-18: in-place normalisation of an upright JPEG must not rewrite the file."""
+        from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
+
+        image_path = tmp_path / "upright.jpg"
+        self._noisy_jpeg(image_path)
+        before = hashlib.sha256(image_path.read_bytes()).hexdigest()
+
+        normalize_exif_orientation(image_path, image_path)
+
+        assert hashlib.sha256(image_path.read_bytes()).hexdigest() == before
+
+    @pytest.mark.parametrize("suffix", [".png", ".tif"])
+    def test_upright_non_jpeg_to_new_path_is_written_losslessly(self, tmp_path, suffix):
+        """LC-18 follow-up: the upright non-JPEG branch must not copy from a closed image."""
+        from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
+
+        pixels = (np.random.default_rng(1).random((24, 36, 3)) * 255).astype(np.uint8)
+        input_path = tmp_path / f"upright{suffix}"
+        output_path = tmp_path / "out" / f"upright{suffix}"
+        Image.fromarray(pixels).save(input_path)
+
+        normalize_exif_orientation(input_path, output_path)
+
+        with Image.open(output_path) as out_img:
+            np.testing.assert_array_equal(np.asarray(out_img.convert("RGB")), pixels)
+
+    def test_rotated_jpeg_is_transposed_and_orientation_reset(self, tmp_path):
+        """An orientation-6 JPEG is physically rotated and its tag normalised to 1."""
+        from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation
+
+        input_path = tmp_path / "rotated.jpg"
+        output_path = tmp_path / "normalized.jpg"
+        self._noisy_jpeg(input_path, orientation=6)
+
+        normalize_exif_orientation(input_path, output_path)
+
+        with Image.open(output_path) as out_img:
+            assert out_img.size == (48, 72)
+            assert out_img.getexif().get(0x0112) == 1
 
 
 class TestValidateDepthImageAlignment:

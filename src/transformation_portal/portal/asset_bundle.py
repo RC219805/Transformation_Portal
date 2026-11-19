@@ -289,7 +289,10 @@ def _portal_direct_asset_signature(asset_name: str) -> Tuple[str, int, int]:
     return _portal_asset_signature(PORTAL_ASSET_PATHS[asset_name])
 
 
-@lru_cache(maxsize=16)
+# Keyed by (asset name, file signature): the bound must comfortably exceed the
+# number of manifest assets, otherwise one page load cycles through more names
+# than the cache holds and every lookup re-reads and re-hashes its file.
+@lru_cache(maxsize=256)
 def _build_portal_direct_asset_fingerprint(asset_name: str, _: Tuple[str, int, int]) -> str:
     return _fingerprint_bytes(PORTAL_ASSET_PATHS[asset_name].read_bytes())
 
@@ -401,8 +404,18 @@ def _requested_portal_asset_fingerprint(request: Request) -> str:
     return str(request.query_params.get(PORTAL_ASSET_FINGERPRINT_PARAM, "")).strip()
 
 
+def _constant_time_text_equal(left: str, right: str) -> bool:
+    """Compare client-supplied text in constant time without raising.
+
+    ``hmac.compare_digest`` raises ``TypeError`` for ``str`` operands holding
+    non-ASCII characters, which a percent-decoded query value or a latin-1
+    decoded header can carry; compare the UTF-8 bytes instead.
+    """
+    return hmac.compare_digest(left.encode("utf-8", "surrogatepass"), right.encode("utf-8", "surrogatepass"))
+
+
 def _portal_asset_cache_control(current_fingerprint: str, requested_fingerprint: str) -> str:
-    if requested_fingerprint and hmac.compare_digest(requested_fingerprint, current_fingerprint):
+    if requested_fingerprint and _constant_time_text_equal(requested_fingerprint, current_fingerprint):
         return PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
     return PORTAL_ASSET_CACHE_CONTROL
 
@@ -419,7 +432,7 @@ def _portal_asset_request_etag_matches(request: Request, current_etag: str) -> b
         normalized = candidate.strip()
         if normalized == "*":
             return True
-        if normalized and hmac.compare_digest(normalized, current_etag):
+        if normalized and _constant_time_text_equal(normalized, current_etag):
             return True
     return False
 

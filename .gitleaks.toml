@@ -50,3 +50,11 @@ regexTarget = "secret"
 # These exact public source digests remain byte-verified by the catalog checker.
 regexes = ['''^(?:7194b5cc25808899836fcbd4651b2f93c79616458b3ccca69b49febded7bcde1|4c9265b65315d7b5e19704ec7bbff490d18ba9da06267f9094923e1c6f9f1e7a)$''']
 paths = ['''^docs/governance/documentation_catalog\.json$''']
+
+[[rules.allowlists]]
+description = "Ignore two verified historical inline seed-user test fixtures"
+condition = "AND"
+regexTarget = "line"
+commits = ["7d48f550f184e160b670e0ad915cf38b19294531"]
+paths = ['''^web/secure-landing/tests/seed-frontdoor-user\.test\.mjs$''']
+regexes = ['''"(?:--password=)?a=long\-and\-strong\-passphrase=="''']

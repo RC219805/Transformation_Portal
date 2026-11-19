@@ -86,6 +86,7 @@ from .apex_codes import APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS
 # The XXHASH_AVAILABLE constant is imported from artifact_manager
 from .artifact_manager import (
     XXHASH_AVAILABLE,
+    ArtifactDigestCache,
     ArtifactManager,
     build_artifact_index,
     coerce_output_paths,
@@ -120,6 +121,7 @@ from .config_resolver import (
     build_orchestrator_run_card_config_fingerprint,
     build_pbr_fingerprint_payload,
     build_run_card_config_fingerprint,
+    build_stage_a_inputs_sha256,
     compute_config_fingerprint,
     discover_presets,
     finalize_run_card_config_fingerprint,
@@ -132,6 +134,7 @@ from .depth_writer import atomic_write_depth_u16_png_with_stats
 from .input_discovery import DiscoveryConfig, discover_images
 from .input_manager import ImageInput
 from .io_atomic import (
+    _DEFAULT_NEW_FILE_MODE,
     atomic_temp_file,
     atomic_write_bytes,
     atomic_write_evidence_pair,
@@ -207,6 +210,7 @@ from .pipeline_coordinator import (
     PipelineCoordinator,
     build_active_depth_state,
     build_backend_metadata_for_attempts,
+    build_failed_backend_metadata,
     default_model_id_for_backend,
     derive_model_id_from_backend_instance,
     expected_output_depth_units_for_backend,
@@ -287,6 +291,20 @@ from .execution_lifecycle import (
 from .execution_plan_adapter import LuxExecutionPlanAuthorityError
 
 logger = logging.getLogger(__name__)
+
+# Checkout (or install prefix) that holds this package:
+# <root>/src/transformation_portal/lux_depth_v3/orchestrator.py. Every git
+# revision a run records is read from here, never from the caller's working
+# directory, which may be an unrelated repository.
+_PIPELINE_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+# One wording for the hard failure of an audit-grade (RAW/TIFF) input on a host
+# without exiftool, whether it is found before Stage A or at manifest time.
+_AUDIT_PROVENANCE_EXIFTOOL_REQUIRED = (
+    "Audit-grade provenance for RAW/TIFF requires exiftool."
+    " Install with: apt-get install libimage-exiftool-perl (Ubuntu/Debian)"
+    " or brew install exiftool (macOS)"
+)
 
 
 def _new_batch_id() -> str:
@@ -792,10 +810,7 @@ class EnhanceOrchestrator:
                 "V2 enhancement disabled" + " (PBR-only mode)",
             )
 
-        # Adjusted path logic for
-        # src/transformation_portal/lux_depth_v3
-        repo_root = Path(__file__).resolve().parent.parent.parent.parent
-        git_rev = get_git_revision(repo_root)
+        git_rev = get_git_revision(_PIPELINE_REPO_ROOT)
         self.v3_git = git_rev
         self.v2_git = git_rev
         self.environment = capture_environment()
@@ -863,6 +878,9 @@ class EnhanceOrchestrator:
         self._active_depth_attempts: List[Dict[str, Any]] = []
         self._active_selected_attempt_index: Optional[int] = None
         self._active_run_card_segmentation_metadata: Dict[str, Dict[str, Any]] = {}
+        # File modes of legacy manifests retired by Stage A, restored when the
+        # manifest is rewritten (keyed by manifest path).
+        self._retired_manifest_modes: Dict[str, int] = {}
         self._active_manifest_plan_projector: Optional[_ManifestPlanProjector] = None
         self._active_execution_outcome_payload: Optional[Mapping[str, Any]] = None
         # Serialize prepared-reuse verification. A cache is enabled only after
@@ -3619,6 +3637,10 @@ class EnhanceOrchestrator:
             # Depth Metadata Check
             if not manifest.depth:
                 return False
+            stored_stats = manifest.depth.stats if isinstance(manifest.depth.stats, dict) else {}
+            if stored_stats.get("stage_a_inputs_sha256") != build_stage_a_inputs_sha256(self.config):
+                logger.info("Stage A RAW/postprocessing settings changed or unrecorded - regenerating Stage A")
+                return False
 
             # Defensive output existence check
             if self.verify_outputs:
@@ -3747,6 +3769,13 @@ class EnhanceOrchestrator:
                 if not v2_report_path.exists():
                     logger.debug(f"V2 report missing: {v2_report_path}")
                     return False
+
+            # Defensive output check for the V2 deliverable itself
+            if self.verify_outputs:
+                for v2_output in manifest.v2.output_paths or []:
+                    if not isinstance(v2_output, str) or not v2_output or not os.path.exists(v2_output):
+                        logger.debug(f"V2 output missing: {v2_output}")
+                        return False
 
             # Defensive output check for PBR assets
             if self.verify_outputs and manifest.pbr_assets:
@@ -4000,6 +4029,7 @@ class EnhanceOrchestrator:
                 output_key,
             )
             t0 = time.time()
+            selected_attempt_index: Optional[int] = None
             try:
                 # Phase 2: Check content-addressable depth cache
                 if self.depth_cache:
@@ -4044,7 +4074,8 @@ class EnhanceOrchestrator:
                 depth_map = None
                 depth_validity_metrics = None
                 selected_backend_id = _primary_backend_name
-                selected_attempt_index: Optional[int] = None
+                selected_backend_instance: Optional[Any] = None
+                selected_attempt_index = None
                 native_depth_shape: Optional[tuple[int, int]] = None
                 last_error: Optional[Exception] = None
                 attempt_offset = len(depth_attempts)
@@ -4081,11 +4112,15 @@ class EnhanceOrchestrator:
                     try:
                         cached_depth = None
                         cache_authority: Optional[_DepthCacheAuthority] = None
+                        # The attempt backend stays local to this image.
+                        # ``self.depth_backend`` is the start-up selection that
+                        # every image's chain begins from; rebinding it here
+                        # made one runtime fallback re-home the rest of the
+                        # batch on the fallback backend.
                         backend = self._get_or_create_depth_backend(
                             backend_id,
                         )
                         backend_instance = backend
-                        self.depth_backend = backend
                         attempt_record.update(
                             self._resolve_backend_model_artifact(
                                 backend_id,
@@ -4384,6 +4419,7 @@ class EnhanceOrchestrator:
                         depth_map = native_depth_map
                         depth_validity_metrics = gate_result
                         selected_backend_id = backend_id
+                        selected_backend_instance = backend_instance
                         selected_attempt_index = attempt_slot
                         native_depth_shape = current_shape
                         break
@@ -4497,6 +4533,15 @@ class EnhanceOrchestrator:
                     selected_attempt_index,
                 )
 
+                # Stage A replaces its artifacts in place from here on, but the
+                # manifest describing them is only rewritten at the end of the
+                # image. Retire the previous manifest first so an interrupted
+                # run cannot leave new artifacts beside an old manifest that a
+                # later legacy resume would trust. Prepared reuse is bound to
+                # artifact bytes through its evidence authority instead.
+                if self._prepared_execution is None:
+                    self._retire_legacy_manifest(manifest_path)
+
                 # 2c. Materials V3 Processing (if enabled)
                 if self.materials_v3_engine:
                     (
@@ -4512,6 +4557,11 @@ class EnhanceOrchestrator:
                         **({"geometry_result": geometry_result} if geometry_result is not None else {}),
                     )
 
+                # A float depth left by an earlier run belongs to the depth PNG
+                # about to be replaced; drop it so it is never indexed or
+                # preferred for PBR next to this run's depth.
+                float_depth_path.unlink(missing_ok=True)
+
                 # 3. Write quantized depth (PNG 16-bit)
                 png_depth = result.depth
                 if geometry_result is not None:
@@ -4524,6 +4574,7 @@ class EnhanceOrchestrator:
                     method=self.config.depth_quantization,
                     debug_verify=self.config.verify_depth_writes,
                     compute_encoded_unique_values=self._is_apex_tier(),
+                    depth_units=getattr(result, "depth_units", None),
                     **({"support_mask": geometry_result.transform.support()} if geometry_result is not None else {}),
                 )
                 produced_depth_sha256 = None
@@ -4532,7 +4583,9 @@ class EnhanceOrchestrator:
                     from .geometry_handoff import snapshot_geometry_artifact
 
                     produced_depth_bytes = snapshot_geometry_artifact(depth_path, math.prod(original_shape) * 2 + 1024**2)
-                    normalized_expected, _ = normalize_depth_for_u16_png(png_depth)
+                    normalized_expected, _ = normalize_depth_for_u16_png(
+                        png_depth, depth_units=getattr(result, "depth_units", None)
+                    )
                     expected_u16 = np.rint(normalized_expected * 65535.0).astype(np.uint16)
                     expected_u16[~geometry_result.transform.support()] = 0
                     encoded_expected = expected_u16.astype(np.float32) / 65535.0
@@ -4544,11 +4597,13 @@ class EnhanceOrchestrator:
 
                 # 3b. Save float depth (.npy) for high-precision PBR if enabled
                 if getattr(self.config, "save_float_depth", False):
-                    np.save(str(float_depth_path), result.depth)
+                    with atomic_temp_file(float_depth_path, suffix=".npy") as float_depth_tmp:
+                        np.save(str(float_depth_tmp), result.depth)
                     logger.debug(f"Saved float depth: {float_depth_path}")
 
-                # Capture backend metadata dynamically (ADR-019)
-                _backend = self.depth_backend
+                # Capture backend metadata dynamically (ADR-019) from the
+                # backend that actually produced this image's depth.
+                _backend = selected_backend_instance
                 license_str = (
                     _backend.license_type.value if _backend is not None and hasattr(_backend, "license_type") else "unknown"
                 )
@@ -4622,6 +4677,10 @@ class EnhanceOrchestrator:
                         geometry_result.transform.support().tobytes()
                     ).hexdigest()
                     stats["depth_png_normalization_scope"] = "photographic_support"
+                elif self._prepared_execution is None:
+                    # Legacy reuse binds these depth-shaping settings, which
+                    # the config fingerprint does not carry (see should_skip_depth).
+                    stats["stage_a_inputs_sha256"] = build_stage_a_inputs_sha256(self.config)
                 if depth_validity_metrics:
                     stats["apex_depth_validity"] = depth_validity_metrics
                     shape_context = depth_validity_metrics.get("shape_context")
@@ -4703,7 +4762,21 @@ class EnhanceOrchestrator:
                     raise
                 if self.config.depth_fallback == "fail":
                     raise
-                elif self.config.depth_fallback == "skip":
+                if selected_attempt_index is None and self._prepared_execution is None:
+                    # No backend produced depth: do not carry the start-up
+                    # "success" selection into this image's manifest. Only the
+                    # returned (manifest) selection changes: the active state
+                    # keeps feeding result and error rows the start-up backend,
+                    # which the run-card validator and the prepared evidence
+                    # authority require to be a real candidate. Prepared runs
+                    # are left alone for the same reason; they fail closed at
+                    # final evidence because the depth outputs are required.
+                    active_backend_metadata = build_failed_backend_metadata(
+                        depth_attempts,
+                        self._backend_metadata,
+                        str(self.config.depth_fallback),
+                    )
+                if self.config.depth_fallback == "skip":
                     return (
                         None,
                         0.0,
@@ -4899,15 +4972,16 @@ class EnhanceOrchestrator:
             pbr_dir = self.output_root / "pbr"
             pbr_dir.mkdir(parents=True, exist_ok=True)
 
-            # Derive base name from output_key for consistent artifact naming
-            sanitized_stem = output_key.stem if output_key.suffix else output_key.name
-
+            # An output key is ``<stem>_<ext>_<hash8>`` and carries no file
+            # extension, so its full name is the artifact base name.
+            # ``Path.stem`` would cut a key with an interior dot (input
+            # ``2024.05.01_front.jpg``) before its discriminating hash.
             pbr_paths = write_pbr_maps(
                 normal_map=normal_map,
                 roughness_map=roughness_map,
                 ao_map=ao_map,
                 output_dir=pbr_dir,
-                base_name=sanitized_stem,
+                base_name=output_key.name,
             )
             pbr_write_ms = round((time.perf_counter() - pbr_write_t0) * 1000.0, 3)
 
@@ -4956,7 +5030,8 @@ class EnhanceOrchestrator:
         """Return canonical Materials V3 enhanced path."""
         temp_dir = self.output_root / "temp"
         extension = ".tif" if self.config.output_bit_depth == 16 else ".png"
-        return temp_dir / f"{output_key.stem}" f"_materials_v3_enhanced" f"{extension}"
+        # The key has no extension; ``.stem`` would truncate at an interior dot.
+        return temp_dir / f"{output_key.name}" f"_materials_v3_enhanced" f"{extension}"
 
     def _segmentation_mask_artifact_path(
         self,
@@ -5595,6 +5670,92 @@ class EnhanceOrchestrator:
             recomputed_enhanced_path,
         )
 
+    def _ensure_materials_handoff_for_v2_rerun(
+        self,
+        *,
+        image_input: ImageInput,
+        output_key: Path,
+        depth_path: Path,
+        float_depth_path: Path,
+        manifest_path: Path,
+        skip_depth: bool,
+        materials_v3_result: Optional[dict],
+        materials_v3_runtime_s: float,
+        enhanced_image_path: Optional[Path],
+        prepared_reuse: Optional[_PreparedReuseSnapshot],
+    ) -> tuple[Optional[dict], float, Optional[Path], Optional[bool]]:
+        """Rebuild a missing Materials V3 hand-off before a non-APEX V2 rerun.
+
+        Cached-depth reruns restore Materials V3 metadata from the manifest,
+        but the enhanced hand-off image is a temporary file deleted after the
+        previous run. When V2 then reruns (changed V2 config, ``force_v2``,
+        failed V2), it must not silently consume the un-enhanced source while
+        the manifest still records the applied pixel ops. APEX has its own
+        stricter recovery in ``_ensure_apex_canonical_materials_execution``.
+
+        The fourth element is the V2 skip decision when this method had to
+        take it (``None`` otherwise). The V2 stage must act on that same
+        decision: taking it a second time would re-read the V2 deliverable in
+        prepared mode and could disagree with the hand-off chosen here.
+        """
+        unchanged = (materials_v3_result, materials_v3_runtime_s, enhanced_image_path, None)
+        restored_without_handoff = (
+            enhanced_image_path is None
+            and isinstance(materials_v3_result, dict)
+            and "enhanced_image" not in materials_v3_result
+            and "material_masks" not in materials_v3_result
+        )
+        if (
+            not restored_without_handoff
+            or self._is_apex_materials_gate_enabled()
+            or self._uses_corrected_geometry()
+            or self.materials_v3_engine is None
+            or self.v2_runner is None
+            or not self.config.enable_v2
+            or not depth_path.exists()
+        ):
+            return unchanged
+        skip_v2 = not self.config.force_v2 and self.should_skip_v2(
+            find_v2_report(self.v2_dir, output_key.name),
+            manifest_path,
+            image_input,
+            skip_depth,
+            prepared_reuse=prepared_reuse,
+        )
+        if skip_v2:
+            return materials_v3_result, materials_v3_runtime_s, enhanced_image_path, True
+
+        logger.info(
+            "Depth was reused and V2 will rerun but the Materials V3 hand-off is missing;"
+            " recomputing Materials V3 from cached depth.",
+        )
+        # The restored masks are about to be replaced (or their metadata
+        # dropped): prepared evidence must bind what this run leaves behind,
+        # not the previous batch's carrier of the masks.
+        if prepared_reuse is not None:
+            prepared_reuse.reused_artifact_kinds.discard("materials_v3_masks")
+        depth_for_materials = self._load_cached_depth(depth_path, float_depth_path)
+        if depth_for_materials is None:
+            logger.warning(
+                "Cached depth could not be reloaded for Materials V3 recomputation;"
+                " dropping restored Materials V3 metadata so V2 input and manifest agree.",
+            )
+            return None, 0.0, None, False
+
+        from .preprocessing import preprocess_image, validate_image_format
+
+        validated_path = validate_image_format(image_input.path)
+        preprocessed_array, _ = preprocess_image(validated_path, raw_config=self.config)
+        depth_array = np.asarray(depth_for_materials, dtype=np.float32)
+        recomputed_result, recomputed_runtime_s, recomputed_enhanced_path = self._run_materials_v3_stage(
+            preprocessed_array=preprocessed_array,
+            source_path=image_input.path,
+            depth_map=depth_array,
+            output_key=output_key,
+            artifact_shape=_shape_2d(depth_array),
+        )
+        return recomputed_result, recomputed_runtime_s, recomputed_enhanced_path, False
+
     def _enforce_apex_v2_canonical_input_preflight(
         self,
         *,
@@ -5671,7 +5832,7 @@ class EnhanceOrchestrator:
     ) -> Optional[Path]:
         """Serialize material masks to compressed NPZ file.
 
-        File format: {output_key.stem}_materials_v3_masks.npz
+        File format: {output_key.name}_materials_v3_masks.npz
 
         Args:
             masks: Dictionary mapping material names to binary masks
@@ -5692,8 +5853,9 @@ class EnhanceOrchestrator:
             # Ensure output directory exists
             output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Build mask file path
-            mask_filename = f"{output_key.stem}_materials_v3_masks.npz"
+            # Build mask file path. The key has no extension; ``.stem`` would
+            # truncate at an interior dot and let two inputs share one file.
+            mask_filename = f"{output_key.name}_materials_v3_masks.npz"
             mask_path = output_dir / mask_filename
 
             # Validate mask data before serialization
@@ -5957,6 +6119,7 @@ class EnhanceOrchestrator:
         depth_artifact_sha256: Optional[str] = None,
         geometry_input_sha256: Optional[str] = None,
         native_materials_source: Optional[str] = None,
+        skip_v2_decision: Optional[bool] = None,
     ) -> tuple[dict, float, Optional[Path]]:
         """Stage B: V2 enhancement subprocess.
 
@@ -5971,6 +6134,9 @@ class EnhanceOrchestrator:
                 result with material_masks.
                 If provided, masks are
                 serialized and passed to V2.
+            skip_v2_decision: Skip decision already
+                taken for this image while choosing
+                the V2 input; ``None`` decides here.
 
         Returns:
             Tuple of (v2_result, v2_runtime_s, v2_report_path)
@@ -5985,13 +6151,16 @@ class EnhanceOrchestrator:
             raise LuxExecutionPlanAuthorityError("V2 Materials handoff does not match the returned intermediate path")
 
         v2_report_path = find_v2_report(self.v2_dir, output_key.name)
-        skip_v2 = not self.config.force_v2 and self.should_skip_v2(
-            v2_report_path,
-            manifest_path,
-            image_input,
-            skip_depth,
-            prepared_reuse=prepared_reuse,
-        )
+        if skip_v2_decision is not None:
+            skip_v2 = skip_v2_decision
+        else:
+            skip_v2 = not self.config.force_v2 and self.should_skip_v2(
+                v2_report_path,
+                manifest_path,
+                image_input,
+                skip_depth,
+                prepared_reuse=prepared_reuse,
+            )
 
         if skip_v2:
             logger.info("V2 outputs valid, skipping.")
@@ -6211,6 +6380,33 @@ class EnhanceOrchestrator:
                         cleanup_error,
                     )
 
+    @staticmethod
+    def _is_audit_grade_input(path: Path) -> bool:
+        """Return True for RAW/TIFF inputs, whose provenance requires exiftool."""
+        from .raw_loader import is_raw_file
+
+        return bool(is_raw_file(path)) or path.suffix.lower() in {".tif", ".tiff"}
+
+    def _require_audit_provenance_tooling(self, image_input: ImageInput) -> None:
+        """Fail before any stage runs when RAW/TIFF provenance cannot be captured.
+
+        ``_write_manifest`` is the last per-image step and hard-fails for an
+        audit-grade input on a host without exiftool. Discovering that only
+        there spent the whole depth/Materials/V2 run on every such image and
+        left Stage A outputs behind without a manifest to index them.
+        """
+        if not self._is_audit_grade_input(image_input.path):
+            return
+        from . import provenance as provenance_module
+
+        # Resolved on the module at call time: this is the probe the strict
+        # capture itself records as ``toolchain.exiftool_version``.
+        if provenance_module.get_exiftool_version() is None:
+            logger.error(
+                "Provenance capture failed:" " exiftool not available" " for RAW/TIFF input",
+            )
+            raise RuntimeError(_AUDIT_PROVENANCE_EXIFTOOL_REQUIRED) from ExiftoolNotFoundError("exiftool not found in PATH")
+
     def _write_manifest(
         self,
         manifest_path: Path,
@@ -6262,9 +6458,7 @@ class EnhanceOrchestrator:
 
         # Determine if this is an audit-grade input (RAW or TIFF)
         # Only RAW/TIFF require exiftool for audit trail
-        from .raw_loader import is_raw_file
-
-        is_audit_input = is_raw_file(image_input.path) or image_input.path.suffix.lower() in {".tif", ".tiff"}
+        is_audit_input = self._is_audit_grade_input(image_input.path)
 
         try:
             # Get config fingerprint for provenance
@@ -6298,8 +6492,10 @@ class EnhanceOrchestrator:
                 ),
                 config_fingerprint=config_fp_str,
                 cli_args=cli_args,
-                # Repository root for git SHA
-                repo_root=Path.cwd(),
+                # Git SHA of the pipeline checkout, the same revision the
+                # manifest records as ``repro.v3_git_revision``. The working
+                # directory is the operator's and may be another repository.
+                repo_root=_PIPELINE_REPO_ROOT,
                 require_exiftool=is_audit_input,
                 ingest_profile=str(
                     raw_summary.get("profile", ""),
@@ -6329,15 +6525,7 @@ class EnhanceOrchestrator:
             logger.error(
                 "Provenance capture failed:" " exiftool not available" " for RAW/TIFF input",
             )
-            raise RuntimeError(
-                "Audit-grade provenance for"
-                " RAW/TIFF requires exiftool."
-                " Install with: apt-get"
-                " install"
-                " libimage-exiftool-perl"
-                " (Ubuntu/Debian) or brew"
-                " install exiftool (macOS)"
-            ) from e
+            raise RuntimeError(_AUDIT_PROVENANCE_EXIFTOOL_REQUIRED) from e
         except ProvenanceError as e:
             # Hard fail on provenance error
             logger.error(
@@ -6573,8 +6761,50 @@ class EnhanceOrchestrator:
                 backend_selection=(manifest_backend_selection.to_dict() if manifest_backend_selection is not None else None),
             ),
         )
+        if self._prepared_execution is None:
+            self._restore_retired_manifest_mode(manifest_write_path)
         manifest.write(manifest_write_path)
         return input_sha
+
+    def _retire_legacy_manifest(self, manifest_path: Path) -> None:
+        """Durably remove the previous legacy manifest before Stage A rewrites its artifacts.
+
+        The Stage A writers publish durably, so the removal must be durable
+        too: otherwise a crash could bring the old manifest back beside new
+        artifacts. A non-default file mode is remembered so the rewritten
+        manifest keeps the operator's permissions, as an in-place atomic
+        replacement would.
+        """
+        try:
+            previous_mode = stat.S_IMODE(manifest_path.stat().st_mode)
+        except FileNotFoundError:
+            return
+        if previous_mode != _DEFAULT_NEW_FILE_MODE:
+            retired_modes = self.__dict__.setdefault("_retired_manifest_modes", {})
+            retired_modes[str(manifest_path)] = previous_mode
+        durable_unlink(manifest_path)
+
+    def _restore_retired_manifest_mode(self, manifest_path: Path) -> None:
+        """Give a retired manifest's file mode to the manifest about to be written.
+
+        The atomic writer preserves the mode of an existing destination, so an
+        empty placeholder carrying the remembered mode is created exclusively
+        just before the write; the published manifest is never visible with
+        wider permissions. An empty manifest is not reusable by any resume
+        check, should the process stop between the two steps.
+        """
+        retired_modes = getattr(self, "_retired_manifest_modes", None)
+        previous_mode = retired_modes.pop(str(manifest_path), None) if retired_modes else None
+        if previous_mode is None:
+            return
+        try:
+            descriptor = os.open(manifest_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, previous_mode)
+        except FileExistsError:
+            return
+        try:
+            os.chmod(manifest_path, previous_mode)
+        finally:
+            os.close(descriptor)
 
     def enhance_image(
         self,
@@ -6678,6 +6908,10 @@ class EnhanceOrchestrator:
         self._active_depth_attempts = []
         self._active_selected_attempt_index = None
         prepared_reuse: Optional[_PreparedReuseSnapshot] = None
+
+        # An audit-grade input cannot complete without exiftool: say so before
+        # any stage spends compute or writes outputs no manifest will index.
+        self._require_audit_provenance_tooling(image_input)
 
         # PERFORMANCE FIX (#4): Use pre-computed
         # paths from parallel batch if available
@@ -6793,6 +7027,15 @@ class EnhanceOrchestrator:
                 ),
             )
 
+        # The per-image manifest records an "error" selection when no backend
+        # produced depth (skip / v2-auto recovery). The result dict keeps the
+        # start-up selection because the run-card backend summary is derived
+        # from it and its semantics validator requires a backend for every
+        # successful image.
+        result_backend_metadata = backend_selection_metadata
+        if backend_selection_metadata is not None and backend_selection_metadata.resolution_status == "error":
+            result_backend_metadata = self._backend_metadata
+
         # Handle depth stage failures that return early
         if depth_metadata is None and depth_runtime_s == 0.0 and pbr_assets is None:
             if self.config.depth_fallback == "skip":
@@ -6800,9 +7043,9 @@ class EnhanceOrchestrator:
                     "status": "skipped",
                     "reason": "Depth computation failed",
                     "image": str(image_input.path),
-                    "backend": (backend_selection_metadata.resolved_backend if backend_selection_metadata else None),
+                    "backend": (result_backend_metadata.resolved_backend if result_backend_metadata else None),
                     "fallback_used": bool(
-                        backend_selection_metadata and (backend_selection_metadata.resolution_status != "success")
+                        result_backend_metadata and (result_backend_metadata.resolution_status != "success")
                     ),
                     "attempts": depth_attempts,
                     "selected_attempt_index": None,
@@ -6842,6 +7085,23 @@ class EnhanceOrchestrator:
                 materials_v3_runtime_s=materials_v3_runtime_s,
                 enhanced_image_path=enhanced_image_path,
             )
+            (
+                materials_v3_result,
+                materials_v3_runtime_s,
+                enhanced_image_path,
+                v2_skip_decision,
+            ) = self._ensure_materials_handoff_for_v2_rerun(
+                image_input=processing_image_input,
+                output_key=output_key,
+                depth_path=depth_path,
+                float_depth_path=float_depth_path,
+                manifest_path=manifest_path,
+                skip_depth=skip_depth,
+                materials_v3_result=materials_v3_result,
+                materials_v3_runtime_s=materials_v3_runtime_s,
+                enhanced_image_path=enhanced_image_path,
+                prepared_reuse=prepared_reuse,
+            )
 
         # --- STAGE B: V2 ENHANCEMENT ---
         # Use enhanced image from Materials V3
@@ -6861,6 +7121,11 @@ class EnhanceOrchestrator:
             materials_v3_result=materials_v3_result,
         )
 
+        # Hand the V2 stage the skip decision the Materials hand-off was chosen
+        # under, so the stage neither re-reads the V2 deliverable nor disagrees.
+        v2_decision_kwargs: dict[str, Any] = {}
+        if v2_skip_decision is not None:
+            v2_decision_kwargs["skip_v2_decision"] = v2_skip_decision
         v2_geometry_kwargs: dict[str, Any] = {}
         if self._uses_corrected_geometry() and self.config.enable_v2:
             if depth_metadata is None or not isinstance(depth_metadata.stats, dict):
@@ -6890,6 +7155,7 @@ class EnhanceOrchestrator:
                 materials_v3_result=materials_v3_result,
                 materials_input_path=enhanced_image_path,
                 prepared_reuse=prepared_reuse,
+                **v2_decision_kwargs,
                 **v2_geometry_kwargs,
             )
         v2_result_status = self._normalize_v2_status(v2_result.get("status"))
@@ -6983,10 +7249,10 @@ class EnhanceOrchestrator:
             "status": "ok",
             "image": str(image_input.path),
             "input_sha256": input_sha,
-            "backend": (backend_selection_metadata.resolved_backend if backend_selection_metadata else None),
-            "fallback_used": bool(backend_selection_metadata and (backend_selection_metadata.resolution_status != "success")),
-            "model_id": (backend_selection_metadata.model_id if backend_selection_metadata else None),
-            "device": (backend_selection_metadata.device if backend_selection_metadata else None),
+            "backend": (result_backend_metadata.resolved_backend if result_backend_metadata else None),
+            "fallback_used": bool(result_backend_metadata and (result_backend_metadata.resolution_status != "success")),
+            "model_id": (result_backend_metadata.model_id if result_backend_metadata else None),
+            "device": (result_backend_metadata.device if result_backend_metadata else None),
             "attempts": depth_attempts,
             "selected_attempt_index": selected_attempt_index,
             "depth_path": (str(depth_path) if depth_metadata else None),
@@ -8008,9 +8274,11 @@ class EnhanceOrchestrator:
                         img.path,
                         e,
                     )
+                    # Same row shape as the enhancement error rows: batch
+                    # manifest, run-card inputs and result_summary key on "image".
                     results[index] = {
                         "status": "error",
-                        "image_input": img,
+                        "image": str(img.path),
                         "error": str(e),
                     }
 
@@ -8054,11 +8322,20 @@ class EnhanceOrchestrator:
         depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.png"
         manifest_path = self.manifests_dir / output_key.parent / f"{output_key.name}_combined.json"
 
-        # Check skip logic (uses cached manifest loading from Phase 1)
-        should_skip = not self.config.force_depth and self.should_skip_depth(
-            depth_path,
-            manifest_path,
-            image_input,
+        # Check skip logic (uses cached manifest loading from Phase 1). A
+        # prepared run decides reuse once, at the execution boundary, from the
+        # exact snapshot it then consumes (``_enhance_image_authorized``
+        # overwrites this hint). Building that full snapshot here as well only
+        # re-read and re-hashed the manifest, depth and float artifacts and the
+        # source image, and then threw the result away.
+        should_skip = (
+            not self.config.force_depth
+            and self._prepared_execution is None
+            and self.should_skip_depth(
+                depth_path,
+                manifest_path,
+                image_input,
+            )
         )
         should_skip = self._authorize_legacy_depth_resume(should_skip)
 
@@ -8322,7 +8599,7 @@ class EnhanceOrchestrator:
 
         # Inert scene-group bridge: preserve
         # existing per-image behavior and order.
-        sorted_images = sorted(images)
+        sorted_images = list(images) if prepared is not None else sorted(images)
         scene_groups = build_scene_groups(
             sorted_images,
             dataset_root=input_dir,
@@ -8499,8 +8776,11 @@ class EnhanceOrchestrator:
         batch_manifest_path = self.manifests_dir / f"batch_{batch_id}.json"
         bm.write(batch_manifest_path)
 
-        # Emit run card if enabled
+        # Emit run card if enabled. Prepared batches re-emit the card after
+        # rewriting carriers; share one digest memo so unchanged artifacts are
+        # not re-read and re-hashed for every emission.
         run_card_path: Optional[Path] = None
+        run_card_digest_cache: ArtifactDigestCache = {}
         if self.config.emit_run_card:
             run_card_path = self._emit_run_card(
                 batch_id,
@@ -8511,6 +8791,7 @@ class EnhanceOrchestrator:
                 outliers,
                 batch_manifest_path=batch_manifest_path,
                 requested_backend_defect=batch_requested_backend_defect,
+                artifact_digest_cache=run_card_digest_cache,
             )
 
         if prepared is not None:
@@ -8544,6 +8825,7 @@ class EnhanceOrchestrator:
                     outliers,
                     batch_manifest_path=batch_manifest_path,
                     requested_backend_defect=batch_requested_backend_defect,
+                    artifact_digest_cache=run_card_digest_cache,
                 )
                 if (run_card_path is None) != (indexed_run_card_path is None):
                     # Publication is intentionally non-blocking, so reconcile
@@ -8563,6 +8845,7 @@ class EnhanceOrchestrator:
                             outliers,
                             batch_manifest_path=batch_manifest_path,
                             requested_backend_defect=batch_requested_backend_defect,
+                            artifact_digest_cache=run_card_digest_cache,
                         )
                         if run_card_path is None:
                             # A failed final re-index leaves any earlier file
@@ -9774,11 +10057,24 @@ class EnhanceOrchestrator:
             seen_paths.add(relative_path)
             source_hash = self._normalize_sha256(result.get("input_sha256"))
             if source_hash is None:
-                source_hash = self._compute_or_skip_hash(
-                    input_path,
-                    manifest_exists=False,
-                    for_manifest_write=True,
-                )
+                try:
+                    source_hash = self._compute_or_skip_hash(
+                        input_path,
+                        manifest_exists=False,
+                        for_manifest_write=True,
+                    )
+                except OSError as exc:
+                    if result.get("status") == "ok":
+                        raise
+                    # An input that already failed (e.g. unreadable) is recorded as a
+                    # per-image error; it must not abort run-card assembly for the
+                    # rest of the batch. Like a vanished input, it has no hash record.
+                    logger.warning(
+                        "Run card omits input record for failed image %s: %s",
+                        input_path,
+                        exc,
+                    )
+                    continue
             if source_hash is None:
                 continue
             try:
@@ -10348,6 +10644,8 @@ class EnhanceOrchestrator:
         outliers: List[Dict[str, Any]],
         batch_manifest_path: Optional[Path] = None,
         requested_backend_defect: Optional[str] = None,
+        *,
+        artifact_digest_cache: Optional[ArtifactDigestCache] = None,
     ) -> Optional[Path]:
         """Emit run card for batch reproducibility.
 
@@ -10368,6 +10666,7 @@ class EnhanceOrchestrator:
         artifact_index = _build_artifact_index(
             self.output_root,
             artifact_paths,
+            digest_cache=artifact_digest_cache,
         )
         run_card_version = str(getattr(self.config, "run_card_version", "v1") or "v1").strip().lower()
         if run_card_version not in {"v1", "v2"}:

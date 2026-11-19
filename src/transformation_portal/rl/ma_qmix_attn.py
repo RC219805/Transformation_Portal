@@ -316,23 +316,30 @@ class CentralCriticQMIXAttn:
         embed_dim: int = 64,
         n_heads: int = 4,
         alpha: float = 0.8,
+        global_state_dim: int | None = None,
     ) -> None:
         """Initialize hybrid critic.
 
         Args:
             n_agents: Number of agents
-            state_dim: Global state dimension
+            state_dim: Per-agent state dimension (also the global state
+                dimension unless ``global_state_dim`` is given)
             embed_dim: Embedding dimension
             n_heads: Number of attention heads
             alpha: QMIX weight (1.0 = pure QMIX, 0.0 = pure VDN)
+            global_state_dim: Global state dimension fed to the attention
+                query and QMIX hypernetworks (defaults to ``state_dim``). The
+                package's own encoders produce different widths
+                (``ma_state.get_state_dim()`` vs ``ma_state.get_global_dim()``).
         """
         self.n_agents = n_agents
         self.state_dim = state_dim
+        self.global_state_dim = state_dim if global_state_dim is None else global_state_dim
         self.embed_dim = embed_dim
         self.alpha = alpha
 
         self.embed = AgentEmbed(state_dim, embed_dim)
-        self.mixer = AttnMixer(n_agents, state_dim, embed_dim, n_heads)
+        self.mixer = AttnMixer(n_agents, self.global_state_dim, embed_dim, n_heads)
 
     def forward(
         self,

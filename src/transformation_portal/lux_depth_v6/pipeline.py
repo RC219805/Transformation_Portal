@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.lux_depth_v3.execution_evidence import (
     _pin_output_root,
     _secure_atomic_write_bytes,
@@ -18,7 +17,7 @@ from transformation_portal.lux_depth_v3.execution_evidence import (
 from transformation_portal.lux_depth_v4.io import directory_path
 
 from .color import GradeRecipe, RenderRecipe
-from .evidence import EVIDENCE_SCHEMA, verify_artifacts
+from .evidence import EVIDENCE_SCHEMA, encode_completion, verify_artifacts
 from .plan import GradePlan, PreparedLuxExecutionV6, depth_recipe, digest, processing_identity, source_binding
 from .products import image_products
 from .source import validate_source
@@ -96,7 +95,7 @@ def run(prepared: PreparedLuxExecutionV6, *, cancellation: Callable[[], bool] | 
                         write(relative, data)
                 records.sort(key=lambda item: item["path"])
                 verify_artifacts(root, plan, prepared.source, records, checkpoint=check, completed=False)
-                evidence = canonicalize_json(
+                evidence = encode_completion(
                     {
                         "schema": EVIDENCE_SCHEMA,
                         "plan_sha256": plan.sha256,

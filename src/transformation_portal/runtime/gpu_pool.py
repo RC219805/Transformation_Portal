@@ -152,16 +152,22 @@ class GPUPool:
         """Acquire exclusive access to a GPU device.
 
         Args:
-            timeout: Maximum time to wait in seconds
+            timeout: Maximum time to wait in seconds. ``None`` waits forever;
+                ``0`` (or a negative value) does not wait at all.
             block: If False, raise immediately if no GPU available
 
         Returns:
             GPULease with assigned device
 
         Raises:
-            GPUPoolError: If no GPU available and not blocking/timeout
+            GPUPoolError: If the pool manages no devices (a lease could never
+                be granted), or no GPU became available before the
+                timeout / in non-blocking mode
         """
-        deadline = time.time() + timeout if timeout else None
+        if not self._devices:
+            raise GPUPoolError("No GPU available: the pool manages no devices")
+
+        deadline = time.monotonic() + timeout if timeout is not None else None
 
         with self._condition:
             while not self._available:
@@ -169,7 +175,7 @@ class GPUPool:
                     raise GPUPoolError("No GPU available (non-blocking)")
 
                 if deadline is not None:
-                    remaining = deadline - time.time()
+                    remaining = deadline - time.monotonic()
                     if remaining <= 0:
                         raise GPUPoolError(f"No GPU available (timeout={timeout}s)")
                     self._condition.wait(timeout=remaining)

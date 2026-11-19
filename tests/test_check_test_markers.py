@@ -775,7 +775,7 @@ class TestEdgeCases:
         assert "unit" in functions[0].markers
 
     def test_nested_class(self, tmp_path: Path) -> None:
-        """Only top-level Test classes are scanned (pytest behavior)."""
+        """Nested Test classes are scanned, as pytest collects them (M-25)."""
         content = _src("""
             import pytest
 
@@ -792,9 +792,10 @@ class TestEdgeCases:
         test_file.write_text(content, encoding="utf-8")
 
         functions = scan_file(test_file)
-        # Only outer test method is detected (nested classes not visited)
-        assert len(functions) == 1
-        assert functions[0].name == "TestOuter.test_outer"
+        # pytest collects TestOuter::TestNested::test_nested; the enclosing
+        # class marker applies to the nested class.
+        assert [f.name for f in functions] == ["TestOuter.test_outer", "TestOuter.TestNested.test_nested"]
+        assert all("unit" in f.markers for f in functions)
 
     def test_marker_with_call_syntax(self, tmp_path: Path) -> None:
         """Markers with call syntax are detected: @pytest.mark.unit()."""
@@ -966,3 +967,155 @@ class TestStressDirectoryRequirements:
 
         violation = check_marker_requirements(functions[0])
         assert violation is None
+
+
+# =============================================================================
+# Fail-closed CLI Contract Tests (M-25)
+# =============================================================================
+
+
+def _run_main(monkeypatch: pytest.MonkeyPatch, *argv: str) -> int:
+    """Invoke the checker CLI entry point with an explicit argv."""
+    from transformation_portal.dev.check_test_markers import main
+
+    monkeypatch.setattr("sys.argv", ["check_test_markers.py", *argv])
+    return main()
+
+
+class TestAuditFailsClosed:
+    """An audit that scanned nothing must not report a vacuous pass."""
+
+    def test_missing_tests_root_exits_nonzero(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        missing = tmp_path / "no_such_dir"
+        report = audit_test_directory(missing)
+        assert report.tests_root_missing is True
+        assert _run_main(monkeypatch, "--audit", "--tests-root", str(missing)) == 2
+        assert _run_main(monkeypatch, "--audit", "--strict", "--tests-root", str(missing)) == 2
+
+    def test_tests_root_that_is_a_file_exits_nonzero(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        not_a_dir = tmp_path / "tests"
+        not_a_dir.write_text("", encoding="utf-8")
+        assert _run_main(monkeypatch, "--audit", "--tests-root", str(not_a_dir)) == 2
+
+    def test_root_without_test_files_exits_nonzero(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "conftest.py").write_text("", encoding="utf-8")
+        assert audit_test_directory(tests_dir).files_scanned == 0
+        assert _run_main(monkeypatch, "--audit", "--strict", "--tests-root", str(tests_dir)) == 2
+
+    def test_marked_tree_still_passes(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_ok.py").write_text(
+            _src("""
+            import pytest
+
+            pytestmark = pytest.mark.unit
+
+            def test_one():
+                pass
+            """),
+            encoding="utf-8",
+        )
+        assert audit_test_directory(tests_dir).files_scanned == 1
+        assert _run_main(monkeypatch, "--audit", "--strict", "--tests-root", str(tests_dir)) == 0
+
+
+class TestUnparseableFilesAreViolations:
+    """A test file whose markers cannot be validated must not pass the gate."""
+
+    def test_check_files_flags_syntax_error(self, tmp_path: Path) -> None:
+        broken = tmp_path / "test_broken.py"
+        broken.write_text("def test_unmarked(:\n    pass\n", encoding="utf-8")
+
+        violations = check_files([broken])
+
+        assert len(violations) == 1
+        assert violations[0].name == "<module>"
+        assert violations[0].lineno == 1
+        assert "syntax error" in violations[0].issue
+
+    def test_check_files_flags_undecodable_source(self, tmp_path: Path) -> None:
+        binary = tmp_path / "test_binary.py"
+        binary.write_bytes(b"\xff\xfe\x00def test_x():\n    pass\n")
+
+        violations = check_files([binary])
+
+        assert len(violations) == 1
+        assert "cannot validate markers" in violations[0].issue
+
+    def test_precommit_mode_exits_nonzero(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        broken = tmp_path / "test_broken.py"
+        broken.write_text("def test_unmarked(:\n    pass\n", encoding="utf-8")
+        assert _run_main(monkeypatch, str(broken)) == 1
+
+    def test_audit_counts_unparseable_and_strict_fails(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_ok.py").write_text(
+            _src("""
+            import pytest
+
+            pytestmark = pytest.mark.unit
+
+            def test_one():
+                pass
+            """),
+            encoding="utf-8",
+        )
+        (tests_dir / "test_broken.py").write_text("def test_unmarked(:\n    pass\n", encoding="utf-8")
+
+        report = audit_test_directory(tests_dir)
+
+        assert report.unparseable_files == 1
+        assert [v.file_path.name for v in report.violations] == ["test_broken.py"]
+        assert _run_main(monkeypatch, "--audit", "--strict", "--tests-root", str(tests_dir)) == 1
+        # Without --strict the audit stays advisory.
+        assert _run_main(monkeypatch, "--audit", "--tests-root", str(tests_dir)) == 0
+
+
+class TestNestedTestClasses:
+    """Methods of nested Test classes are checked like any other test (M-25)."""
+
+    def test_unmarked_nested_method_is_a_violation(self, tmp_path: Path) -> None:
+        nested = tmp_path / "test_nested.py"
+        nested.write_text(
+            _src("""
+            class TestOuter:
+                class TestInner:
+                    def test_unmarked(self):
+                        pass
+            """),
+            encoding="utf-8",
+        )
+
+        violations = check_files([nested])
+
+        assert [v.name for v in violations] == ["TestOuter.TestInner.test_unmarked"]
+
+    def test_nested_markers_accumulate_and_helpers_are_ignored(self, tmp_path: Path) -> None:
+        nested = tmp_path / "test_nested_markers.py"
+        nested.write_text(
+            _src("""
+            import pytest
+
+            @pytest.mark.unit
+            class TestOuter:
+                @pytest.mark.slow
+                class TestInner:
+                    @pytest.mark.regression
+                    def test_deep(self):
+                        pass
+
+                class Helper:
+                    def test_not_collected(self):
+                        pass
+            """),
+            encoding="utf-8",
+        )
+
+        functions = scan_file(nested)
+
+        assert [f.name for f in functions] == ["TestOuter.TestInner.test_deep"]
+        assert functions[0].markers == frozenset({"unit", "slow", "regression"})

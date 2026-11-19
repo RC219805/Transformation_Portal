@@ -183,3 +183,16 @@ class TestSyntheticBackendFallbackPolicy:
 
         # Depth should vary (not collapsed to constant)
         assert result.depth_map.std() > 0.01, "Depth should have variation"
+
+    def test_uint16_array_maps_full_range_without_wrapping(self):
+        """A monotone 16-bit ramp must stay monotone instead of wrapping modulo 256."""
+        backend = SyntheticDepthBackend()
+        ramp = np.tile(np.linspace(0, 65535, 512).astype(np.uint16), (4, 1))
+        image = np.stack([ramp] * 3, axis=-1)
+
+        result = backend.compute(image)
+
+        expected = np.rint(image.astype(np.float32) / 257.0).astype(np.uint8)
+        assert np.array_equal(result.original_image, expected)
+        luminance_row = result.original_image[0, :, 0].astype(np.int32)
+        assert (np.diff(luminance_row) >= 0).all()

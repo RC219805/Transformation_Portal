@@ -212,3 +212,93 @@ class TestDepthCacheWriter:
         assert loaded is not None
         assert loaded.depth_units == "meters"
         assert np.allclose(loaded.depth_map, enhanced_depth)
+
+
+def _relative(value: float) -> DepthResult:
+    return DepthResult(
+        depth_map=np.full((4, 6), value, dtype=np.float32),
+        original_image=np.zeros((4, 6, 3), dtype=np.uint8),
+        depth_units="relative",
+    )
+
+
+def _metric(value: float, **kwargs) -> DepthResult:
+    return DepthResult(
+        depth_map=np.full((4, 6), value, dtype=np.float32),
+        original_image=np.zeros((4, 6, 3), dtype=np.uint8),
+        depth_units="meters",
+        backend_id="depth_pro",
+        **kwargs,
+    )
+
+
+@pytest.mark.regression
+class TestDepthCacheWriterIntegrity:
+    """Regression tests for audit finding D-08."""
+
+    def test_metric_entry_without_input_size_reads_back(self, tmp_path):
+        writer = DepthCacheWriter(tmp_path / "cache")
+        writer.write("k", _metric(3.5, focal_length_px=500.0))
+
+        loaded = writer.read("k")
+
+        assert loaded is not None
+        assert loaded.input_size is None
+        assert loaded.focal_length_px == 500.0
+        assert float(loaded.depth_map[0, 0]) == 3.5
+
+    def test_relative_rewrite_is_not_shadowed_by_stale_metric_entry(self, tmp_path):
+        cache_dir = tmp_path / "cache"
+        writer = DepthCacheWriter(cache_dir)
+        writer.write("k", _metric(3.5, input_size=(4, 6)))
+        writer.write("k", _relative(0.25))
+
+        loaded = writer.read("k")
+
+        assert loaded is not None
+        assert loaded.depth_units == "relative"
+        assert float(loaded.depth_map[0, 0]) == 0.25
+        assert sorted(p.name for p in cache_dir.iterdir()) == ["k.npy"]
+
+    def test_metric_rewrite_removes_stale_relative_entry(self, tmp_path):
+        cache_dir = tmp_path / "cache"
+        writer = DepthCacheWriter(cache_dir)
+        writer.write("k", _relative(0.25))
+        writer.write("k", _metric(3.5, input_size=(4, 6)))
+
+        assert sorted(p.name for p in cache_dir.iterdir()) == ["k.json", "k.npz"]
+        writer.delete("k")
+        assert writer.read("k") is None
+
+    @pytest.mark.parametrize("bad_key", ["../escaped", "sub/escaped", "/abs", "..", ".", "", "a\\b", "a\x00b"])
+    def test_cache_key_cannot_escape_cache_dir(self, tmp_path, bad_key):
+        cache_dir = tmp_path / "cache"
+        writer = DepthCacheWriter(cache_dir)
+
+        with pytest.raises(ValueError, match="Invalid depth cache key"):
+            writer.write(bad_key, _relative(0.25))
+        for method in (writer.read, writer.exists, writer.delete):
+            with pytest.raises(ValueError, match="Invalid depth cache key"):
+                method(bad_key)
+        assert not (tmp_path / "escaped.npy").exists()
+        assert list(cache_dir.iterdir()) == []
+
+    @pytest.mark.parametrize("suffix", [".npy", ".npz"])
+    def test_truncated_entry_is_dropped_on_read(self, tmp_path, suffix):
+        cache_dir = tmp_path / "cache"
+        writer = DepthCacheWriter(cache_dir)
+        (cache_dir / f"k{suffix}").write_bytes(b"\x93NUMPY\x01\x00")
+
+        assert writer.exists("k")
+        assert writer.read("k") is None
+        assert not writer.exists("k")
+        assert list(cache_dir.iterdir()) == []
+
+    def test_writes_leave_no_temp_files(self, tmp_path):
+        cache_dir = tmp_path / "cache"
+        writer = DepthCacheWriter(cache_dir)
+        writer.write("rel", _relative(0.5))
+        writer.write("met", _metric(2.0, input_size=(4, 6), field_of_view_deg=60.0))
+
+        assert sorted(p.name for p in cache_dir.iterdir()) == ["met.json", "met.npz", "rel.npy"]
+        assert writer.read("met").field_of_view_deg == 60.0

@@ -110,8 +110,8 @@ def get_mime_type(path: Union[str, Path]) -> Optional[str]:
     mime_map = {
         "JPEG": "image/jpeg",
         "PNG": "image/png",
-        "TIFF": "image/tif",
-        "GIF": "image/gi",
+        "TIFF": "image/tiff",
+        "GIF": "image/gif",
         "BMP": "image/bmp",
         "WEBP": "image/webp",
         "ICO": "image/x-icon",
@@ -166,6 +166,20 @@ def validate_image_integrity(path: Union[str, Path]) -> Tuple[bool, Optional[str
         return False, f"Cannot open image: {str(e)}"
     except Exception as e:
         return False, f"Unexpected error: {str(e)}"
+
+
+def _tiff_bits_per_sample(path: Path) -> Optional[int]:
+    """Return the BitsPerSample of the first TIFF page, or None if unknown."""
+    if not HAS_TIFFFILE:
+        return None
+    try:
+        with tifffile.TiffFile(path) as tif:
+            bits = tif.pages[0].bitspersample
+    except Exception:
+        return None
+    if isinstance(bits, tuple):
+        bits = max(bits) if bits else None
+    return int(bits) if bits else None
 
 
 def get_image_metadata(path: Union[str, Path]) -> Dict[str, Any]:
@@ -230,6 +244,12 @@ def get_image_metadata(path: Union[str, Path]) -> Dict[str, Any]:
                 "I;16LS": 16,
             }
             metadata["bit_depth"] = mode_bit_depth.get(img.mode, 8)
+            if img.format == "TIFF":
+                # Pillow opens 16-bit RGB TIFFs as 8-bit "RGB"; the mode
+                # does not carry the stored sample depth, BitsPerSample does.
+                tiff_bits = _tiff_bits_per_sample(path_obj)
+                if tiff_bits is not None:
+                    metadata["bit_depth"] = tiff_bits
 
             # Try to get EXIF data
             try:
@@ -302,7 +322,7 @@ def convert_image_format(
                 save_kwargs["subsampling"] = 0  # Best quality
             elif output_ext == ".webp":
                 save_kwargs["quality"] = quality
-            elif output_ext in {".ti", ".tiff"}:
+            elif output_ext in {".tif", ".tiff"}:
                 save_kwargs["compression"] = "tiff_lzw"  # Good lossless compression
             elif output_ext == ".png":
                 save_kwargs["compress_level"] = 6  # Balance speed/size
@@ -366,7 +386,7 @@ def batch_convert_directory(
 
     # Get all image files
     pattern = "**/*" if recursive else "*"
-    image_extensions = {".jpg", ".jpeg", ".png", ".ti", ".tif", ".bmp", ".webp", ".gif"}
+    image_extensions = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp", ".gif"}
 
     for input_file in input_dir.glob(pattern):
         if not input_file.is_file():
@@ -441,7 +461,7 @@ def smart_convert(
 
     # Handle 16-bit preservation
     if preserve_bit_depth and metadata.get("bit_depth") == 16:
-        if output_ext in {".ti", ".tif", ".png"}:
+        if output_ext in {".tif", ".tiff", ".png"}:
             # Use specialized converter for formats that support 16-bit (TIFF/PNG)
             return convert_tiff_preserve_depth(input_path, output_path)
 
@@ -460,6 +480,9 @@ def check_tifffile_available() -> bool:
         True if tifffile is available, False otherwise
     """
     return HAS_TIFFFILE
+
+
+_TIFF_COMPRESSION_ALIASES = {"zip": "zlib"}
 
 
 def save_tiff_16bit(
@@ -499,11 +522,15 @@ def save_tiff_16bit(
         if metadata:
             tiff_metadata.update(metadata)
 
-        # Save with tifffile
+        # Save with tifffile (map the documented 'zip' alias to Adobe Deflate,
+        # TIFF compression code 8, which tifffile names 'zlib')
+        tiff_compression = (
+            _TIFF_COMPRESSION_ALIASES.get(compression.lower(), compression) if isinstance(compression, str) else compression
+        )
         tifffile.imwrite(
             output_path,
             image_array,
-            compression=compression,
+            compression=tiff_compression,
             metadata=tiff_metadata,
             photometric="rgb" if image_array.ndim == 3 else "minisblack",
         )
@@ -582,11 +609,40 @@ def convert_tiff_preserve_depth(input_path: Union[str, Path], output_path: Union
     if array is None:
         return False
 
-    if bit_depth == 16 and HAS_TIFFFILE:
+    output_ext = Path(output_path).suffix.lower()
+    if bit_depth == 16 and output_ext == ".png":
+        return _save_png_16bit(array, output_path)
+    if bit_depth == 16 and HAS_TIFFFILE and output_ext in {".tif", ".tiff"}:
         return save_tiff_16bit(array, output_path, compression)
-    else:
-        # Fallback to PIL for 8-bit
-        return convert_image_format(input_path, output_path)
+    # Fallback to PIL for 8-bit input or formats without a 16-bit writer
+    return convert_image_format(input_path, output_path)
+
+
+def _save_png_16bit(array: "np.ndarray", output_path: Union[str, Path]) -> bool:
+    """Write a uint16 greyscale, RGB or RGBA array as a 16-bit PNG."""
+    output_path = Path(output_path)
+    try:
+        if array.dtype != np.uint16:
+            raise ValueError(f"expected uint16 data, got {array.dtype}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if array.ndim == 2:
+            Image.fromarray(array).save(output_path, format="PNG")
+            return True
+        if array.ndim == 3 and array.shape[2] in (3, 4):
+            # Pillow cannot write 16-bit colour PNGs; OpenCV (core dependency)
+            # can, and expects BGR(A) channel order.
+            import cv2  # pylint: disable=import-outside-toplevel
+
+            code = cv2.COLOR_RGB2BGR if array.shape[2] == 3 else cv2.COLOR_RGBA2BGRA
+            ok, encoded = cv2.imencode(".png", cv2.cvtColor(array, code))
+            if not ok:
+                raise ValueError("OpenCV failed to encode the PNG")
+            output_path.write_bytes(encoded.tobytes())
+            return True
+        raise ValueError(f"unsupported array shape for PNG: {array.shape}")
+    except Exception as e:
+        warnings.warn(f"Failed to save 16-bit PNG: {str(e)}")
+        return False
 
 
 def get_tiff_compression_info(path: Union[str, Path]) -> Optional[str]:

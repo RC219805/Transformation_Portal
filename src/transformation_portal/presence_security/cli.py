@@ -40,7 +40,21 @@ def cmd_anchor(args: argparse.Namespace) -> None:
     print("Anchor payload written:", out_path)
 
 
+# LSB payloads only survive lossless, non-palettised encoders; JPEG/WebP/GIF
+# output would silently destroy the watermark. Every Pillow format listed here
+# stores 8-bit RGB exactly with the default save options this command uses
+# (JPEG 2000 defaults to its reversible transform).
+_LSB_LOSSLESS_FORMATS = frozenset({"PNG", "BMP", "DIB", "TIFF", "PPM", "TGA", "PCX", "SGI", "IM", "QOI", "DDS", "JPEG2000"})
+
+
 def cmd_watermark(args: argparse.Namespace) -> None:
+    if args.mode == "lsb":
+        out_format = Image.registered_extensions().get(Path(args.out).suffix.lower())
+        if out_format not in _LSB_LOSSLESS_FORMATS:
+            raise SystemExit(
+                f"presence-security: --mode lsb requires a lossless output format "
+                f"({', '.join(sorted(_LSB_LOSSLESS_FORMATS))}); refusing to write {args.out!r}"
+            )
     with Image.open(args.image) as handle:
         img = handle.convert("RGB")
     manifest_bytes = Path(args.manifest).read_bytes()

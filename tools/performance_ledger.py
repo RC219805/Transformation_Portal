@@ -30,11 +30,12 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import platform
 import random
 import sys
 import warnings
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -252,16 +253,28 @@ def extract_backends(manifests: List[Dict[str, Any]]) -> List[str]:
     """Extract backend identifiers from manifests."""
     backends = []
     for manifest in manifests:
-        depth_meta = manifest.get("depth", {})
+        depth_meta = manifest.get("depth")
+        if depth_meta is None:
+            # No depth metadata means the run failed. extract_timings() counts it against the
+            # success rate; it has no backend, so it must not be reported as a backend mismatch.
+            continue
         backend = depth_meta.get("model", "unknown")
         backends.append(backend)
     return backends
+
+
+def _validate_finite_statistics(statistics: Statistics, label: str) -> None:
+    for metric, value in asdict(statistics).items():
+        if value is not None and not math.isfinite(value):
+            raise ValueError(f"{label} statistic {metric} must be finite")
 
 
 def compute_statistics(timings: List[float], bootstrap_iterations: int = 1000, enable_bootstrap: bool = True) -> Statistics:
     """Compute runtime statistics with optional bootstrap CI."""
     if not timings:
         raise ValueError("No timings provided")
+    if not all(math.isfinite(timing) for timing in timings):
+        raise ValueError("Manifest timings must be finite")
 
     if HAS_NUMPY:
         timings_array = np.array(timings)
@@ -290,7 +303,7 @@ def compute_statistics(timings: List[float], bootstrap_iterations: int = 1000, e
     if enable_bootstrap and bootstrap_iterations > 0:
         bootstrap_ci_lower, bootstrap_ci_upper = _bootstrap_confidence_interval(timings, iterations=bootstrap_iterations)
 
-    return Statistics(
+    statistics = Statistics(
         count=len(timings),
         mean_sec=mean_val,
         median_sec=median_val,
@@ -304,6 +317,8 @@ def compute_statistics(timings: List[float], bootstrap_iterations: int = 1000, e
         bootstrap_ci_95_lower=bootstrap_ci_lower,
         bootstrap_ci_95_upper=bootstrap_ci_upper,
     )
+    _validate_finite_statistics(statistics, "Computed")
+    return statistics
 
 
 def capture_environment() -> EnvironmentMetadata:
@@ -384,11 +399,18 @@ def detect_regressions(
     baseline: Baseline, current_stats: Statistics, thresholds: Dict[str, float], strict: bool = False
 ) -> List[Regression]:
     """Compare current stats against baseline and detect regressions."""
+    _validate_finite_statistics(baseline.statistics, "Baseline")
+    _validate_finite_statistics(current_stats, "Current")
+    if not all(math.isfinite(value) for value in thresholds.values()):
+        raise ValueError("Regression thresholds must be finite")
     regressions = []
+
+    # Strict mode also reports a slowdown below the threshold ("potential regression"). An unchanged
+    # or faster metric is never a regression, strict or not.
 
     # Check p95 regression
     p95_change_pct = ((current_stats.p95_sec - baseline.statistics.p95_sec) / baseline.statistics.p95_sec) * 100.0
-    if strict or p95_change_pct > thresholds["p95_worsening_pct"]:
+    if p95_change_pct > thresholds["p95_worsening_pct"] or (strict and p95_change_pct > 0):
         status = "regression" if p95_change_pct > thresholds["p95_worsening_pct"] else "potential_regression"
         regressions.append(
             Regression(
@@ -403,7 +425,7 @@ def detect_regressions(
 
     # Check mean regression
     mean_change_pct = ((current_stats.mean_sec - baseline.statistics.mean_sec) / baseline.statistics.mean_sec) * 100.0
-    if strict or mean_change_pct > thresholds["mean_worsening_pct"]:
+    if mean_change_pct > thresholds["mean_worsening_pct"] or (strict and mean_change_pct > 0):
         status = "regression" if mean_change_pct > thresholds["mean_worsening_pct"] else "potential_regression"
         regressions.append(
             Regression(
@@ -536,6 +558,7 @@ def load_baseline(path: Path) -> Baseline:
 
 def save_baseline(baseline: Baseline, path: Path):
     """Save baseline to JSON file."""
+    _validate_finite_statistics(baseline.statistics, "Baseline")
     path.parent.mkdir(parents=True, exist_ok=True)
 
     # Convert to dict and filter None values for cleaner JSON

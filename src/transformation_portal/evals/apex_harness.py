@@ -29,6 +29,7 @@ Example:
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -122,7 +123,9 @@ class ApexEvaluationHarness:
             prompt_spec_builder: Optional builder for dimension-specific VLM prompts
             threshold: Pass/fail threshold (0.0-1.0)
             metric_weight: Weight for metric scores vs VLM (0.0-1.0)
-            fail_on_vlm_error: If True, fail evaluation on VLM errors
+            fail_on_vlm_error: If True, a VLM error fails the evaluation (passes=False)
+                whatever the combined score; if False, the VLM is skipped and the
+                metrics alone decide
         """
         self.llava_backend = llava_backend
         self.metric_fns = metric_fns or []
@@ -159,10 +162,15 @@ class ApexEvaluationHarness:
         # Combine scores
         combined_score = self._combine_scores(metric_avg, vlm_result)
 
+        # fail_on_vlm_error: a VLM error fails the gate outright. Blending the error's
+        # 0.0 VLM score by weight is not enough, since a high enough metric_weight
+        # times the metric average would still clear the threshold.
+        vlm_error_fails = bool(self.fail_on_vlm_error and "error" in vlm_result and not vlm_result.get("skipped", False))
+
         # Build result
         result = EvalResult(
             score=combined_score,
-            passes=combined_score >= self.threshold,
+            passes=combined_score >= self.threshold and not vlm_error_fails,
             metric_scores={r.name: r.score for r in metric_results},
             vlm_score=vlm_result.get("score", 0.0),
             vlm_issues=vlm_result.get("issues", []),
@@ -174,6 +182,7 @@ class ApexEvaluationHarness:
                     "vlm": self.vlm_weight,
                 },
                 "threshold": self.threshold,
+                "vlm_error_fails": vlm_error_fails,
             },
         )
 
@@ -201,9 +210,21 @@ class ApexEvaluationHarness:
 
         for fn in self.metric_fns:
             try:
-                score = fn(image_paths)
+                score = float(fn(image_paths))
+                if not math.isfinite(score):
+                    # Fail closed: ``min(1.0, nan)`` is 1.0, so a NaN/inf score
+                    # must never reach the clamp below and read as perfect.
+                    logger.warning("Metric %s returned a non-finite score: %r", fn.__name__, score)
+                    results.append(
+                        EvalMetricResult(
+                            name=fn.__name__,
+                            score=0.0,
+                            metadata={"error": f"non-finite metric score: {score!r}"},
+                        )
+                    )
+                    continue
                 # Clamp to valid range
-                score = max(0.0, min(1.0, float(score)))
+                score = max(0.0, min(1.0, score))
 
                 results.append(
                     EvalMetricResult(
@@ -272,7 +293,7 @@ class ApexEvaluationHarness:
                 context=context,
             )
 
-            return {
+            vlm_payload: dict[str, Any] = {
                 "score": result.summary_score,
                 "passes": result.passes_basic_quality,
                 "issues": [
@@ -286,6 +307,14 @@ class ApexEvaluationHarness:
                 "raw_text": result.raw_text,
                 "model_key": result.model_key,
             }
+            # An unparseable VLM answer comes back as a result with parse_error set
+            # (score 0.0) instead of an exception. Under fail_on_vlm_error it is a VLM
+            # error like any other and must fail the gate, not be blended by weight.
+            parse_error = getattr(result, "parse_error", None)
+            if self.fail_on_vlm_error and isinstance(parse_error, str) and parse_error:
+                logger.error("VLM response could not be parsed: %s", parse_error)
+                vlm_payload["error"] = f"VLM response could not be parsed: {parse_error}"
+            return vlm_payload
 
         except Exception as exc:
             logger.error("VLM evaluation failed: %s", exc)
@@ -344,6 +373,10 @@ def sharpness_metric(image_paths: list[Path]) -> float:
     for path in image_paths:
         img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
         if img is None:
+            # Fail closed: a missing or unreadable deliverable scores 0 instead of
+            # being dropped from the average.
+            logger.warning("Unreadable image scored 0.0: %s", path)
+            scores.append(0.0)
             continue
 
         # Laplacian variance
@@ -374,6 +407,10 @@ def contrast_metric(image_paths: list[Path]) -> float:
     for path in image_paths:
         img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
         if img is None:
+            # Fail closed: a missing or unreadable deliverable scores 0 instead of
+            # being dropped from the average.
+            logger.warning("Unreadable image scored 0.0: %s", path)
+            scores.append(0.0)
             continue
 
         # Standard deviation as contrast measure
@@ -403,6 +440,10 @@ def brightness_metric(image_paths: list[Path]) -> float:
     for path in image_paths:
         img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
         if img is None:
+            # Fail closed: a missing or unreadable deliverable scores 0 instead of
+            # being dropped from the average.
+            logger.warning("Unreadable image scored 0.0: %s", path)
+            scores.append(0.0)
             continue
 
         mean_val = float(np.mean(img))

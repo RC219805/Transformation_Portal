@@ -24,6 +24,12 @@ Implementation notes:
   while streaming the body. Both GET metadata and observed bytes enforce
   ``ARTIFACT_FINGERPRINT_MAX_BYTES``; a larger replacement object cannot
   bypass the budget. Size disagreement reports an unavailable fingerprint.
+- A fingerprint is observed once per stored object version, not once per
+  lookup: it is remembered against the version the hashed ``GetObject``
+  response described (ETag, size, LastModified, VersionId), and a later
+  ``HeadObject`` naming that same version is answered without another
+  download. S3 objects never change in place, so a rewritten object always
+  names a new version and is hashed again.
 - Object metadata sets ``Content-Type`` and presigned GET URLs can
   carry response-header overrides so signed delivery preserves the
   orchestrator's artifact response semantics.
@@ -61,6 +67,8 @@ from transformation_portal.portal.job_artifacts import ARTIFACT_FINGERPRINT_MAX_
 
 _CHUNK_BYTES = 1024 * 1024
 _DEFAULT_PREFIX = "tp/artifacts"
+_FINGERPRINT_MEMO_ENTRIES = 4096
+_ObjectVersion = tuple[str, int, str, str]
 _NATIVE_MODEL_BYTES = 4 * 1024**2
 _NATIVE_MODEL_NODES = 65536
 
@@ -77,6 +85,19 @@ def _normalize_prefix(prefix: str) -> str:
 
 def _content_type_for(relative_path: str) -> str:
     return _artifact_content_type(Path(relative_path))
+
+
+def _object_version(response: Any) -> Optional[_ObjectVersion]:
+    """Identify the immutable stored object a HeadObject/GetObject response describes.
+
+    Without an ETag and a size the version cannot be told apart from a
+    rewrite, so such a response never matches a remembered fingerprint.
+    """
+    etag = response.get("ETag")
+    size = response.get("ContentLength")
+    if not isinstance(etag, str) or not etag or not isinstance(size, int) or isinstance(size, bool) or size < 0:
+        return None
+    return etag, size, str(response.get("LastModified") or ""), str(response.get("VersionId") or "")
 
 
 def _load_boto3() -> Any:
@@ -544,6 +565,8 @@ class S3ArtifactStore(ArtifactStore):
         self._region_name = region_name or None
         self._client = client
         self._lock = asyncio.Lock()
+        # Bounded: object key -> (version whose bytes were hashed, its SHA-256).
+        self._fingerprints: OrderedDict[str, tuple[_ObjectVersion, str]] = OrderedDict()
         self._native_publication_root: Path | None = None
         self._native_publication_stat: tuple[int, int] | None = None
         if isinstance(photographic_publication_root, Path) and photographic_publication_root.is_absolute():
@@ -694,7 +717,7 @@ class S3ArtifactStore(ArtifactStore):
             sha256_hex = None
             status = "skipped_size"
         else:
-            sha256_hex, status = await self._stream_sha256(client, key, expected_size_bytes=size_bytes)
+            sha256_hex, status = await self._stream_sha256(client, key, expected_size_bytes=size_bytes, head=head)
 
         return ArtifactObjectMetadata(
             relative_path=_normalize_relative_path(relative_path),
@@ -774,7 +797,7 @@ class S3ArtifactStore(ArtifactStore):
                     sha256_hex = None
                     status = "skipped_size"
                 else:
-                    sha256_hex, status = await self._stream_sha256(client, key, expected_size_bytes=size_bytes)
+                    sha256_hex, status = await self._stream_sha256(client, key, expected_size_bytes=size_bytes, head=head)
                 results.append(
                     ArtifactObjectMetadata(
                         relative_path=normalized_relative,
@@ -923,7 +946,10 @@ class S3ArtifactStore(ArtifactStore):
                 kwargs = {"Bucket": self._bucket, "Prefix": prefix}
                 if continuation:
                     kwargs["ContinuationToken"] = continuation
-                response = await asyncio.to_thread(client.list_objects_v2, **kwargs)
+                try:
+                    response = await asyncio.to_thread(client.list_objects_v2, **kwargs)
+                except Exception as exc:  # noqa: BLE001 - boto3 ClientError
+                    raise ArtifactStoreError(f"S3 list_objects_v2 failed for {prefix}") from exc
                 keys = [{"Key": entry["Key"]} for entry in (response.get("Contents", []) or [])]
                 if keys:
                     # ``delete_objects`` accepts up to 1000 keys per call.
@@ -961,6 +987,7 @@ class S3ArtifactStore(ArtifactStore):
         (``pytest-xdist``) and shared-tenant buckets stay isolated.
         """
         client = await self._get_client()
+        self._fingerprints.clear()
         prefix = f"{self._prefix}/jobs/"
         continuation: Optional[str] = None
         while True:
@@ -980,11 +1007,17 @@ class S3ArtifactStore(ArtifactStore):
                 break
 
     async def _delete_object_batch(self, client: Any, batch: List[dict[str, str]]) -> int:
-        response = await asyncio.to_thread(
-            client.delete_objects,
-            Bucket=self._bucket,
-            Delete={"Objects": batch, "Quiet": False},
-        )
+        try:
+            response = await asyncio.to_thread(
+                client.delete_objects,
+                Bucket=self._bucket,
+                Delete={"Objects": batch, "Quiet": False},
+            )
+        except Exception as exc:  # noqa: BLE001 - boto3 ClientError
+            # A request-level failure (bucket gone since the listing, access
+            # denied on the call, endpoint error) is the store's own error,
+            # like the per-key failures reported in ``Errors`` below.
+            raise ArtifactStoreError(f"S3 delete_objects failed for {len(batch)} keys under {self._prefix}") from exc
         errors = response.get("Errors", []) or []
         if errors:
             sample = ", ".join(f"{error.get('Key', '<unknown>')}:{error.get('Code', '<unknown>')}" for error in errors[:3])
@@ -992,7 +1025,34 @@ class S3ArtifactStore(ArtifactStore):
         deleted = response.get("Deleted", []) or []
         return len(deleted)
 
-    async def _stream_sha256(self, client: Any, key: str, *, expected_size_bytes: int) -> tuple[Optional[str], str]:
+    def _remembered_sha256(self, key: str, head: Any) -> Optional[str]:
+        """Return the fingerprint already observed for exactly the version ``head`` names."""
+        version = _object_version(head)
+        remembered = self._fingerprints.get(key)
+        if version is None or remembered is None or remembered[0] != version:
+            return None
+        self._fingerprints.move_to_end(key)
+        return remembered[1]
+
+    def _remember_sha256(self, key: str, response: Any, sha256_hex: str) -> None:
+        # The identity comes from the response whose body was hashed, so a
+        # rewrite between HeadObject and GetObject cannot be remembered under
+        # the older version.
+        version = _object_version(response)
+        if version is None:
+            return
+        self._fingerprints[key] = (version, sha256_hex)
+        self._fingerprints.move_to_end(key)
+        while len(self._fingerprints) > _FINGERPRINT_MEMO_ENTRIES:
+            self._fingerprints.popitem(last=False)
+
+    async def _stream_sha256(
+        self, client: Any, key: str, *, expected_size_bytes: int, head: Any = None
+    ) -> tuple[Optional[str], str]:
+        if head is not None:
+            remembered = self._remembered_sha256(key, head)
+            if remembered is not None:
+                return remembered, "ok"
         try:
             response = await asyncio.to_thread(client.get_object, Bucket=self._bucket, Key=key)
         except Exception as exc:  # noqa: BLE001 - boto3 ClientError
@@ -1034,7 +1094,9 @@ class S3ArtifactStore(ArtifactStore):
                     await asyncio.to_thread(close)
                 except Exception:  # noqa: BLE001 - best-effort
                     pass
-        return digest.hexdigest(), "ok"
+        sha256_hex = digest.hexdigest()
+        self._remember_sha256(key, response, sha256_hex)
+        return sha256_hex, "ok"
 
     def _file_sha256(self, path: Path, size_bytes: Optional[int]) -> tuple[Optional[str], str]:
         if size_bytes is None:

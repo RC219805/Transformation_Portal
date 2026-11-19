@@ -667,6 +667,42 @@ class TestStageExecution:
         with Image.open(result.output_path) as processed:
             assert processed.width >= 64  # Should be upscaled
 
+    def test_upscaling_4k_fallback_never_shrinks(self, pipeline_module, monkeypatch):
+        """D-22: an image already at target width must not be downscaled to fit."""
+        monkeypatch.setattr(pipeline_module, "HAS_4K_PIPELINE", False)
+        pipeline = pipeline_module.UnifiedPipeline(
+            {"name": "Upscale Test", "stages": ["upscaling_4k"], "quality_feedback": {"enabled": False}}
+        )
+        wide = Image.new("RGB", (4000, 2000))
+        assert pipeline._apply_upscaling_4k(wide, {}).size == (4000, 2000)
+        small = Image.new("RGB", (1920, 1080))
+        assert pipeline._apply_upscaling_4k(small, {}).size == (3840, 2160)
+
+    def test_depth_estimation_does_not_retain_depth_maps(self, pipeline_module, monkeypatch):
+        """D-23: the depth stage must not keep one depth map per processed image."""
+        calls = []
+
+        class StubDepthProcessor:
+            def __init__(self, device="cpu"):
+                pass
+
+            def estimate_depth(self, image):
+                calls.append(image.size)
+                return np.zeros((image.height, image.width), np.float32)
+
+        depth_module = _create_stub_module(
+            "transformation_portal.depth.depth_processor", {"DepthProcessor": StubDepthProcessor}
+        )
+        monkeypatch.setitem(sys.modules, "transformation_portal.depth.depth_processor", depth_module)
+        pipeline = pipeline_module.UnifiedPipeline(
+            {"name": "Depth Test", "stages": ["depth_estimation"], "quality_feedback": {"enabled": False}}
+        )
+        images = [Image.new("RGB", (32, 24), (i, i, i)) for i in range(3)]
+        for image in images:
+            assert pipeline._apply_depth_estimation(image, {}) is image
+        assert calls == [(32, 24)] * 3
+        assert not hasattr(pipeline, "_depth_maps")
+
     def test_unknown_stage_skipped(self, pipeline_module, sample_input_image, caplog):
         """Test unknown stage is skipped with warning logged."""
         # Create a minimal recipe with a known stage
@@ -938,6 +974,142 @@ class TestBatchProcessing:
         assert observed["max_workers"] == 5
         assert create_calls == 1
 
+    @staticmethod
+    def _write_solid(path: Path, color: tuple[int, int, int]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (16, 12), color=color).save(path)
+
+    @staticmethod
+    def _output_colors(batch_result) -> dict[str, tuple[int, int, int]]:
+        colors: dict[str, tuple[int, int, int]] = {}
+        for result in batch_result.results:
+            with Image.open(result.output_path) as output:
+                colors[result.input_path.name] = output.convert("RGB").getpixel((0, 0))
+        return colors
+
+    @pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
+    def test_batch_same_stem_different_extension_writes_distinct_outputs(
+        self, pipeline_module, minimal_recipe, tmp_path: Path, parallel: bool
+    ):
+        """Inputs that share a stem must not overwrite each other's output."""
+        input_dir = tmp_path / "inputs"
+        self._write_solid(input_dir / "a.bmp", (200, 10, 10))
+        self._write_solid(input_dir / "a.png", (10, 200, 10))
+        self._write_solid(input_dir / "b.png", (10, 10, 200))
+        output_dir = tmp_path / "outputs"
+
+        pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
+        batch_result = pipeline.process_batch(str(input_dir / "*"), output_dir, parallel=parallel, max_workers=2)
+
+        assert batch_result.successful_count == 3
+        assert batch_result.failed_count == 0
+        output_names = {result.input_path.name: result.output_path.name for result in batch_result.results}
+        assert output_names == {
+            "a.bmp": "a.bmp_test_pipeline.png",
+            "a.png": "a.png_test_pipeline.png",
+            # The input that never collided keeps its historical name byte for byte.
+            "b.png": "b_test_pipeline.png",
+        }
+        assert sorted(path.name for path in output_dir.iterdir()) == sorted(output_names.values())
+        # Every output holds the pixels of its own input, not a sibling's.
+        assert self._output_colors(batch_result) == {
+            "a.bmp": (200, 10, 10),
+            "a.png": (10, 200, 10),
+            "b.png": (10, 10, 200),
+        }
+
+    def test_batch_same_name_in_different_directories_writes_distinct_outputs(
+        self, pipeline_module, minimal_recipe, tmp_path: Path
+    ):
+        """A glob that matches the same file name in several directories keeps every output."""
+        renders = tmp_path / "renders"
+        self._write_solid(renders / "kitchen" / "final.png", (200, 10, 10))
+        self._write_solid(renders / "lounge" / "final.png", (10, 200, 10))
+        output_dir = tmp_path / "outputs"
+
+        pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
+        batch_result = pipeline.process_batch(str(renders / "*" / "final.png"), output_dir)
+
+        assert batch_result.successful_count == 2
+        assert [result.output_path.name for result in batch_result.results] == [
+            "kitchen_final.png_test_pipeline.png",
+            "lounge_final.png_test_pipeline.png",
+        ]
+        with Image.open(output_dir / "kitchen_final.png_test_pipeline.png") as kitchen:
+            assert kitchen.getpixel((0, 0)) == (200, 10, 10)
+        with Image.open(output_dir / "lounge_final.png_test_pipeline.png") as lounge:
+            assert lounge.getpixel((0, 0)) == (10, 200, 10)
+
+    def test_batch_output_plan_keeps_unique_names_and_never_reuses_a_taken_name(self, pipeline_module, minimal_recipe):
+        """Only colliding inputs are renamed, and never onto a name another input owns."""
+        pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
+        inputs = [
+            Path("shoot/a.jpg"),
+            # Its default name equals the first disambiguation candidate of a.jpg.
+            Path("shoot/a.jpg.png"),
+            Path("shoot/a.png"),
+            Path("shoot/day/final.jpg"),
+            Path("shoot/night/final.jpg"),
+            Path("shoot/night/final.tif"),
+            Path("shoot/unique.tif"),
+        ]
+
+        planned = pipeline._plan_batch_output_names(inputs)
+
+        assert planned == [
+            "a.jpg_2_test_pipeline.png",
+            "a.jpg_test_pipeline.png",
+            "a.png_test_pipeline.png",
+            "day_final.jpg_test_pipeline.png",
+            "night_final.jpg_test_pipeline.png",
+            "night_final.tif_test_pipeline.png",
+            "unique_test_pipeline.png",
+        ]
+        assert len(set(planned)) == len(inputs)
+        # Non-colliding inputs keep exactly the name a single-image run gives them.
+        for index in (1, 6):
+            assert planned[index] == pipeline._get_output_name(inputs[index])
+
+    def test_batch_output_plan_never_reuses_a_taken_name_that_differs_only_in_case(self, pipeline_module, minimal_recipe):
+        """A disambiguated name must not land on a case variant of another input's output.
+
+        On a case-insensitive volume (the macOS default) ``a.JPG_x.png`` and
+        ``a.jpg_x.png`` are one file, so the renamed output would overwrite it.
+        """
+        pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
+        inputs = [
+            Path("shoot/a.JPG"),
+            Path("shoot/a.png"),
+            # Unique default name ``a.jpg_test_pipeline.png``: a case variant of
+            # the first disambiguation candidate of a.JPG.
+            Path("shoot/a.jpg.png"),
+        ]
+
+        planned = pipeline._plan_batch_output_names(inputs)
+
+        assert planned == [
+            "a.JPG_2_test_pipeline.png",
+            "a.png_test_pipeline.png",
+            "a.jpg_test_pipeline.png",
+        ]
+        assert len({name.casefold() for name in planned}) == len(inputs)
+
+    def test_batch_dry_run_previews_the_names_a_real_run_writes(self, pipeline_module, minimal_recipe, tmp_path: Path, caplog):
+        """The dry-run plan must show the disambiguated names, not the colliding default."""
+        input_dir = tmp_path / "inputs"
+        self._write_solid(input_dir / "a.bmp", (200, 10, 10))
+        self._write_solid(input_dir / "a.png", (10, 200, 10))
+
+        pipeline = pipeline_module.UnifiedPipeline(minimal_recipe)
+        with caplog.at_level(logging.INFO, logger="unified_pipeline"):
+            pipeline.process_batch(str(input_dir / "*"), tmp_path / "outputs", dry_run=True)
+
+        preview = [record.getMessage() for record in caplog.records if "→" in record.getMessage()]
+        assert preview == [
+            "  1. a.bmp → a.bmp_test_pipeline.png",
+            "  2. a.png → a.png_test_pipeline.png",
+        ]
+
 
 # =============================================================================
 # Output Generation Tests
@@ -1020,6 +1192,48 @@ class TestOutputGeneration:
 
         assert result.success is True
         assert (tmp_path / "custom_output").exists()
+
+    def test_recipe_name_with_path_separator_stays_in_output_dir(self, pipeline_module, sample_input_image, tmp_path: Path):
+        """D-08: a '/' in the recipe name must not point the output into a missing subdirectory."""
+        recipe = {
+            "name": "Interior/Exterior Blend",
+            "stages": ["color_grading"],
+            "color_grading": {"enabled": True},
+            "quality_feedback": {"enabled": False},
+            "output": {"format": "png"},
+        }
+
+        pipeline = pipeline_module.UnifiedPipeline(recipe)
+        result = pipeline.process_single(sample_input_image, output_dir=tmp_path / "out")
+
+        assert result.success is True
+        assert result.output_path.parent == tmp_path / "out"
+        assert result.output_path.name == "input_interior_exterior_blend.png"
+
+    def test_output_name_unchanged_for_names_without_separators(self, pipeline_module, sample_input_image):
+        """Names that save today keep byte-identical output filenames."""
+        recipe = {"name": "Signature Estate-v2 (Golden)", "stages": ["color_grading"], "output": {"format": "png"}}
+
+        pipeline = pipeline_module.UnifiedPipeline(recipe)
+
+        assert pipeline._get_output_name(sample_input_image) == "input_signature_estate_v2_(golden).png"
+
+    def test_null_sections_are_treated_as_empty(self, pipeline_module, sample_input_image, tmp_path: Path):
+        """D-08: a stage/output/quality section that loads as YAML null must not crash construction."""
+        recipe = {
+            "name": "Null Sections",
+            "stages": ["color_grading"],
+            "color_grading": None,
+            "quality_feedback": {"enabled": False},
+            "output": None,
+        }
+
+        pipeline = pipeline_module.UnifiedPipeline(recipe)
+        result = pipeline.process_single(sample_input_image, output_dir=tmp_path / "out")
+
+        assert result.success is True
+        assert result.stages_executed == ["color_grading"]
+        assert result.output_path.suffix == ".tif"
 
 
 # =============================================================================

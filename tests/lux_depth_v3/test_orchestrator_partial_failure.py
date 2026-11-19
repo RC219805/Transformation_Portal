@@ -503,3 +503,91 @@ class TestResultAggregation:
         runtimes = [r.get("runtime_s", 0.0) for r in results]
         assert len(runtimes) == 3
         assert all(isinstance(rt, (int, float)) for rt in runtimes)
+
+
+def _make_counting_backend(name: str, license_value: str, compute):
+    """Create a named stub backend whose compute calls are observable."""
+    backend = Mock()
+    backend.name = name
+    backend.license_type = Mock(value=license_value)
+    backend.ensure_available.return_value = None
+    backend.compute.side_effect = compute
+    return backend
+
+
+class TestRuntimeFallbackIsPerImage:
+    """A runtime fallback on one image must not re-home the images after it."""
+
+    @staticmethod
+    def _run_four_images(tmp_path: Path, da3_fails_on_call) -> tuple[Any, Dict[str, Any], List[Dict[str, Any]]]:
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+        da3_calls = [0]
+
+        def da3_compute(_image):
+            da3_calls[0] += 1
+            if da3_fails_on_call(da3_calls[0]):
+                raise RuntimeError("simulated DA3 worker failure")
+            return _make_mock_depth_result()
+
+        backends = {
+            "da3": _make_counting_backend("da3", "model_dependent", da3_compute),
+            "da2": _make_counting_backend("da2", "commercial", lambda _image: _make_mock_depth_result()),
+        }
+        registry = Mock()
+        registry.get_backend.side_effect = lambda backend_id, _config: backends[backend_id]
+
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        orchestrator = _create_orchestrator(tmp_path / "output", registry_override=registry, depth_fallback="fail")
+        results = [
+            orchestrator.enhance_image(
+                ImageInput(path=_make_test_image(inputs, f"frame_{index}.png")),
+                input_root=inputs,
+            )
+            for index in range(4)
+        ]
+        return orchestrator, backends, results
+
+    def test_transient_primary_failure_does_not_rehome_later_images(self, tmp_path: Path) -> None:
+        """One DA3 hiccup falls back for that image only; later images start on DA3 again."""
+        import json
+
+        orchestrator, backends, results = self._run_four_images(tmp_path, lambda call: call == 1)
+
+        assert [r["status"] for r in results] == ["ok"] * 4
+        assert [[(a["backend"], a["status"]) for a in r["attempts"]] for r in results] == [
+            [("da3", "failed"), ("da2", "success")],
+            [("da3", "success")],
+            [("da3", "success")],
+            [("da3", "success")],
+        ]
+        assert [r["backend"] for r in results] == ["da2", "da3", "da3", "da3"]
+        assert [r["fallback_used"] for r in results] == [True, False, False, False]
+        assert backends["da3"].compute.call_count == 4
+        assert backends["da2"].compute.call_count == 1
+        # The start-up selection is the anchor of every image's chain.
+        assert orchestrator.depth_backend is backends["da3"]
+
+        expected = [("da2", "fallback", "commercial")] + [("da3", "success", "model_dependent")] * 3
+        for result, (backend_id, resolution_status, license_value) in zip(results, expected):
+            manifest = json.loads(Path(result["manifest"]).read_text(encoding="utf-8"))
+            assert manifest["backend_selection"]["resolved_backend"] == backend_id
+            assert manifest["backend_selection"]["resolution_status"] == resolution_status
+            assert manifest["depth"]["model"] == backend_id
+            # Depth stats describe the backend that produced this image.
+            assert manifest["depth"]["stats"]["backend"] == backend_id
+            assert manifest["depth"]["stats"]["license"] == license_value
+
+    def test_persistent_primary_failure_is_recorded_for_every_image(self, tmp_path: Path) -> None:
+        """A permanently failing DA3 is attempted, and recorded as failed, for every image."""
+        orchestrator, backends, results = self._run_four_images(tmp_path, lambda call: True)
+
+        assert [r["status"] for r in results] == ["ok"] * 4
+        for result in results:
+            assert [(a["backend"], a["status"]) for a in result["attempts"]] == [("da3", "failed"), ("da2", "success")]
+            assert result["backend"] == "da2"
+            assert result["selected_attempt_index"] == 1
+        assert backends["da3"].compute.call_count == 4
+        assert backends["da2"].compute.call_count == 4
+        assert orchestrator.depth_backend is backends["da3"]

@@ -146,6 +146,13 @@ class RLTrainer:
             log_prob: Log probability of action
             value: Value estimate
         """
+        # compute_loss recomputes log-prob and value from the current model, so
+        # the stored copies are informational only. Detach them: otherwise every
+        # replay entry pins its whole autograd graph for the buffer's lifetime.
+        if hasattr(log_prob, "detach"):
+            log_prob = log_prob.detach()
+        if hasattr(value, "detach"):
+            value = value.detach()
         self.buffer.add(
             Transition(
                 state=state,

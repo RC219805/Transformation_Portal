@@ -90,6 +90,7 @@ import logging
 import os
 import re
 import tempfile
+import threading
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -97,7 +98,7 @@ from typing import Any, Dict, Generator, List, Optional
 
 import numpy as np
 
-from ....ingest.canonical_json import dump_json
+from ....ingest.canonical_json import dump_json, dumps_json
 
 # Platform-specific imports (guarded for cross-platform safety)
 try:
@@ -150,6 +151,74 @@ def _is_artifact_temp_name(name: str) -> bool:
         return not SAFE_CACHE_KEY.match(stem)
 
     return False
+
+
+# Reserved payload key recording the Python kind of every stored value, so a
+# cache hit returns the same types as a fresh stage run (a tuple stays a tuple,
+# a list stays a list, a 0-d array stays an array). Entries written before this
+# record existed load with the legacy conversion.
+_VALUE_KINDS_KEY = "__tp_value_kinds__"
+
+
+def _value_kind(value: Any) -> str:
+    """Classify a stage output value for type-faithful restoration on load."""
+    if isinstance(value, np.ndarray):
+        return "ndarray"
+    if isinstance(value, np.generic):
+        return "numpy_scalar"
+    if isinstance(value, (list, tuple)):
+        container = "list" if isinstance(value, list) else "tuple"
+        if value and all(isinstance(item, np.ndarray) for item in value):
+            return f"{container}_of_ndarray"
+        return container
+    return "python_scalar"
+
+
+def _restore_value(arr: np.ndarray, kind: str) -> Any:
+    """Rebuild a stored value from its array and recorded kind."""
+    if kind == "ndarray":
+        return arr
+    if kind == "numpy_scalar":
+        return arr[()]
+    if kind == "python_scalar":
+        return arr.item()
+    if kind == "list":
+        return arr.tolist()
+    if kind == "tuple":
+        return tuple(arr.tolist())
+    if kind == "list_of_ndarray":
+        return [np.array(item) for item in arr]
+    if kind == "tuple_of_ndarray":
+        return tuple(np.array(item) for item in arr)
+    raise ValueError(f"Unknown artifact value kind: {kind!r}")
+
+
+def _same_value(original: Any, restored: Any) -> bool:
+    """Return True when ``restored`` equals ``original`` with the same types."""
+    if type(original) is not type(restored):
+        return False
+    if isinstance(original, np.ndarray):
+        if original.dtype != restored.dtype or original.shape != restored.shape:
+            return False
+        equal_nan = original.dtype.kind in "fcmM"
+        return bool(np.array_equal(original, restored, equal_nan=equal_nan))
+    if isinstance(original, np.generic):
+        # Bitwise, so NaN and NaT scalars compare equal to themselves.
+        return bool(original.dtype == restored.dtype and original.tobytes() == restored.tobytes())
+    if isinstance(original, (list, tuple)):
+        return len(original) == len(restored) and all(_same_value(a, b) for a, b in zip(original, restored))
+    if original != original:  # NaN (float or complex)
+        return bool(restored != restored)
+    return bool(original == restored)
+
+
+def _survives_roundtrip(value: Any, arr: np.ndarray, kind: str) -> bool:
+    """Return True when loading ``arr`` as ``kind`` gives ``value`` back unchanged."""
+    try:
+        return _same_value(value, _restore_value(arr, kind))
+    except (TypeError, ValueError):
+        # e.g. an array-like recorded as a scalar: more than one element to restore
+        return False
 
 
 class CacheLockTimeout(Exception):
@@ -320,6 +389,15 @@ class ArtifactStore:
         self.eviction_policy = eviction_policy
         self.lock_timeout_seconds = lock_timeout_seconds
         self.durable_commits = durable_commits
+
+        # Size accounting for the advisory limit check: a full walk of artifacts/
+        # is taken lazily and then only after as many stores as there were files
+        # in the last walk (amortized O(1) per store); in between, the walk total
+        # is adjusted by the bytes this instance stored or evicted.
+        self._size_lock = threading.Lock()
+        self._size_estimate_bytes: Optional[int] = None
+        self._files_at_last_scan = 0
+        self._stores_since_scan = 0
 
         # Cache statistics
         self.stats_path = self.cache_dir / "stats.json"
@@ -636,23 +714,35 @@ class ArtifactStore:
                 data = np.load(artifact_path, allow_pickle=False)
 
                 # Convert to dict
+                kinds: Optional[Dict[str, str]] = None
+                if _VALUE_KINDS_KEY in data.files:
+                    kinds = json.loads(str(data[_VALUE_KINDS_KEY].item()))
+                    if not isinstance(kinds, dict):
+                        raise ValueError("artifact value kinds record is not an object")
                 result = {}
                 for key in data.files:
+                    if key == _VALUE_KINDS_KEY:
+                        continue
                     value = data[key]
-                    # Handle scalar arrays
-                    if value.shape == ():
+                    if kinds is not None:
+                        result[key] = _restore_value(value, kinds[key])
+                    elif value.shape == ():
+                        # Legacy entry: scalar arrays become Python scalars
                         result[key] = value.item()
                     else:
                         result[key] = value
 
-                # Update stats
-                self._record_cache_hit()
-
-                logger.debug(f"Cache hit: {cache_key}")
-                return result
-
             except Exception as e:
                 raise ValueError(f"Corrupted artifact: {cache_key}") from e
+
+            # Stats bookkeeping must not turn a valid hit into a corruption error.
+            try:
+                self._record_cache_hit()
+            except Exception as e:
+                logger.warning(f"Failed to update cache hit stats for {cache_key}: {e}")
+
+            logger.debug(f"Cache hit: {cache_key}")
+            return result
 
     def store(
         self,
@@ -686,6 +776,10 @@ class ArtifactStore:
             provenance_path = self._provenance_path(cache_key)
             committed_path = self._committed_path(cache_key)
 
+            # Bytes of existing files this write replaces, including a corrupted
+            # marker removed below (size accounting).
+            replaced_bytes = self._entry_bytes(artifact_path, provenance_path, committed_path)
+
             # Idempotency check: if already committed, skip write (Issue #929 correctness)
             # This prevents overwrite hazards when multiple processes compute same key.
             # If crash happens during overwrite, old .committed marker could point to
@@ -705,7 +799,10 @@ class ArtifactStore:
             # Validate and convert artifacts BEFORE entering try/except
             # This ensures dtype validation errors propagate with clear messages
             np_dict: Dict[str, np.ndarray] = {}
+            kinds: Dict[str, str] = {}
             for key, value in artifact.items():
+                if key == _VALUE_KINDS_KEY:
+                    raise ValueError(f"Artifact key '{key}' is reserved by the artifact store")
                 # Convert to numpy array (let NumPy infer dtype)
                 if isinstance(value, np.ndarray):
                     arr = value
@@ -723,7 +820,21 @@ class ArtifactStore:
                         "Supported types: numeric arrays, bool arrays, string arrays, scalars."
                     )
 
+                # A cache hit must return what the stage returned: refuse values
+                # that NumPy conversion would change (e.g. [1, "x"] -> ["1", "x"], an
+                # enum member -> int, "ab\0" -> "ab") or that cannot be rebuilt as
+                # the type they had (a range, a bytearray, any other array-like).
+                kind = _value_kind(value)
+                if kind != "ndarray" and not _survives_roundtrip(value, arr, kind):
+                    raise ValueError(
+                        f"Artifact value for key '{key}' ({type(value).__name__}) does not survive "
+                        "array conversion with its types and values intact and cannot be cached."
+                    )
+
                 np_dict[key] = arr
+                kinds[key] = kind
+
+            np_dict[_VALUE_KINDS_KEY] = np.array(dumps_json(kinds, sort_keys=True))
 
             tmp_artifact_path: Optional[Path] = None
             tmp_prov_path: Optional[Path] = None
@@ -809,6 +920,7 @@ class ArtifactStore:
                 # Best-effort cleanup of renamed-but-uncommitted files
                 artifact_path.unlink(missing_ok=True)
                 provenance_path.unlink(missing_ok=True)
+                self._invalidate_size_estimate()
 
                 raise ValueError(f"Failed to store artifact: {cache_key}") from e
 
@@ -820,9 +932,10 @@ class ArtifactStore:
                 logger.warning(f"Failed to update cache miss stats for {cache_key}: {e}")
 
             logger.debug(f"Stored artifact: {cache_key}")
+            stored_bytes = self._entry_bytes(artifact_path, provenance_path, committed_path) - replaced_bytes
 
-            # Check cache size (warn if over limit)
-            self._check_cache_size()
+        # Check cache size (warn if over limit) after releasing the per-key lock.
+        self._check_cache_size(stored_bytes)
 
     def load_provenance(self, cache_key: str) -> ProvenanceMetadata:
         """Load provenance metadata for artifact with shared lock.
@@ -886,6 +999,7 @@ class ArtifactStore:
             artifact_path = self._artifact_path(cache_key)
             provenance_path = self._provenance_path(cache_key)
             committed_path = self._committed_path(cache_key)
+            removed_bytes = self._entry_bytes(artifact_path, provenance_path, committed_path)
 
             # Remove marker first (ensures readers see entry as uncommitted)
             if committed_path.exists():
@@ -894,6 +1008,10 @@ class ArtifactStore:
                 artifact_path.unlink()
             if provenance_path.exists():
                 provenance_path.unlink()
+
+            with self._size_lock:
+                if self._size_estimate_bytes is not None:
+                    self._size_estimate_bytes -= removed_bytes
 
             logger.debug(f"Evicted artifact: {cache_key}")
 
@@ -908,7 +1026,13 @@ class ArtifactStore:
             temp files while this method walks artifacts/, so vanished entries
             are skipped instead of failing an already committed write.
         """
+        total_size, _ = self._scan_cache_size()
+        return total_size / (1024 * 1024)
+
+    def _scan_cache_size(self) -> tuple[int, int]:
+        """Walk artifacts/ and return (total bytes, file count) of non-temp files."""
         total_size = 0
+        file_count = 0
         for path in self.artifacts_dir.rglob("*"):
             try:
                 if not path.is_file():
@@ -916,9 +1040,10 @@ class ArtifactStore:
                 if _is_artifact_temp_name(path.name):
                     continue
                 total_size += path.stat().st_size
+                file_count += 1
             except OSError:
                 logger.debug("Skipping concurrently removed cache entry during size accounting: %s", path)
-        return total_size / (1024 * 1024)
+        return total_size, file_count
 
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics.
@@ -1153,6 +1278,9 @@ class ArtifactStore:
                 logger.debug(f"Scavenger: skipping locked key {cache_key}")
                 continue
 
+        if report["orphaned_artifacts_removed"] or report["orphaned_provenance_removed"]:
+            self._invalidate_size_estimate()
+
         logger.info(
             f"Scavenger complete: {report['orphaned_artifacts_removed']} orphaned artifacts, "
             f"{report['orphaned_provenance_removed']} orphaned provenance, "
@@ -1253,14 +1381,46 @@ class ArtifactStore:
             self._stats = current_stats
             self._save_stats_atomic()
 
-    def _check_cache_size(self) -> None:
+    @staticmethod
+    def _entry_bytes(*paths: Path) -> int:
+        """Return the summed size of those of the given cache files that exist."""
+        total = 0
+        for path in paths:
+            try:
+                total += path.stat().st_size
+            except OSError:
+                continue
+        return total
+
+    def _invalidate_size_estimate(self) -> None:
+        """Make the next size check walk artifacts/ again."""
+        with self._size_lock:
+            self._size_estimate_bytes = None
+
+    def _check_cache_size(self, stored_bytes: int = 0) -> None:
         """Check cache size and warn if over limit.
+
+        Args:
+            stored_bytes: Net bytes the calling store() just added to artifacts/.
 
         Design notes:
         - L1: Warns only, no auto-eviction.
         - L2: Implements LRU eviction.
+        - Walking artifacts/ on every store made each store O(cache entries).
+          The size is the last full walk plus the net bytes this instance has
+          stored or evicted since; the walk is repeated once more stores have
+          happened than the last walk counted files, so writes by other
+          processes are picked up at amortized O(1) cost per store. Within one
+          process the size equals a full walk.
         """
-        size_mb = self.get_cache_size_mb()
+        with self._size_lock:
+            self._stores_since_scan += 1
+            if self._size_estimate_bytes is None or self._stores_since_scan > self._files_at_last_scan:
+                self._size_estimate_bytes, self._files_at_last_scan = self._scan_cache_size()
+                self._stores_since_scan = 0
+            else:
+                self._size_estimate_bytes += stored_bytes
+            size_mb = self._size_estimate_bytes / (1024 * 1024)
         limit_mb = self.max_size_gb * 1024
 
         if size_mb > limit_mb:

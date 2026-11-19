@@ -274,6 +274,52 @@ class TestArtifactReloadHelpers:
             tmp_path / "segmentation" / "scene" / "image_jpg_abcd1234_materials_v3_masks.npz"
         )
 
+    @pytest.mark.parametrize(
+        ("first", "second"),
+        [
+            ("2024.05.01_front.jpg", "2024.05.01_back.jpg"),
+            ("kitchen.1.jpg", "kitchen.2.jpg"),
+            ("shot.v1.tif", "shot.v2.tif"),
+        ],
+    )
+    def test_segmentation_mask_artifact_path_keeps_keys_with_interior_dots_distinct(
+        self, tmp_path: Path, first: str, second: str
+    ):
+        """Inputs that share the text before their last interior dot keep separate mask artifacts.
+
+        The output key has no extension, so ``Path.stem`` cut it at the last
+        interior dot and dropped the discriminating hash: both inputs mapped
+        to one ``<prefix>_materials_v3_masks.npz``.
+        """
+        from transformation_portal.lux_depth_v3.artifact_manager import make_output_key, segmentation_mask_artifact_path
+
+        input_root = tmp_path / "inputs"
+        segmentation_dir = tmp_path / "segmentation"
+        first_key = make_output_key(input_root / first, input_root)
+        second_key = make_output_key(input_root / second, input_root)
+        assert first_key.stem == second_key.stem, "fixture must exercise the truncating-stem collision"
+
+        first_path = segmentation_mask_artifact_path(segmentation_dir, first_key)
+        second_path = segmentation_mask_artifact_path(segmentation_dir, second_key)
+
+        assert first_path != second_path
+        assert first_path == segmentation_dir / f"{first_key.name}_materials_v3_masks.npz"
+        assert second_path == segmentation_dir / f"{second_key.name}_materials_v3_masks.npz"
+
+    @pytest.mark.parametrize("relative_input", ["image.jpg", "scene1/IMG_0042.png", "a/b/render final.tiff", "noext"])
+    def test_segmentation_mask_artifact_path_is_unchanged_without_interior_dots(self, tmp_path: Path, relative_input: str):
+        """Keys without an interior dot keep exactly the name they always had."""
+        from transformation_portal.lux_depth_v3.artifact_manager import make_output_key, segmentation_mask_artifact_path
+
+        input_root = tmp_path / "inputs"
+        segmentation_dir = tmp_path / "segmentation"
+        key = make_output_key(input_root / relative_input, input_root)
+        assert key.stem == key.name
+
+        assert segmentation_mask_artifact_path(segmentation_dir, key) == (
+            segmentation_dir / key.parent / f"{key.stem}_materials_v3_masks.npz"
+        )
+
 
 class TestMakeOutputKey:
     """Test output key generation."""
@@ -412,6 +458,72 @@ class TestBuildArtifactIndex:
         assert index[0]["relative_path"] == "depth/file.png"
         assert index[1]["relative_path"] == "manifests/file.png"
         assert index[2]["relative_path"] == "v2/file.png"
+
+    @staticmethod
+    def _counting_digests(monkeypatch):
+        import transformation_portal.lux_depth_v3.artifact_manager as artifact_manager
+
+        real_compute = artifact_manager.compute_file_sha256
+        reads: list[Path] = []
+
+        def counting(path, *args, **kwargs):
+            reads.append(Path(path))
+            return real_compute(path, *args, **kwargs)
+
+        monkeypatch.setattr(artifact_manager, "compute_file_sha256", counting)
+        return artifact_manager, reads
+
+    @pytest.mark.regression
+    def test_digest_cache_reuses_unchanged_files_with_identical_index(self, tmp_path: Path, monkeypatch):
+        """A shared digest memo avoids re-hashing settled files and never changes the index."""
+        artifact_manager, reads = self._counting_digests(monkeypatch)
+        monkeypatch.setattr(artifact_manager, "ARTIFACT_DIGEST_REUSE_MARGIN_NS", 0)
+        depth_file = tmp_path / "depth" / "image_depth.png"
+        depth_file.parent.mkdir()
+        depth_file.write_bytes(b"depth bytes")
+
+        uncached = artifact_manager.build_artifact_index(tmp_path, [depth_file])
+        cache: dict = {}
+        first = artifact_manager.build_artifact_index(tmp_path, [depth_file], digest_cache=cache)
+        second = artifact_manager.build_artifact_index(tmp_path, [depth_file], digest_cache=cache)
+
+        assert first == uncached
+        assert second == uncached
+        assert reads.count(depth_file.resolve()) == 2
+
+    @pytest.mark.regression
+    def test_digest_cache_rehashes_changed_files(self, tmp_path: Path, monkeypatch):
+        """A rewrite (new size, mtime or inode) invalidates the memoised digest."""
+        import hashlib
+
+        artifact_manager, reads = self._counting_digests(monkeypatch)
+        monkeypatch.setattr(artifact_manager, "ARTIFACT_DIGEST_REUSE_MARGIN_NS", 0)
+        carrier = tmp_path / "manifests" / "carrier.json"
+        carrier.parent.mkdir()
+        carrier.write_bytes(b"first")
+        cache: dict = {}
+        artifact_manager.build_artifact_index(tmp_path, [carrier], digest_cache=cache)
+
+        carrier.write_bytes(b"second carrier")
+        rewritten = artifact_manager.build_artifact_index(tmp_path, [carrier], digest_cache=cache)
+
+        assert rewritten[0]["sha256"] == hashlib.sha256(b"second carrier").hexdigest()
+        assert reads.count(carrier.resolve()) == 2
+
+    @pytest.mark.regression
+    def test_digest_cache_does_not_memoise_recently_changed_files(self, tmp_path: Path, monkeypatch):
+        """Files changed within the settle margin are always re-hashed (racily-clean guard)."""
+        artifact_manager, reads = self._counting_digests(monkeypatch)
+        fresh = tmp_path / "depth" / "fresh_depth.png"
+        fresh.parent.mkdir()
+        fresh.write_bytes(b"fresh")
+        cache: dict = {}
+
+        artifact_manager.build_artifact_index(tmp_path, [fresh], digest_cache=cache)
+        artifact_manager.build_artifact_index(tmp_path, [fresh], digest_cache=cache)
+
+        assert cache == {}
+        assert reads.count(fresh.resolve()) == 2
 
 
 class TestComputeArtifactMerkleRoot:

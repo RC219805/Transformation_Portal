@@ -111,10 +111,26 @@ def _expand_env_vars_recursive(obj: Any) -> Any:
     return obj
 
 
+_PATH_KEY_WORDS = frozenset({"path", "file", "filename", "dir", "directory", "lut", "logo", "texture"})
+
+
+def _is_path_key(key: str) -> bool:
+    """Return True when ``key`` names a path (its last word is a path word).
+
+    Words merely containing a path word (``profile``, ``logo_text``) do not count;
+    a compound ending in "path" (``filepath``, ``lutpath``) still does.
+    """
+    last_word = re.split(r"[_\-]", key.lower())[-1]
+    return last_word in _PATH_KEY_WORDS or last_word.endswith("path")
+
+
 def _resolve_relative_paths(obj: Any, base_dir: Path) -> Any:
     """Resolve relative paths in a data structure relative to a base directory.
 
-    Only resolves paths for keys containing 'path', 'lut', 'file', or 'dir'.
+    Only resolves paths for keys whose name, or last ``_``/``-`` separated word,
+    is a path word ('path', 'file', 'dir', 'lut', 'logo', ...): ``lut``,
+    ``logo_path`` and ``output_dir`` resolve, while ``profile``, ``logo_text``
+    and ``text_direction`` (which merely contain such a word) are left alone.
 
     Args:
         obj: Any Python object.
@@ -123,12 +139,10 @@ def _resolve_relative_paths(obj: Any, base_dir: Path) -> Any:
     Returns:
         Object with relative paths resolved.
     """
-    path_keys = {"path", "lut", "file", "dir", "logo", "texture"}
-
     if isinstance(obj, dict):
         result = {}
         for k, v in obj.items():
-            if isinstance(v, str) and any(pk in k.lower() for pk in path_keys):
+            if isinstance(v, str) and isinstance(k, str) and _is_path_key(k):
                 # Check if it's a relative path (cross-platform check)
                 if v and not os.path.isabs(v) and not v.startswith("$"):
                     resolved = base_dir / v
@@ -219,6 +233,9 @@ def validate_recipe(recipe_dict: Dict[str, Any], strict: bool = False) -> Tuple[
     # Required fields
     if "name" not in recipe_dict:
         errors.append("Missing required field: 'name'")
+    elif not isinstance(recipe_dict["name"], str):
+        # The name becomes part of every output filename.
+        errors.append("Field 'name' must be a string")
 
     if "stages" not in recipe_dict:
         errors.append("Missing required field: 'stages'")
@@ -240,8 +257,10 @@ def validate_recipe(recipe_dict: Dict[str, Any], strict: bool = False) -> Tuple[
         "quality_assessment",
     }
     stages = recipe_dict.get("stages", [])
-    for stage in stages:
-        if stage not in valid_stages:
+    for stage in stages if isinstance(stages, list) else []:
+        if not isinstance(stage, str):
+            errors.append(f"Invalid stage entry: stages must be stage names (strings), got {type(stage).__name__}")
+        elif stage not in valid_stages:
             errors.append(f"Invalid stage: '{stage}'. Valid stages: {sorted(valid_stages)}")
 
     # Validate stage configurations
@@ -280,6 +299,19 @@ def validate_recipe(recipe_dict: Dict[str, Any], strict: bool = False) -> Tuple[
             "rag_indexing_enabled",
         ],
     }
+
+    # A section whose options are all commented out loads as YAML null and is
+    # treated as empty; anything else that is not a mapping cannot configure a
+    # section the pipeline reads: every listed stage (also one without option
+    # checks below, such as quality_assessment), output and quality_feedback.
+    sections_read = ["output", "quality_feedback"]
+    for stage in stages if isinstance(stages, list) else []:
+        if isinstance(stage, str) and stage in valid_stages and stage not in sections_read:
+            sections_read.append(stage)
+    for section_name in sections_read:
+        section = recipe_dict.get(section_name)
+        if section is not None and not isinstance(section, dict):
+            errors.append(f"Section '{section_name}' must be a mapping, got {type(section).__name__}")
 
     for stage_name, valid_keys in stage_configs.items():
         if stage_name in recipe_dict and isinstance(recipe_dict[stage_name], dict):
@@ -321,10 +353,13 @@ def validate_recipe(recipe_dict: Dict[str, Any], strict: bool = False) -> Tuple[
 
         if "format" in output_config:
             valid_formats = {"jpeg", "png", "tiff", "exr"}
-            fmt = output_config["format"].lower()
-            output_config["format"] = fmt  # Normalize to lowercase for downstream use
-            if fmt not in valid_formats:
-                errors.append(f"Invalid output format: '{fmt}'. Valid formats: {sorted(valid_formats)}")
+            if not isinstance(output_config["format"], str):
+                errors.append("Output 'format' must be a string")
+            else:
+                fmt = output_config["format"].lower()
+                output_config["format"] = fmt  # Normalize to lowercase for downstream use
+                if fmt not in valid_formats:
+                    errors.append(f"Invalid output format: '{fmt}'. Valid formats: {sorted(valid_formats)}")
 
         if "quality" in output_config:
             quality = output_config["quality"]

@@ -9,6 +9,7 @@ from PIL import Image
 from src.transformation_portal.rendering.process_renderings_750 import (
     CONVERTIBLE_IMAGE_SUFFIXES,
     SUPPORTED_IMAGE_SUFFIXES,
+    _load_rgb,
     convert_renderings_to_jpeg,
     ensure_supported_renderings,
 )
@@ -49,3 +50,24 @@ def test_ensure_supported_renderings_returns_original_when_already_supported(tmp
 
 def test_supported_and_convertible_sets_are_disjoint() -> None:
     assert not (CONVERTIBLE_IMAGE_SUFFIXES & SUPPORTED_IMAGE_SUFFIXES)
+
+
+def test_convert_renderings_to_jpeg_scales_16bit_greyscale_tiff(tmp_path: Path) -> None:
+    """Regression for H-05: a 16-bit grey TIFF (mode I;16) was clipped at 255 and converted to white."""
+    Image.fromarray(np.full((16, 16), 32896, dtype=np.uint16)).save(tmp_path / "grey16.tif")
+
+    converted_dir = convert_renderings_to_jpeg(tmp_path)
+
+    with Image.open(converted_dir / "grey16.jpg") as converted:
+        pixels = np.asarray(converted).astype(np.int16)
+    assert np.abs(pixels - 128).max() <= 2
+
+
+def test_load_rgb_scales_16bit_greyscale(tmp_path: Path) -> None:
+    path = tmp_path / "grey16.png"
+    Image.fromarray(np.array([[0, 16448, 32896, 65535]], dtype=np.uint16)).save(path)
+
+    rgb = _load_rgb(path)
+
+    assert rgb.shape == (1, 4, 3)
+    assert np.allclose(rgb[0, :, 0], np.array([0, 64, 128, 255]) / 255.0)

@@ -187,10 +187,10 @@ def main(argv: list[str] | None = None) -> int:
                 "acceptance": "not_assessed",
             }
         elif args.command == "evaluate":
-            from .evaluation import evaluate_dataset
+            from .evaluation import MAX_EVALUATION_INPUT_BYTES, decode_evaluation_json_object, evaluate_dataset
 
-            data, _ = _read(args.input, 16 * 1024 * 1024)
-            result = evaluate_dataset(decode_bounded_json_object(data))
+            data, _ = _read(args.input, MAX_EVALUATION_INPUT_BYTES)
+            result = evaluate_dataset(decode_evaluation_json_object(data))
             if args.output is not None:
                 output = args.output.expanduser().absolute()
                 write_bytes(directory_path(output.parent), output.name, canonicalize_json(result))

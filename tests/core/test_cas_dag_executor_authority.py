@@ -232,6 +232,50 @@ def test_array_descriptor_must_match_verified_npy_header(setup):
     assert stage.calls == 2
 
 
+def _symlink_or_skip(link: Path, target: Path) -> None:
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:  # pragma: no cover - platforms without symlinks
+        pytest.skip(f"symlinks unavailable: {exc}")
+
+
+def test_cache_entries_are_read_back_through_a_symlinked_cache_root(tmp_path):
+    """An operator may point cache_dir at another volume through a symlink."""
+    volume = tmp_path / "big_volume" / "cache"
+    volume.mkdir(parents=True)
+    link = tmp_path / "cache_link"
+    _symlink_or_skip(link, volume)
+    executor = CASDAGExecutor(
+        ArtifactStore(tmp_path / "cas"), link, CASDAGConfig(code_paths=[], lockfile_path="requirements/base.txt")
+    )
+    stage = InputStage()
+    graph = StageGraph("symlinked-root")
+    graph.add_stage(stage)
+    context = StageContext(artifacts={"image": np.ones((2, 2), dtype=np.float32)})
+
+    with patch("transformation_portal.core.execution_identity.get_env_fingerprint", return_value="sha256:stable-env"):
+        runs = [executor.execute(graph, context) for _ in range(3)]
+
+    assert all(run.success for run in runs)
+    assert [run.cache_hits for run in runs] == [0, 1, 1]
+    assert stage.calls == 1
+    assert len(list(volume.rglob("dag_cache/*/*.json"))) == 1
+
+
+def test_symlink_below_the_cache_root_is_still_not_followed(setup, tmp_path):
+    executor, _store, stage, graph, context, path, _manifest, _obj = _cached_array(setup)
+    dag_cache = executor.cache_dir / "dag_cache"
+    moved = tmp_path / "moved-dag-cache"
+    dag_cache.rename(moved)
+    _symlink_or_skip(dag_cache, moved)
+    assert path.exists()  # the entry is reachable by path, through the link
+
+    result = executor.execute(graph, context)
+
+    assert result.success and result.cache_misses == 1
+    assert stage.calls == 2
+
+
 def test_verified_cas_rejects_symlinked_shard(setup, tmp_path):
     _executor, store, _stage, _graph, _context, _path, _manifest, obj = _cached_array(setup)
     shard = obj.path.parent

@@ -480,6 +480,100 @@ def test_check_camera_geometry_sanity_rejects_disconnected_overlap_graph(tmp_pat
         check_camera_geometry_sanity((first, second, disconnected))
 
 
+@pytest.mark.parametrize(
+    ("fx", "fy"),
+    [
+        (float("nan"), 1000.0),
+        (float("inf"), 1000.0),
+        (1000.0, float("nan")),
+        (1000.0, -500.0),
+        (1000.0, 0.0),
+        (1000.0, 20_000.0),
+    ],
+    ids=["fx_nan", "fx_inf", "fy_nan", "fy_negative", "fy_zero", "fy_too_large"],
+)
+def test_check_camera_geometry_sanity_rejects_invalid_focal_lengths(tmp_path: Path, fx: float, fy: float):
+    """LC-19: both focal lengths must be finite and in (0, MAX_FOCAL_LENGTH]."""
+    sidecar_path = tmp_path / "scene_cameras.json"
+    sidecar_path.write_text('{"schema":"tp.scene_cameras.v1","scenes":{}}', encoding="utf-8")
+    cameras = []
+    for tx in (0.0, 0.2):
+        camera = _camera(tx, sidecar_path)
+        camera.params.intrinsics[0, 0] = fx
+        camera.params.intrinsics[1, 1] = fy
+        cameras.append(camera)
+
+    with pytest.raises(ValueError, match="Suspicious focal length"):
+        check_camera_geometry_sanity(cameras)
+
+
+def _built_manifest(tmp_path: Path) -> dict:
+    output_root = tmp_path / "output"
+    segmentation_artifact = output_root / "segmentation" / "scene_a_masks.npz"
+    segmentation_artifact.parent.mkdir(parents=True, exist_ok=True)
+    segmentation_artifact.write_bytes(b"segmentation")
+    sidecar_path = tmp_path / "scene_cameras.json"
+    sidecar_path.write_text('{"schema":"tp.scene_cameras.v1","scenes":{}}', encoding="utf-8")
+    return build_scene_manifest(
+        context=_context(tmp_path, sidecar_path),
+        output_root=output_root,
+        segmentation_artifact_paths=(segmentation_artifact,),
+        camera_sidecar_path=sidecar_path,
+    )
+
+
+@pytest.mark.parametrize("digest", ["<missing>", None, 7, "", "A" * 64, "0" * 63])
+@pytest.mark.parametrize("entry_kind", ["image", "segmentation"])
+def test_scene_integrity_requires_a_digest_on_every_entry(tmp_path: Path, entry_kind: str, digest: object):
+    """LC-19: a missing or malformed sha256 must fail closed instead of skipping the hash check."""
+    scene_manifest = _built_manifest(tmp_path)
+    verify_scene_integrity(scene_manifest)
+    entry = scene_manifest["images"][0] if entry_kind == "image" else scene_manifest["segmentation_artifacts"][0]
+    if digest == "<missing>":
+        del entry["sha256"]
+    else:
+        entry["sha256"] = digest
+
+    with pytest.raises(RuntimeError, match="missing or invalid SHA256"):
+        verify_scene_integrity(scene_manifest)
+
+
+def test_scene_integrity_requires_input_hash_for_indexed_inputs(tmp_path: Path):
+    """LC-19: an input listed without a manifest digest must not bypass the artifact-index comparison."""
+    scene_manifest = _built_manifest(tmp_path)
+    relative_path = scene_manifest["inputs"][0]
+    artifact_index = {relative_path: {"sha256": "f" * 64}}
+    scene_manifest["input_hashes"] = {}
+
+    with pytest.raises(RuntimeError, match="missing or invalid SHA256 for input"):
+        verify_scene_integrity(scene_manifest, artifact_index=artifact_index)
+
+
+def test_scene_integrity_rejects_relative_paths_escaping_base_dir(tmp_path: Path):
+    """LC-19: relative manifest paths are confined to base_dir; '..' segments fail closed."""
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    inside = bundle / "view_1.jpg"
+    inside.write_bytes(b"inside")
+    outside = tmp_path / "outside.jpg"
+    outside.write_bytes(b"outside")
+    manifest = {
+        "images": [
+            {"path": "view_1.jpg", "sha256": hashlib.sha256(b"inside").hexdigest()},
+            {"path": "../outside.jpg", "sha256": hashlib.sha256(b"outside").hexdigest()},
+        ],
+        "cameras": [{}, {}],
+        "segmentation_artifacts": [],
+    }
+
+    with pytest.raises(RuntimeError, match="escapes its base directory"):
+        verify_scene_integrity(manifest, base_dir=bundle)
+
+    manifest["images"] = manifest["images"][:1]
+    manifest["cameras"] = [{}]
+    verify_scene_integrity(manifest, base_dir=bundle)
+
+
 def test_check_camera_geometry_sanity_uses_camera_centers_from_extrinsics(tmp_path: Path):
     sidecar_path = tmp_path / "scene_cameras.json"
     sidecar_path.write_text('{"schema":"tp.scene_cameras.v1","scenes":{}}', encoding="utf-8")

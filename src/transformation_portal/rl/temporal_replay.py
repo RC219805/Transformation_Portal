@@ -180,9 +180,14 @@ class TemporalReplayBuffer:
         if not raw_batch:
             return None
 
-        # Determine dimensions from first sample
-        first_seq = raw_batch[0]["transitions"]
-        n_agents = len(node_ids)
+        # Pad missing agents with zeros of the observed per-agent state width
+        # (28 only when no state is present at all, the historical default).
+        pad_dim = 28
+        for item in raw_batch:
+            present = next((t.states[nid] for t in item["transitions"] for nid in node_ids if nid in t.states), None)
+            if present is not None:
+                pad_dim = len(present)
+                break
 
         # Collect formatted data
         states_seqs = []
@@ -210,7 +215,7 @@ class TemporalReplayBuffer:
                             state = state.tolist()
                         agent_states.append(state)
                     else:
-                        agent_states.append([0.0] * 28)  # Default
+                        agent_states.append([0.0] * pad_dim)
 
                     agent_actions.append(t.actions.get(nid, 0))
 

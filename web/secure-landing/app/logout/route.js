@@ -47,18 +47,22 @@ export async function POST(request) {
   if (!validateOriginAndReferrer(request)) {
     audit("csrf_failure", { path: "/logout" });
     emitLogoutRum(LOGOUT_RUM_EVENT_TYPES.FAILURE, LOGOUT_RUM_FAILURE_CODES.CSRF);
-    const response = applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/login?error=csrf"), 303));
-    clearSessionCookie(response);
-    return response;
+    // A rejected (possibly forged) logout leaves both the cookie and the
+    // server-side session untouched: clearing only the cookie would let a
+    // cross-site form log the victim out while orphaning a still-valid
+    // authenticated session.
+    return applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/login?error=csrf"), 303));
   }
 
   const csrfToken = request.headers.get("x-csrf-token") || "";
   if (session && !validateCsrfToken(session, csrfToken)) {
     audit("csrf_failure", { path: "/logout", username: session.username });
     emitLogoutRum(LOGOUT_RUM_EVENT_TYPES.FAILURE, LOGOUT_RUM_FAILURE_CODES.CSRF);
-    const response = applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/login?error=csrf"), 303));
-    clearSessionCookie(response);
-    return response;
+    // A rejected (possibly forged) logout leaves both the cookie and the
+    // server-side session untouched: clearing only the cookie would let a
+    // cross-site form log the victim out while orphaning a still-valid
+    // authenticated session.
+    return applySecurityHeaders(NextResponse.redirect(buildRequestUrl(request, "/login?error=csrf"), 303));
   }
 
   if (session?.id) {

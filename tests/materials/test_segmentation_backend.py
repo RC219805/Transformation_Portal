@@ -53,6 +53,10 @@ except ImportError:
     MPS_AVAILABLE = False
     CUDA_AVAILABLE = False
 
+# EfficientSAMBackend.load() needs a real torch even on the heuristic path, so
+# tests that load it must skip (not error) in the torch-free core environment.
+requires_torch = pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch required to load the EfficientSAM backend")
+
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -115,6 +119,7 @@ def fixture_config_strict():
 @pytest.fixture(name="efficientsam_heuristic_backend")
 def fixture_efficientsam_heuristic_backend(monkeypatch):
     """Fast unit-test backend: force heuristic path to avoid real SAM inference."""
+    pytest.importorskip("torch", reason="PyTorch required to load the EfficientSAM backend")
     import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
 
     monkeypatch.setattr(seg_module, "EFFICIENTVIT_AVAILABLE", False)
@@ -423,6 +428,7 @@ def test_efficientsam_backend_invalid_input(efficientsam_heuristic_backend):
 
 
 @pytest.mark.ml
+@requires_torch
 def test_efficientsam_backend_cpu_device():
     """Test that EfficientSAMBackend works on CPU."""
     backend = EfficientSAMBackend()
@@ -461,6 +467,7 @@ def test_efficientsam_backend_cuda_device():
 
 
 @pytest.mark.ml
+@requires_torch
 def test_efficientsam_backend_auto_device():
     """Test that EfficientSAMBackend auto-detects device."""
     backend = EfficientSAMBackend()
@@ -1093,6 +1100,136 @@ def test_segment_materials_cache_rejects_missing_confidence(sample_image, tmp_pa
     assert calls["segment"] == 2
 
 
+def test_segment_materials_does_not_cache_degraded_heuristic_fallback(tmp_path, monkeypatch):
+    """LC-02: heuristic fallback masks must not be replayed as the requested backend's results."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    image = np.full((120, 160, 3), 90, dtype=np.uint8)
+    image[60:, :80] = (40, 160, 50)  # foliage-like block
+    image[:40, 80:] = (60, 80, 220)  # blue block
+
+    # A loaded EfficientSAM backend running in heuristic mode (efficientvit unavailable).
+    heuristic_backend = EfficientSAMBackend()
+    heuristic_backend._model_loaded = True
+    heuristic_backend._use_real_model = False
+    heuristic_backend._device = "cpu"
+
+    calls = {"healthy": 0}
+    healthy_mask = np.zeros(image.shape[:2], dtype=np.float32)
+    healthy_mask[10:60, 10:60] = 1.0
+
+    class HealthyBackend:
+        info = SegmentationBackendInfo("Fake", "fake", False, False, 1, "test")
+        _device = "cpu"
+
+        def segment(self, _image):
+            calls["healthy"] += 1
+            return {"glass": (healthy_mask, 0.93)}
+
+        def segmentation_degraded(self):
+            return False
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        material_segmentation_cache_policy="read_write",
+        depth_device="cpu",
+    )
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *args, **kwargs: heuristic_backend)
+    degraded = segment_materials(image, config, cache_dir=tmp_path)
+    degraded_metadata = get_last_segmentation_runtime_metadata()
+    assert degraded, "heuristic fallback should still serve masks for this run"
+    assert heuristic_backend.segmentation_degraded() is True
+    assert {ev["confidence_score_type"] for ev in degraded_metadata["material_confidence_evidence"].values()} == {
+        "heuristic_material_confidence_v1"
+    }
+    assert list(tmp_path.rglob("*.json")) == []
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *args, **kwargs: HealthyBackend())
+    healthy = segment_materials(image, config, cache_dir=tmp_path)
+    healthy_metadata = get_last_segmentation_runtime_metadata()
+
+    assert calls["healthy"] == 1
+    assert healthy_metadata["cache_hit"] is False
+    assert set(healthy) == {"glass"}
+    # The healthy result is cached and replayed normally.
+    segment_materials(image, config, cache_dir=tmp_path)
+    assert get_last_segmentation_runtime_metadata()["cache_hit"] is True
+    assert calls["healthy"] == 1
+
+
+def test_efficientsam_segmentation_degraded_tracks_clip_evidence():
+    """A CLIP-classified result is not degraded; a heuristic one is."""
+    backend = EfficientSAMBackend()
+    backend._material_confidence_evidence = {"glass": {"confidence_score_type": "clip_softmax_margin_v1"}}
+    assert backend.segmentation_degraded() is False
+    backend._material_confidence_evidence = {"glass": {"confidence_score_type": "heuristic_material_confidence_v1"}}
+    assert backend.segmentation_degraded() is True
+
+
+def test_segment_materials_does_not_cache_when_sam_proposals_fail(tmp_path, monkeypatch):
+    """LC-02: CLIP labels on heuristic regions (SAM proposals failed) are still a degraded result."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    image = np.full((120, 160, 3), 90, dtype=np.uint8)
+    proposal = np.zeros(image.shape[:2], dtype=bool)
+    proposal[10:60, 10:60] = True
+
+    class FlakyMaskGenerator:
+        fail = True
+
+        def generate(self, _image):
+            if self.fail:
+                raise RuntimeError("transient SAM failure")
+            return [{"segmentation": proposal, "bbox": [10, 10, 50, 50], "area": int(proposal.sum())}]
+
+    generator = FlakyMaskGenerator()
+    backend = EfficientSAMBackend()
+    backend._model_loaded = True
+    backend._use_real_model = True
+    backend._device = "cpu"
+    backend._mask_generator = generator
+
+    def clip_labels_any_regions(_image, segments):
+        # Stand-in for a working CLIP stage: it labels whatever regions it is handed
+        # (SAM proposals, or heuristic regions when SAM returned nothing).
+        mask = segments[0]["segmentation"].astype(np.float32) if segments else np.ones(image.shape[:2], np.float32)
+        backend._material_confidence_evidence = {
+            "glass": {"material_confidence": 0.9, "confidence_score_type": "clip_softmax_margin_v1"}
+        }
+        return {"glass": (mask, 0.9)}
+
+    monkeypatch.setattr(seg_module, "EFFICIENTVIT_AVAILABLE", True)
+    monkeypatch.setattr(seg_module, "OPEN_CLIP_AVAILABLE", True)
+    monkeypatch.setattr(backend, "_classify_segments_with_clip", clip_labels_any_regions)
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *args, **kwargs: backend)
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        material_segmentation_cache_policy="read_write",
+        depth_device="cpu",
+    )
+
+    served = segment_materials(image, config, cache_dir=tmp_path)
+    assert set(served) == {"glass"}, "the degraded result is still served for this run"
+    assert backend.segmentation_degraded() is True
+    assert list(tmp_path.rglob("*.json")) == []
+
+    # The generator recovers: the next run executes the backend and its result is cached.
+    generator.fail = False
+    recovered = segment_materials(image, config, cache_dir=tmp_path)
+    assert get_last_segmentation_runtime_metadata()["cache_hit"] is False
+    assert np.array_equal(recovered["glass"], proposal.astype(np.float32))
+    assert backend.segmentation_degraded() is False
+    assert len(list(tmp_path.rglob("*.json"))) == 1
+
+    # A missing generator is the same degraded condition.
+    backend._mask_generator = None
+    backend.segment(image)
+    assert backend.segmentation_degraded() is True
+
+
 def test_segment_materials_sam2_strict_mode_missing_backend(sample_image, monkeypatch):
     """Strict mode should raise when SAM2 backend dependencies are unavailable."""
     import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
@@ -1237,6 +1374,7 @@ def test_heuristic_segmentation_detects_materials(efficientsam_heuristic_backend
 
 
 @pytest.mark.ml
+@requires_torch
 def test_efficientsam_backend_lazy_loading(sample_image):
     """Test that model is loaded lazily on first inference."""
     backend = EfficientSAMBackend()
@@ -1452,6 +1590,7 @@ def test_confidence_scores_in_valid_range(sample_image, efficientsam_heuristic_b
 
 
 @pytest.mark.ml
+@requires_torch
 def test_heuristic_fallback_returns_medium_confidence(sample_image, monkeypatch):
     """Heuristic fallback should return 0.5 confidence to indicate uncertainty.
 
@@ -1597,3 +1736,113 @@ def test_confidence_filtering_example(efficientsam_heuristic_backend):
     # All remaining materials should meet threshold
     for material, (mask, conf) in high_confidence_only.items():
         assert conf >= min_confidence, f"{material} confidence {conf} below threshold {min_confidence}"
+
+
+def _legacy_heuristic_component_segments(heuristic_results):
+    """Reference: the original per-component full-image loop (pre audit LC-12)."""
+    from scipy import ndimage
+
+    reference = []
+    for material_name, (mask, _) in heuristic_results.items():
+        labeled, num_features = ndimage.label(mask > 0.5)
+        for region_id in range(1, num_features + 1):
+            region_mask = labeled == region_id
+            area = region_mask.sum()
+            if area < 500:
+                continue
+            rows, cols = np.where(region_mask)
+            x1, x2 = cols.min(), cols.max()
+            y1, y2 = rows.min(), rows.max()
+            reference.append(
+                {
+                    "segmentation": region_mask,
+                    "bbox": [int(x1), int(y1), int(x2 - x1 + 1), int(y2 - y1 + 1)],
+                    "area": int(area),
+                    "heuristic_label": material_name,
+                }
+            )
+    return reference
+
+
+def test_heuristic_component_segments_match_legacy_loop(monkeypatch):
+    """Regression (audit LC-12): vectorised component extraction stays bit-identical.
+
+    The heuristic fallback used a full-image pass per connected component, which is
+    quadratic on speckled masks; the bincount/find_objects path must produce the same
+    segments (order, masks, bboxes, areas, labels).
+    """
+    pytest.importorskip("scipy")
+    rng = np.random.default_rng(1234)
+    h, w = 96, 128
+
+    stone = rng.random((h, w)) < 0.35  # speckle: many tiny components
+    stone[0:30, 0:40] = True  # touches the top-left border
+    stone[60:96, 90:128] = True  # touches the bottom-right border
+    ring = np.zeros((h, w), dtype=bool)
+    ring[20:80, 50:85] = True
+    ring[30:70, 60:75] = False  # non-convex component with a hole
+    heuristic_results = {
+        "stone": (stone.astype(np.float32), 0.5),
+        "glass": (ring.astype(np.float32), 0.5),
+        "water": (np.zeros((h, w), dtype=np.float32), 0.5),
+    }
+
+    actual = _capture_heuristic_component_segments(monkeypatch, heuristic_results, (h, w))
+
+    expected = _legacy_heuristic_component_segments(heuristic_results)
+    assert len(expected) >= 3
+    assert len(actual) == len(expected)
+    for got, want in zip(actual, expected):
+        assert got["heuristic_label"] == want["heuristic_label"]
+        assert got["bbox"] == want["bbox"]
+        assert got["area"] == want["area"]
+        assert type(got["area"]) is int
+        assert got["segmentation"].dtype == want["segmentation"].dtype
+        assert np.array_equal(got["segmentation"], want["segmentation"])
+
+
+def test_heuristic_component_segments_scale_linearly_on_speckled_masks(monkeypatch):
+    """Regression (audit LC-12): tens of thousands of speckle components stay cheap.
+
+    The legacy loop compared the whole label image once per component (~15 s for a
+    500x750 speckled mask); the vectorised path needs well under a second.
+    """
+    pytest.importorskip("scipy")
+    import time
+
+    rng = np.random.default_rng(7)
+    h, w = 500, 750
+    speckle = rng.random((h, w)) < 0.4
+    speckle[100:200, 100:300] = True  # one component above the 500-px area floor
+    heuristic_results = {"stone": (speckle.astype(np.float32), 0.5)}
+
+    t0 = time.perf_counter()
+    segments = _capture_heuristic_component_segments(monkeypatch, heuristic_results, (h, w))
+    elapsed = time.perf_counter() - t0
+
+    assert segments, "the large block must survive the area filter"
+    assert elapsed < 3.0, f"component extraction took {elapsed:.2f}s on a speckled 500x750 mask"
+
+
+def _capture_heuristic_component_segments(monkeypatch, heuristic_results, shape):
+    """Run the no-SAM-segments branch and return the segments handed to CLIP."""
+    h, w = shape
+    backend = EfficientSAMBackend()
+    backend._device = "cpu"
+    monkeypatch.setattr(backend, "_heuristic_segmentation", lambda _image: heuristic_results)
+    monkeypatch.delenv("SKIP_CLIP_INFERENCE", raising=False)
+    if not TORCH_AVAILABLE:
+        # The CLIP branch imports torch before loading the runtime; a bare stand-in
+        # lets the capture hook below run in the core (torch-free) lane.
+        monkeypatch.setitem(sys.modules, "torch", types.ModuleType("torch"))
+
+    captured = {}
+
+    def _capture_segments_then_fail():
+        captured["segments"] = list(sys._getframe(1).f_locals["segments"])
+        raise RuntimeError("offline: CLIP not loaded in this test")
+
+    monkeypatch.setattr(backend, "_load_clip_runtime", _capture_segments_then_fail)
+
+    backend._classify_segments_with_clip(np.zeros((h, w, 3), dtype=np.uint8), [])
+    return captured["segments"]

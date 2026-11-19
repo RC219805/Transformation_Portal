@@ -20,12 +20,12 @@ import {
   LOGIN_RUM_FAILURE_CODES
 } from "../../lib/rum-emitter.js";
 import {
+  clearLoginAttempts,
   createAnonymousSession,
   destroySession,
   getRemoteAddress,
   getSessionFromRequest,
-  isLoginThrottled,
-  recordLoginAttempt,
+  reserveLoginAttempt,
   rotateAuthenticatedSession,
   setSessionCookie,
   validateCsrfToken
@@ -464,9 +464,15 @@ export async function POST(request) {
   const username = String(formData.get("username") || "").trim();
   const password = String(formData.get("password") || "");
   const remoteAddr = getRemoteAddress(request);
-  const throttleKey = `${accessContext.accessEmail || "local"}:${username.toLowerCase()}:${remoteAddr}`;
+  const accountKey = `${accessContext.accessEmail || "local"}:${username.toLowerCase()}`;
+  // The per-address bucket keys on a forwarded client address, which the
+  // client can rotate; the per-account bucket bounds the total budget for the
+  // identity regardless of the address it arrives from.
+  const throttleKeys = [`${accountKey}:${remoteAddr}`, `account:${accountKey}`];
 
-  if (await isLoginThrottled(throttleKey)) {
+  // Check and record the attempt atomically before the password is verified,
+  // so a burst of concurrent POSTs cannot all pass the throttle check.
+  if (!(await reserveLoginAttempt({ throttleKeys, remoteAddr }))) {
     audit("login_throttle", {
       username: username.toLowerCase(),
       accessEmail: accessContext.accessEmail,
@@ -482,13 +488,8 @@ export async function POST(request) {
     accessEmail: accessContext.accessEmail,
     allowAccessBypass: accessContext.bypass
   });
-  await recordLoginAttempt({
-    throttleKey,
-    success: Boolean(user),
-    remoteAddr
-  });
-
   if (!user) {
+    // The reservation above already recorded this failure.
     audit("login_failure", {
       username: username.toLowerCase(),
       accessEmail: accessContext.accessEmail,
@@ -498,6 +499,7 @@ export async function POST(request) {
     emitLoginRum(LOGIN_RUM_EVENT_TYPES.FAILURE, LOGIN_RUM_FAILURE_CODES.INVALID);
     return redirectToLogin(request, "invalid", session, requestedReturnTo);
   }
+  await clearLoginAttempts(throttleKeys);
 
   const authenticatedSession = await rotateAuthenticatedSession(session, user);
   if (session?.id) {

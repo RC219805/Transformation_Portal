@@ -6,13 +6,16 @@ import sys
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
+from transformation_portal.vlm_captioning import fastvlm_runtime
 from transformation_portal.vlm_captioning.fastvlm_runtime import (
     DEFAULT_FASTVLM_PROMPT,
     REVIEW_FASTVLM_PROMPT,
     FastVLMRuntimeConfig,
     build_fastvlm_sidecar,
     config_from_env,
+    dumps_sidecar,
     infer_fastvlm_model_role,
     prompt_for_fastvlm_model,
     resolve_fastvlm_model_path,
@@ -332,6 +335,112 @@ def test_runtime_timeout(tmp_path: Path) -> None:
     assert result.success is False
     assert result.status == "timeout"
     assert "timed out" in (result.error or "")
+
+
+def test_runtime_timeout_keeps_partial_output(tmp_path: Path) -> None:
+    # D-15: the partial output attached to TimeoutExpired is bytes; it must be kept as text.
+    runtime_dir = tmp_path / "runtime"
+    _write_fake_mlx_module(
+        runtime_dir,
+        "import sys, time\n"
+        "print('SCENE=partial caption before hang', flush=True)\n"
+        "print('loading weights...', file=sys.stderr, flush=True)\n"
+        "time.sleep(5)\n",
+    )
+    config, image = _config(tmp_path, runtime_dir)
+    config = FastVLMRuntimeConfig(**{**config.__dict__, "timeout_seconds": 1})
+
+    result = run_fastvlm_caption(config, image)
+
+    assert result.status == "timeout"
+    assert "SCENE=partial caption before hang" in result.raw_stdout
+    assert "loading weights..." in result.raw_stderr
+
+
+def test_runtime_undecodable_output_returns_structured_result(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # D-07: a non-UTF-8 byte must not escape as UnicodeDecodeError when strict is off.
+    monkeypatch.setattr("locale.getpreferredencoding", lambda do_setlocale=True: "utf-8")
+    runtime_dir = tmp_path / "runtime"
+    _write_fake_mlx_module(
+        runtime_dir,
+        "import sys\n"
+        "sys.stdout.buffer.write(b'SCENE=living room; MATERIALS=wood \\xff\\r\\n')\n"
+        "sys.stderr.buffer.write(b'warn \\xfe\\n')\n",
+    )
+    config, image = _config(tmp_path, runtime_dir)
+
+    result = run_fastvlm_caption(config, image)
+
+    assert result.success is True
+    assert result.status == "ok"
+    assert result.raw_stdout == "SCENE=living room; MATERIALS=wood �\n"
+    assert result.raw_stderr == "warn �\n"
+    assert result.caption_parse.caption["scene"] == "living room"
+
+
+@pytest.mark.parametrize(
+    ("encoding", "expected"),
+    [("iso8859-1", "SCENE=caf\u00e9 terrace\n"), ("no-such-codec", "SCENE=caf\ufffd terrace\n")],
+)
+def test_runtime_decodes_output_with_the_locale_encoding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, encoding: str, expected: str
+) -> None:
+    # The child inherits the locale, and text-mode pipes decoded with it: output that
+    # decoded before D-07 must keep decoding to the same text. An unknown codec name
+    # falls back to UTF-8 instead of raising.
+    monkeypatch.setattr("locale.getpreferredencoding", lambda do_setlocale=True: encoding)
+    runtime_dir = tmp_path / "runtime"
+    _write_fake_mlx_module(runtime_dir, "import sys\nsys.stdout.buffer.write(b'SCENE=caf\\xe9 terrace\\n')\n")
+    config, image = _config(tmp_path, runtime_dir)
+
+    result = run_fastvlm_caption(config, image)
+
+    assert result.status == "ok"
+    assert result.raw_stdout == expected
+
+
+def test_runtime_unstartable_argv_returns_structured_result(tmp_path: Path) -> None:
+    runtime_dir = tmp_path / "runtime"
+    _write_fake_mlx_module(runtime_dir, "print('unreachable')\n")
+    config, image = _config(tmp_path, runtime_dir)
+
+    result = run_fastvlm_caption(config, image, prompt="describe\x00this")
+
+    assert result.success is False
+    assert result.status == "error"
+    assert "failed to start" in (result.error or "")
+
+
+def test_runtime_bounds_captured_output_in_result_and_sidecar(tmp_path: Path) -> None:
+    # D-15: a runtime that prints megabytes must not be copied unbounded into the sidecar.
+    runtime_dir = tmp_path / "runtime"
+    _write_fake_mlx_module(
+        runtime_dir,
+        "import sys\n"
+        "sys.stdout.write('SCENE=Kitchen; MATERIALS=marble;\\n' + 'A' * 2_000_000 + '\\nTAIL_OUT\\n')\n"
+        "sys.stderr.write('B' * 2_000_000 + '\\nTAIL_ERR\\n')\n",
+    )
+    config, image = _config(tmp_path, runtime_dir)
+
+    result = run_fastvlm_caption(config, image)
+
+    limit = fastvlm_runtime.MAX_CAPTURED_OUTPUT_CHARS
+    marker_allowance = 128
+    assert result.success is True
+    assert len(result.raw_stdout) <= limit + marker_allowance
+    assert len(result.raw_stderr) <= limit + marker_allowance
+    assert result.raw_stdout.startswith("SCENE=Kitchen; MATERIALS=marble;")
+    assert result.raw_stdout.endswith("TAIL_OUT\n")
+    assert result.raw_stderr.endswith("TAIL_ERR\n")
+    assert "characters of FastVLM output omitted" in result.raw_stdout
+
+    proxy_source = tmp_path / "proxy-source.png"
+    Image.new("RGB", (8, 8), (10, 20, 30)).save(proxy_source)
+    proxy = build_vlm_image_proxy(proxy_source, tmp_path / "proxy")
+    sidecar = build_fastvlm_sidecar(enabled=True, model_path=config.model_path, image_proxy=proxy, runtime_result=result)
+    serialized = dumps_sidecar(sidecar)
+    assert len(serialized) <= 4 * (limit + marker_allowance) + 64 * 1024
+    assert sidecar["vlm_captioning"]["used_for_quality_gate"] is False
 
 
 def test_runtime_nonzero_exit(tmp_path: Path) -> None:

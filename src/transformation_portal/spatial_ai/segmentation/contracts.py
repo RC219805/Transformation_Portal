@@ -62,7 +62,7 @@ class SegmentationInput:
     def __post_init__(self):
         """Validate input contract."""
         # Gamma enforcement (SpatialCaptureV1 contract)
-        if abs(self.gamma - 1.0) > 1e-6:
+        if not abs(self.gamma - 1.0) <= 1e-6:  # NaN-safe: NaN fails the comparison
             raise ValueError(
                 f"Segmentation requires gamma=1.0 (linear RGB), got {self.gamma}. "
                 "This violates the SpatialCaptureV1 contract."

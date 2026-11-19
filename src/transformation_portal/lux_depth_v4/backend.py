@@ -18,8 +18,12 @@ from typing import Any, Callable, ClassVar, Mapping, Protocol
 import numpy as np
 from PIL import Image
 
-from transformation_portal.core.execution_plan import decode_bounded_json_object
-from transformation_portal.ingest.canonical_json import dumps_json
+from transformation_portal.core.execution_plan import MAX_PLAN_BODY_BYTES, decode_bounded_json_object
+from transformation_portal.ingest.canonical_json import canonicalize_json
+
+# Worker ingress decodes each request line (newline included) with the bounded
+# plan decoder, so the parent must never emit a frame larger than its bound.
+MAX_WORKER_REQUEST_BYTES = MAX_PLAN_BODY_BYTES
 
 
 class CarriedDepthPlan(Protocol):
@@ -43,9 +47,15 @@ def require_process_supervisor() -> ModuleType:
 
 
 def worker_environment() -> dict[str, str]:
+    # Parent-only lazy import: the worker interpreter imports this module too.
+    from transformation_portal.orchestrator.execution_process import _sanitized_child_env
+
+    # Service credentials (API keys, store/broker URLs, cloud and hub tokens)
+    # never cross into third-party model or decoder code; the governed native
+    # consumer boundary already applies this same redaction.
     env = {
         key: value
-        for key, value in os.environ.items()
+        for key, value in _sanitized_child_env().items()
         if not key.upper().startswith("PYTHON") and key.upper() not in {"VIRTUAL_ENV", "__PYVENV_LAUNCHER__"}
     }
     env.update(
@@ -199,9 +209,11 @@ class DA3Session:
     def _rpc(self, request: dict) -> dict:
         assert self.process.stdin is not None and self.process.stdout is not None
         self.checkpoint()
-        frame = dumps_json(request, allow_nan=False).encode() + b"\n"
-        if len(frame) > 8 * 1024 * 1024:
-            raise RuntimeError("Worker request exceeds byte budget")
+        # Canonical UTF-8 keeps a plan admitted at prepare within the same
+        # byte bound on the wire (ASCII escaping can expand it up to 6x).
+        frame = canonicalize_json(request) + b"\n"
+        if len(frame) > MAX_WORKER_REQUEST_BYTES:
+            raise RuntimeError(f"Worker request exceeds the {MAX_WORKER_REQUEST_BYTES}-byte worker ingress bound")
         offset = 0
         with selectors.DefaultSelector() as writer:
             writer.register(self.process.stdin, selectors.EVENT_WRITE)

@@ -25,6 +25,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from tests.conftest import requires_enforced_posix_permissions
+
 pytestmark = [pytest.mark.unit, pytest.mark.security]
 
 
@@ -855,6 +857,7 @@ class TestEdgeCases:
         # Should pass (within 0-1 range)
         assert result.is_valid is True
 
+    @requires_enforced_posix_permissions
     def test_validate_unreadable_file(self, tmp_path: Path) -> None:
         """Validation handles unreadable files."""
         from transformation_portal.utils.input_validation import ImageValidator
@@ -863,19 +866,20 @@ class TestEdgeCases:
         test_file = tmp_path / "unreadable.png"
         test_file.write_bytes(b"fake content")
 
-        # Make it unreadable (Unix only)
-        if os.name != "nt":
-            os.chmod(test_file, 0o000)
+        # Make it unreadable. The skip marker guarantees the mode bits are
+        # enforced here, so this never passes vacuously (Windows) or fails
+        # spuriously (root / CAP_DAC_OVERRIDE).
+        os.chmod(test_file, 0o000)
 
-            try:
-                validator = ImageValidator()
-                result = validator.validate(test_file)
+        try:
+            validator = ImageValidator()
+            result = validator.validate(test_file)
 
-                assert result.is_valid is False
-                assert any(e.code == "FILE_NOT_READABLE" for e in result.errors)
-            finally:
-                # Restore permissions for cleanup
-                os.chmod(test_file, 0o644)
+            assert result.is_valid is False
+            assert any(e.code == "FILE_NOT_READABLE" for e in result.errors)
+        finally:
+            # Restore permissions for cleanup
+            os.chmod(test_file, 0o644)
 
     def test_validate_dict_input_fails(self) -> None:
         """Validation fails gracefully for dict input."""

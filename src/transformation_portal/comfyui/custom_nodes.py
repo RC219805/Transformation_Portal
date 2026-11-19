@@ -74,11 +74,20 @@ class BaseNode(ABC):
         raise NotImplementedError
 
     def _to_numpy(self, image: Any) -> np.ndarray:
-        """Helper to ensure image is numpy array (H,W,3)."""
+        """Helper to ensure image is a uint8 numpy array (H,W,3).
+
+        ComfyUI IMAGE values are float32 in [0, 1]; the wrapped components
+        (SkyBlender, FLUX, VLM) expect 8-bit 0..255 images, so floating input
+        is converted here, at the node boundary.
+        """
         if isinstance(image, torch.Tensor):
             # ComfyUI often passes (B,H,W,C) tensors
-            return image.cpu().numpy()[0]
-        return np.array(image)
+            array = image.detach().cpu().numpy()[0]
+        else:
+            array = np.array(image)
+        if np.issubdtype(array.dtype, np.floating):
+            array = np.rint(np.nan_to_num(array, nan=0.0).clip(0.0, 1.0) * 255.0).astype(np.uint8)
+        return array
 
     def _to_tensor(self, array: np.ndarray) -> torch.Tensor:
         """Helper to convert back to ComfyUI tensor format."""

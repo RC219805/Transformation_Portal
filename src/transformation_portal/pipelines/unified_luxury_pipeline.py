@@ -42,7 +42,7 @@ Usage:
     )
 
     pipeline = UnifiedLuxuryPipeline(config)
-    results = pipeline.process(Path("input.exr"))
+    results = pipeline.process(Path("input.tif"))
 
 Performance:
     - PREMIUM profile: 2-5 minutes per 4K image (M4 Max with CoreML + MPS)
@@ -67,6 +67,13 @@ from PIL import Image
 from tqdm import tqdm
 
 from transformation_portal.pipelines.parallel_io import ParallelIOPipeline
+from transformation_portal.utils.image_utils import (
+    OutputStemAllocator,
+    atomic_output_path,
+    convert_to_rgb,
+    fit_size_within,
+    quantize_unit_float,
+)
 
 # Optional imports with graceful fallback
 try:
@@ -112,7 +119,14 @@ class OutputFormat(Enum):
     MAGAZINE = "magazine"  # 2K magazine layout (2048px)
 
 
-DEFAULT_BATCH_PATTERN = "*.{jpg,jpeg,png,tif,tiff,exr}"
+DEFAULT_BATCH_PATTERN = "*.{jpg,jpeg,png,tif,tiff}"
+
+# Scene-referred HDR containers the loader cannot read: Pillow has no decoder
+# for them, and turning scene-linear float pixels into this display-referred
+# pipeline would need an exposure/tone-mapping decision nobody has made yet.
+# Reject them up front with an actionable error instead of an opaque decoder
+# failure.
+UNSUPPORTED_INPUT_SUFFIXES = frozenset({".exr"})
 
 
 @dataclass
@@ -284,6 +298,7 @@ class _OutputGenerationWork:
     config: UnifiedPipelineConfig
     started_at: float
     stage_times: Dict[str, float]
+    output_stem: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -314,7 +329,7 @@ class UnifiedLuxuryPipeline:
         )
 
         pipeline = UnifiedLuxuryPipeline(config)
-        results = pipeline.process("input.exr")
+        results = pipeline.process("input.tif")
     """
 
     def __init__(self, config: UnifiedPipelineConfig):
@@ -383,12 +398,14 @@ class UnifiedLuxuryPipeline:
         if self.config.enable_vfx and self.config.profile == ProcessingProfile.PERFORMANCE:
             log.warning("VFX enabled with PERFORMANCE profile - may impact speed")
 
-    def process(self, input_path: Path, **overrides) -> Dict[str, Path]:
+    def process(self, input_path: Path, *, output_stem: Optional[str] = None, **overrides) -> Dict[str, Path]:
         """
         Process single image through unified pipeline.
 
         Args:
             input_path: Path to input image
+            output_stem: Base name of the output files (default: ``input_path.stem``);
+                batch processing passes a name no other input of the batch uses
             **overrides: Override config parameters for this image
 
         Returns:
@@ -396,7 +413,7 @@ class UnifiedLuxuryPipeline:
 
         Example:
             results = pipeline.process(
-                "render.exr",
+                "render.tif",
                 exposure=0.2,
                 enable_vfx=True
             )
@@ -464,6 +481,7 @@ class UnifiedLuxuryPipeline:
                 input_path,
                 metadata,
                 temp_config,
+                output_stem,
             )
 
             # Update statistics
@@ -495,7 +513,7 @@ class UnifiedLuxuryPipeline:
             Dictionary mapping input paths to their output dictionaries
 
         Example:
-            input_files = list(Path("renders").glob("*.exr"))
+            input_files = list(Path("renders").glob("*.tif"))
             results = pipeline.batch_process(input_files)
 
             for input_path, outputs in results.items():
@@ -507,11 +525,12 @@ class UnifiedLuxuryPipeline:
             return self._batch_process_parallel_io(input_paths, show_progress=show_progress)
 
         results = {}
+        output_stems = self._assign_output_stems(input_paths)
         iterator = tqdm(input_paths, desc="Processing") if show_progress else input_paths
 
         for input_path in iterator:
             try:
-                outputs = self.process(input_path)
+                outputs = self.process(input_path, output_stem=output_stems[Path(input_path)])
                 results[input_path] = outputs
             except Exception as e:
                 log.error(f"Failed to process {input_path.name}: {e}")
@@ -520,6 +539,18 @@ class UnifiedLuxuryPipeline:
         log.info(self.stats.summary())
 
         return results
+
+    @staticmethod
+    def _assign_output_stems(input_paths: List[Path]) -> Dict[Path, str]:
+        """Give every distinct input its own output base name, in input order.
+
+        Same-stem inputs (``kitchen.png`` and ``kitchen.tif``) would otherwise write the
+        same files and overwrite each other; only the later colliding names change.
+        Keys are ``Path`` objects, so ``str`` inputs and the ``Path`` that the parallel
+        I/O loader hands back resolve to the same entry.
+        """
+        allocator = OutputStemAllocator()
+        return {Path(input_path): allocator.claim(input_path) for input_path in input_paths}
 
     def _batch_process_parallel_io(
         self,
@@ -546,7 +577,13 @@ class UnifiedLuxuryPipeline:
             thread_name_prefix="unified_luxury_io",
         )
 
-        io_results = io_pipeline.process_batch(input_paths, self._prepare_batch_output_work)
+        output_stems = self._assign_output_stems(input_paths)
+        io_results = io_pipeline.process_batch(
+            input_paths,
+            lambda input_path, loaded: self._prepare_batch_output_work(
+                input_path, loaded, output_stem=output_stems[Path(input_path)]
+            ),
+        )
 
         results: Dict[Path, Dict[str, Path]] = {}
         result_iterator = tqdm(io_results, desc="Processing") if show_progress else io_results
@@ -588,6 +625,7 @@ class UnifiedLuxuryPipeline:
         self,
         input_path: Path,
         loaded: _LoadedBatchImage,
+        output_stem: Optional[str] = None,
     ) -> _OutputGenerationWork:
         """Run compute stages for a loaded batch item and defer output I/O."""
 
@@ -640,6 +678,7 @@ class UnifiedLuxuryPipeline:
             config=temp_config,
             started_at=started_at,
             stage_times=self.stats.stage_times.copy(),
+            output_stem=output_stem,
         )
 
     def _save_batch_outputs(
@@ -650,7 +689,7 @@ class UnifiedLuxuryPipeline:
         """Write outputs for a prepared batch item."""
 
         start = time.time()
-        outputs = self._generate_outputs(work.image, input_path, work.metadata, work.config)
+        outputs = self._generate_outputs(work.image, input_path, work.metadata, work.config, work.output_stem)
         elapsed = time.time() - start
         stage_times = work.stage_times.copy()
         stage_times["Output Generation"] = elapsed
@@ -774,6 +813,11 @@ class UnifiedLuxuryPipeline:
         """
         if not input_path.exists():
             raise FileNotFoundError(f"Input image not found: {input_path}")
+        if input_path.suffix.lower() in UNSUPPORTED_INPUT_SUFFIXES:
+            raise ValueError(
+                f"Unsupported input format {input_path.suffix!r} for {input_path.name}: the unified luxury "
+                "pipeline cannot read OpenEXR/HDR inputs; convert to a display-referred 16-bit TIFF first"
+            )
 
         log.info(f"Loading: {input_path.name}")
 
@@ -788,7 +832,7 @@ class UnifiedLuxuryPipeline:
 
         if image.mode != "RGB":
             log.info(f"  Converting {image.mode} → RGB")
-            image = image.convert("RGB")
+            image = convert_to_rgb(image)
 
         image.load()
 
@@ -1051,7 +1095,7 @@ class UnifiedLuxuryPipeline:
                     if isinstance(enhanced, np.ndarray):
                         # Convert float32 to uint8 if needed
                         if enhanced.dtype == np.float32 or enhanced.dtype == np.float64:
-                            enhanced = (np.clip(enhanced, 0, 1) * 255).astype(np.uint8)
+                            enhanced = quantize_unit_float(enhanced)
                         return Image.fromarray(enhanced)
                     elif isinstance(enhanced, Image.Image):
                         return enhanced
@@ -1062,7 +1106,7 @@ class UnifiedLuxuryPipeline:
                         if isinstance(val, np.ndarray):
                             # Convert float32 to uint8 if needed
                             if val.dtype == np.float32 or val.dtype == np.float64:
-                                val = (np.clip(val, 0, 1) * 255).astype(np.uint8)
+                                val = quantize_unit_float(val)
                             return Image.fromarray(val)
                         elif isinstance(val, Image.Image):
                             return val
@@ -1071,7 +1115,7 @@ class UnifiedLuxuryPipeline:
             elif isinstance(result, np.ndarray):
                 # Convert float32 to uint8 if needed
                 if result.dtype == np.float32 or result.dtype == np.float64:
-                    result = (np.clip(result, 0, 1) * 255).astype(np.uint8)
+                    result = quantize_unit_float(result)
                 return Image.fromarray(result)
             elif isinstance(result, Image.Image):
                 return result
@@ -1290,7 +1334,7 @@ class UnifiedLuxuryPipeline:
 
         # 9. TRANSITION BLENDING: Smooth material boundaries
         # This respects the third Material Response tenet
-        final_blend = gaussian_filter(enhanced, sigma=0.4)
+        final_blend = gaussian_filter(enhanced, sigma=(0.4, 0.4, 0))  # spatial only, never across channels
         blend_factor = 0.12
         enhanced = enhanced * (1 - blend_factor) + final_blend * blend_factor
 
@@ -1312,7 +1356,7 @@ class UnifiedLuxuryPipeline:
         enhanced = np.clip(enhanced, 0.0, 1.0)
         log.info(f"    Strength: {strength:.2f}, Material Response v2.0")
 
-        return Image.fromarray((enhanced * 255).astype(np.uint8), "RGB")
+        return Image.fromarray(quantize_unit_float(enhanced), "RGB")
 
     def _apply_vfx_effects(self, image: Image.Image, params: Dict[str, Any]) -> Image.Image:
         """
@@ -1385,7 +1429,7 @@ class UnifiedLuxuryPipeline:
 
         arr = np.clip(arr, 0, 1)
 
-        return Image.fromarray((arr * 255).astype(np.uint8), "RGB")
+        return Image.fromarray(quantize_unit_float(arr), "RGB")
 
     def _apply_lut(self, arr: np.ndarray, lut_path: Path, strength: float) -> np.ndarray:
         """
@@ -1409,6 +1453,7 @@ class UnifiedLuxuryPipeline:
         input_path: Path,
         metadata: Dict[str, Any],
         config: UnifiedPipelineConfig,
+        output_stem: Optional[str] = None,
     ) -> Dict[str, Path]:
         """
         Generate all requested output formats.
@@ -1418,13 +1463,14 @@ class UnifiedLuxuryPipeline:
             input_path: Original input path (for naming)
             metadata: Original image metadata
             config: Pipeline configuration
+            output_stem: Output base name (default: ``input_path.stem``)
 
         Returns:
             Dictionary mapping format names to output paths
         """
         log.info("  Generating output formats...")
 
-        basename = input_path.stem
+        basename = output_stem or input_path.stem
         outputs = {}
         failures: List[Tuple[OutputFormat, Exception]] = []
 
@@ -1544,7 +1590,7 @@ class UnifiedLuxuryPipeline:
 
             # CRITICAL: Always clip to [0,1] before converting to 16-bit
             # This prevents float32 TIFFs with values outside [0,1] range
-            arr_16bit = (np.clip(arr_float, 0.0, 1.0) * 65535).astype(np.uint16)
+            arr_16bit = quantize_unit_float(arr_float, np.uint16)
             height, width = arr_16bit.shape[:2]
 
             # Extract ICC profile if available
@@ -1554,18 +1600,20 @@ class UnifiedLuxuryPipeline:
                 extratags.append((34675, "B", len(icc_profile), icc_profile, False))
 
             # Save with proper 16-bit encoding
-            tifffile.imwrite(
-                output_path,
-                arr_16bit,
-                photometric="rgb",
-                compression="lzw",
-                extratags=extratags if extratags else None,
-            )
+            with atomic_output_path(output_path) as temp_path:
+                tifffile.imwrite(
+                    temp_path,
+                    arr_16bit,
+                    photometric="rgb",
+                    compression="lzw",
+                    extratags=extratags if extratags else None,
+                )
             log.info(f"    Master TIFF: {width}x{height}, 16-bit, {output_path.stat().st_size / (1024**2):.1f} MB")
         else:
             # Fallback to PIL (8-bit only)
             log.warning("    tifffile not available - saving 8-bit TIFF (install tifffile for 16-bit)")
-            image.save(output_path, compression="lzw", dpi=(300, 300))
+            with atomic_output_path(output_path) as temp_path:
+                image.save(temp_path, compression="lzw", dpi=(300, 300))
             log.info(
                 f"    Master TIFF: {image.size[0]}x{image.size[1]}, 8-bit, {output_path.stat().st_size / (1024**2):.1f} MB"
             )
@@ -1585,8 +1633,7 @@ class UnifiedLuxuryPipeline:
         # Resize to 4K
         max_dim = 3840
         if max(image.size) > max_dim:
-            ratio = max_dim / max(image.size)
-            new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+            new_size = fit_size_within(image.size, (max_dim, max_dim))
             resized = image.resize(new_size, Image.Resampling.LANCZOS)
         else:
             resized = image
@@ -1602,7 +1649,8 @@ class UnifiedLuxuryPipeline:
         if icc_profile:
             save_kwargs["icc_profile"] = icc_profile
 
-        resized.save(output_path, **save_kwargs)
+        with atomic_output_path(output_path) as temp_path:
+            resized.save(temp_path, **save_kwargs)
 
         size_mb = output_path.stat().st_size / (1024**2)
         log.info(f"    Web 4K: {resized.size[0]}x{resized.size[1]}, Q96, {size_mb:.1f} MB")
@@ -1622,8 +1670,7 @@ class UnifiedLuxuryPipeline:
         # Resize to 8K
         max_dim = 7680
         if max(image.size) > max_dim:
-            ratio = max_dim / max(image.size)
-            new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+            new_size = fit_size_within(image.size, (max_dim, max_dim))
             resized = image.resize(new_size, Image.Resampling.LANCZOS)
         else:
             resized = image
@@ -1639,7 +1686,8 @@ class UnifiedLuxuryPipeline:
         if icc_profile:
             save_kwargs["icc_profile"] = icc_profile
 
-        resized.save(output_path, **save_kwargs)
+        with atomic_output_path(output_path) as temp_path:
+            resized.save(temp_path, **save_kwargs)
 
         size_mb = output_path.stat().st_size / (1024**2)
         log.info(f"    Print 8K: {resized.size[0]}x{resized.size[1]}, Q98, {size_mb:.1f} MB")
@@ -1658,8 +1706,7 @@ class UnifiedLuxuryPipeline:
 
         # Resize to 1080p
         max_dim = 1080
-        ratio = max_dim / max(image.size)
-        new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+        new_size = fit_size_within(image.size, (max_dim, max_dim))
         resized = image.resize(new_size, Image.Resampling.LANCZOS)
 
         # Save optimized for social media
@@ -1673,7 +1720,8 @@ class UnifiedLuxuryPipeline:
         if icc_profile:
             save_kwargs["icc_profile"] = icc_profile
 
-        resized.save(output_path, **save_kwargs)
+        with atomic_output_path(output_path) as temp_path:
+            resized.save(temp_path, **save_kwargs)
 
         size_mb = output_path.stat().st_size / (1024**2)
         log.info(f"    Social: {resized.size[0]}x{resized.size[1]}, Q92, {size_mb:.1f} MB")
@@ -1693,8 +1741,7 @@ class UnifiedLuxuryPipeline:
         # Resize to 2K
         max_dim = 2048
         if max(image.size) > max_dim:
-            ratio = max_dim / max(image.size)
-            new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+            new_size = fit_size_within(image.size, (max_dim, max_dim))
             resized = image.resize(new_size, Image.Resampling.LANCZOS)
         else:
             resized = image
@@ -1710,7 +1757,8 @@ class UnifiedLuxuryPipeline:
         if icc_profile:
             save_kwargs["icc_profile"] = icc_profile
 
-        resized.save(output_path, **save_kwargs)
+        with atomic_output_path(output_path) as temp_path:
+            resized.save(temp_path, **save_kwargs)
 
         size_mb = output_path.stat().st_size / (1024**2)
         log.info(f"    Magazine 2K: {resized.size[0]}x{resized.size[1]}, Q95, {size_mb:.1f} MB")
@@ -1778,7 +1826,7 @@ def process_luxury_render(
 
     Example:
         outputs = process_luxury_render(
-            "kitchen.exr",
+            "kitchen.tif",
             profile=ProcessingProfile.PREMIUM
         )
     """

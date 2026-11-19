@@ -54,7 +54,14 @@ from transformation_portal.pipelines.dimension_validation import (
 from transformation_portal.pipelines.dimension_validation import validate_sd_dimensions as _validate_sd_dimensions
 
 # Import common image utilities
-from transformation_portal.utils.image_utils import load_image, np_to_pil, pil_to_np, save_image
+from transformation_portal.utils.image_utils import (
+    OutputStemAllocator,
+    convert_to_rgb,
+    load_image,
+    np_to_pil,
+    pil_to_np,
+    save_image,
+)
 
 # Optional Real-ESRGAN status (already set during import attempt above)
 # Keep backward compatibility with existing code that checks _HAS_REALESRGAN
@@ -241,7 +248,7 @@ def _load_texture_base(path: str) -> np.ndarray:
 
     try:
         with Image.open(path) as img:
-            texture = img.convert("RGB")
+            texture = convert_to_rgb(img)
             return np.asarray(texture, dtype=np.float32) / 255.0
     except FileNotFoundError as exc:  # pragma: no cover - defensive
         raise FileNotFoundError(f"Texture file not found: {path}") from exc
@@ -710,6 +717,21 @@ def adjust_contrast_saturation(
 # --------------------------
 
 
+def _load_caption_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Return a caption font of ``size`` px, falling back to Pillow's sized default."""
+
+    try:
+        # Use a clean sans (replace with your corporate font)
+        return ImageFont.truetype("arial.ttf", size=size)
+    except OSError:
+        pass
+    try:
+        # Pillow's bundled scalable default keeps the intended caption size.
+        return ImageFont.load_default(size=size)
+    except (OSError, TypeError, ImportError):
+        return ImageFont.load_default()
+
+
 def overlay_logo_caption(  # pylint: disable=too-many-locals
     img: Image.Image,
     logo_path: Optional[str],
@@ -719,17 +741,15 @@ def overlay_logo_caption(  # pylint: disable=too-many-locals
     """Overlay caption text and optional logo onto ``img``."""
 
     canvas = img.copy()
-    draw = ImageDraw.Draw(canvas)
     width_px, height_px = canvas.size
 
     # Caption
     if text:
-        try:
-            # Use a clean sans (replace with your corporate font)
-            font = ImageFont.truetype("arial.tt", size=max(22, height_px // 40))
-        except (OSError, IOError):
-            font = ImageFont.load_default()
-
+        font = _load_caption_font(max(22, height_px // 40))
+        # Draw on a transparent overlay and composite it, so the box and text
+        # alpha values are honoured instead of being painted opaque on RGB.
+        overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
         bbox = draw.textbbox((0, 0), text, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         x = margin
@@ -739,6 +759,10 @@ def overlay_logo_caption(  # pylint: disable=too-many-locals
         box = [x - pad, y - pad, x + tw + pad, y + th + pad]
         draw.rectangle(box, fill=(0, 0, 0, 160))
         draw.text((x, y), text, fill=(255, 255, 255, 230), font=font)
+        original_mode = canvas.mode
+        canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay)
+        if original_mode != "RGBA":
+            canvas = canvas.convert(original_mode)
 
     # Logo
     if logo_path and Path(logo_path).exists():
@@ -1499,6 +1523,9 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
     print(f"[Finishing] {asdict(finish)}")
     print(f"[Batch] {len(files)} file(s)")
 
+    failures = 0
+    # Same-stem inputs (kitchen.png, kitchen.tif) would overwrite each other's output.
+    stem_allocator = OutputStemAllocator()
     for i, f in enumerate(files, 1):
         try:
             print(f"\n[{i}/{len(files)}] {f}")
@@ -1513,11 +1540,18 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
                 brand_text=brand_text,
                 export_4k=w4k,
             )
-            fname = Path(f).stem + "_lux.png"
+            fname = stem_allocator.claim(f) + "_lux.png"
             save_image(out_img, out_dir / fname)
             print(f"[Saved] {out_dir / fname}")
         except Exception as e:
+            failures += 1
             print(f"[Error] {f}: {e}")
+
+    if failures == len(files):
+        typer.echo(f"Error: all {failures} file(s) failed", err=True)
+        raise typer.Exit(code=1)
+    if failures:
+        print(f"[Batch] Completed with {failures} failure(s) out of {len(files)} file(s)")
 
 
 if __name__ == "__main__":

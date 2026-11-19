@@ -177,6 +177,28 @@ Bundle verification MUST:
    compare against notarization digests.
 8. Fail non-zero on any mismatch.
 
+## Optional Merkle binding check
+
+Steps 1-8 prove that the artifacts match the digests recorded in the bundle
+manifest. They do not prove that `hash_manifest.csv.gz` is the manifest the
+signed `merkle_roots.json` was derived from: the bundle manifest is unsigned,
+so whoever can edit the hash manifest can also refresh `hash_manifest_sha256`
+and recompute `bundle_root_sha256`.
+
+`--verify-merkle-binding` adds that link. After steps 1-8 pass it:
+
+1. Recomputes the global and per-partition Merkle roots from the bundled
+   `hash_manifest.csv.gz` rows and compares roots, leaf counts and the
+   partition set with the bundled `merkle_roots.json`.
+2. Compares `rows_total`, the status counts and `total_bytes_hashed` in the
+   bundled `hash_summary.json` with the same rows.
+3. Exits `11` on any mismatch, and on a hash manifest that cannot be read as
+   Phase 3 rows.
+
+The check is opt-in so that Phase 3.3 / 3.4 manifests keep verifying exactly
+as before (ADR-035 D5). Run it whenever the bundle carries real Phase 3 scan
+outputs and is relied on as custody evidence.
+
 ---
 
 # CLI Interface
@@ -220,6 +242,15 @@ Verify canonical bundle manifest:
 python tools/verify_evidence_bundle_manifest.py \
   --bundle-manifest /path/to/evidence_bundle_manifest.json \
   --bundle-dir /path/to/bundle_dir
+```
+
+Verify the bundle manifest and bind the hash manifest rows to the signed roots:
+
+```bash
+python tools/verify_evidence_bundle_manifest.py \
+  --bundle-manifest /path/to/evidence_bundle_manifest.json \
+  --bundle-dir /path/to/bundle_dir \
+  --verify-merkle-binding
 ```
 
 ---

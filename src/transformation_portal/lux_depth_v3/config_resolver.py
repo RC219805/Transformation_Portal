@@ -745,6 +745,46 @@ def build_apex_depth_gate_fingerprint_payload(config: EnhanceConfig) -> Dict[str
     }
 
 
+def build_stage_a_inputs_sha256(config: EnhanceConfig) -> str:
+    """Digest the depth-shaping settings that ``ConfigFingerprint`` does not carry.
+
+    RAW decode settings, the effective depth postprocessing, the CoreML
+    accelerator toggle and the ensemble policy all change Stage A depth, but
+    they are not ConfigFingerprint fields (whose bytes are bound into plans).
+    Legacy Stage A reuse records and compares this digest separately.
+    """
+    from .ingest_adapter import raw_ingest_summary
+
+    postprocessing = config.depth_postprocessing
+    if postprocessing is None:
+        postprocessing = resolve_preset(config.preset, config.model_variant)[0].postprocessing
+    refinement = postprocessing.refinement
+    payload = {
+        "raw_ingest_settings_hash": str(raw_ingest_summary(config)["settings_hash"]),
+        "depth_postprocessing": {
+            "apply_metric_scaling": bool(postprocessing.apply_metric_scaling),
+            "scale_factor": float(postprocessing.scale_factor),
+            "apply_median_filter": bool(postprocessing.apply_median_filter),
+            "median_kernel_size": int(postprocessing.median_kernel_size),
+            "apply_bilateral_filter": bool(postprocessing.apply_bilateral_filter),
+            "bilateral_sigma_color": float(postprocessing.bilateral_sigma_color),
+            "bilateral_sigma_space": float(postprocessing.bilateral_sigma_space),
+            "preserve_edges": bool(postprocessing.preserve_edges),
+            "edge_threshold": float(postprocessing.edge_threshold),
+            "fusion_mode": str(postprocessing.fusion_mode),
+            "refinement": (None if refinement is None else f"{type(refinement).__module__}.{type(refinement).__qualname__}"),
+        },
+        "use_coreml_backend": bool(config.use_coreml_backend),
+        "ensemble": {
+            "fusion_method": str(config.ensemble_fusion_method),
+            "max_variance_threshold": float(config.ensemble_max_variance_threshold),
+            "temporal_filter_mode": str(config.ensemble_temporal_filter_mode),
+            "temporal_filter_alpha": float(config.ensemble_temporal_filter_alpha),
+        },
+    }
+    return hashlib.sha256(canonicalize_json(payload)).hexdigest()
+
+
 def build_depth_cache_payload(
     config: EnhanceConfig,
     model_variant: Optional[ModelVariant] = None,

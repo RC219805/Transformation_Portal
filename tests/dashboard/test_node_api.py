@@ -121,6 +121,13 @@ def test_node_logs_respects_tail(client: TestClient) -> None:
     assert body["logs"][-1].endswith("line-4")
 
 
+@pytest.mark.parametrize("tail", [0, -1, 1001])
+def test_node_logs_rejects_out_of_range_tail(client: TestClient, tail: int) -> None:
+    # tail=0 used to slice logs[-0:] and return every entry (D5).
+    resp = client.get("/api/inspect/runs/run_1/nodes/ingest/logs", params={"tail": tail})
+    assert resp.status_code == 422
+
+
 # --------------------------------------------------------------------------- #
 # artifacts (with / without CAS)
 # --------------------------------------------------------------------------- #
@@ -314,3 +321,33 @@ def test_create_router_requires_fastapi(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(node_api, "FASTAPI_AVAILABLE", False)
     with pytest.raises(ImportError, match="FastAPI is required"):
         node_api.create_node_inspection_router()
+
+
+# --------------------------------------------------------------------------- #
+# D7 regressions: bounded reads and multi-byte read boundary
+# --------------------------------------------------------------------------- #
+
+
+def test_artifact_preview_multibyte_split_by_read_boundary_is_text(client: TestClient, tmp_path: Path) -> None:
+    f = tmp_path / "utf8.txt"
+    f.write_bytes(("a" * 4095 + "é" + " more\n" * 50).encode("utf-8"))
+    cas = _FakeCAS()
+    cas.add("sha-utf8", f)
+    node_api.set_cas(cas)  # type: ignore[arg-type]
+
+    body = client.get("/api/inspect/artifact/sha-utf8/preview").json()
+    assert body["content_type"] == "text/plain"
+    assert body["preview"] == "a" * 4095
+    assert body["truncated"] is True
+
+
+@pytest.mark.parametrize("max_bytes", [-1, 0, 65537])
+def test_artifact_preview_rejects_unbounded_max_bytes(client: TestClient, tmp_path: Path, max_bytes: int) -> None:
+    f = tmp_path / "small.txt"
+    f.write_bytes(b"hello")
+    cas = _FakeCAS()
+    cas.add("sha-small", f)
+    node_api.set_cas(cas)  # type: ignore[arg-type]
+
+    resp = client.get("/api/inspect/artifact/sha-small/preview", params={"max_bytes": max_bytes})
+    assert resp.status_code == 422

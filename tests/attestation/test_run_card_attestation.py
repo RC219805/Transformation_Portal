@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from transformation_portal.attestation.dsse import decode_dsse_payload
+from transformation_portal.attestation.dsse import DSSE_IN_TOTO_JSON_PAYLOAD_TYPE, decode_dsse_payload, pre_auth_encode
 from transformation_portal.attestation.run_card_detached import (
     bind_run_card_detached_attestation,
     build_run_card_detached_attestation_payload,
@@ -338,3 +338,16 @@ def test_run_card_attestation_preimage_is_deterministic() -> None:
         run_card_bytes=run_card_bytes,
     )
     assert preimage_a == preimage_b
+
+
+def test_dsse_pre_auth_encode_ascii_payload_type_is_byte_identical() -> None:
+    payload = b'{"a":1}'
+    expected = b"DSSEv1 28 application/vnd.in-toto+json 7 " + payload
+    assert pre_auth_encode(DSSE_IN_TOTO_JSON_PAYLOAD_TYPE, payload) == expected
+
+
+def test_dsse_pre_auth_encode_uses_utf8_byte_length_for_payload_type() -> None:
+    payload_type = "application/vnd.tp+json;v=é"
+    encoded_type = payload_type.encode("utf-8")
+    assert len(encoded_type) == 28
+    assert pre_auth_encode(payload_type, b"{}") == b"DSSEv1 28 " + encoded_type + b" 2 {}"

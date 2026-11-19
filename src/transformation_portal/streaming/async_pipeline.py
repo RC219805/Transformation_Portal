@@ -626,7 +626,8 @@ class StreamingImageLoader:
 
     Features:
     - Async loading with prefetch buffer
-    - Memory management to prevent OOM
+    - Memory management: a garbage-collection pass once the images loaded
+      since the last pass reach 90% of ``max_memory_mb``
     - Support for multiple image formats
     - Optional thumbnail generation during load
 
@@ -651,7 +652,10 @@ class StreamingImageLoader:
 
         Args:
             prefetch_size: Number of images to prefetch
-            max_memory_mb: Maximum memory usage in MB
+            max_memory_mb: Memory budget in MB for loaded image arrays; once
+                the arrays yielded since the last collection reach 90% of it,
+                a garbage-collection pass runs. This is a soft trigger, not a
+                hard cap on resident memory.
             worker_pool: Optional shared worker pool
         """
         self._prefetch_size = prefetch_size
@@ -704,6 +708,18 @@ class StreamingImageLoader:
             metadata["memory_mb"] = memory_mb
 
             return image_array, metadata
+
+    @staticmethod
+    def _loaded_memory_mb(image: Any, metadata: Any) -> float:
+        """Size in MB of a loaded image, from its metadata or array size."""
+        if isinstance(metadata, dict):
+            value = metadata.get("memory_mb")
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+                return float(value)
+        nbytes = getattr(image, "nbytes", None)
+        if isinstance(nbytes, int) and nbytes >= 0:
+            return nbytes / (1024 * 1024)
+        return 0.0
 
     async def load_image(self, path: Path) -> Tuple[Any, Dict[str, Any]]:
         """Async load a single image.
@@ -762,6 +778,7 @@ class StreamingImageLoader:
 
                 try:
                     image, metadata = await task
+                    self._current_memory_mb += self._loaded_memory_mb(image, metadata)
                     yield image, path, None
                 except Exception as e:
                     if yield_on_error:
@@ -819,7 +836,11 @@ class AsyncPipeline:
         Args:
             max_queue_size: Maximum queue size between stages
             worker_pool: Shared worker pool (created if not provided)
-            stop_on_error: Stop pipeline on first error
+            stop_on_error: Stop pipeline on first error. Within an item, any
+                failed stage ends that item; within ``process_batch`` and
+                ``process_streaming``, no further items are started after the
+                first failed item (items already in flight drain and are
+                still yielded).
         """
         self._stages: List[AsyncStage] = []
         self._queues: List[BackpressureQueue] = []
@@ -900,6 +921,11 @@ class AsyncPipeline:
 
         self._active = False
 
+    @staticmethod
+    def _work_item_failed(work_item: WorkItem) -> bool:
+        """Return True when any stage of ``work_item`` failed."""
+        return any(result.failed for result in work_item.stage_results)
+
     async def process_item(self, item: Any) -> WorkItem:
         """Process a single item through all stages.
 
@@ -949,6 +975,7 @@ class AsyncPipeline:
         item_iterator = iter(items)
         pending: Dict[asyncio.Task[WorkItem[Any]], Any] = {}
         shutdown_waiter = asyncio.create_task(self._shutdown_event.wait())
+        stop_scheduling = False
 
         def build_failed_work_item(item: Any, error: Exception) -> WorkItem[Any]:
             work_item = WorkItem(id=str(id(item)), data=item, metadata={"error": str(error)})
@@ -966,7 +993,7 @@ class AsyncPipeline:
             return work_item
 
         def schedule_pending_work() -> None:
-            while len(pending) < max_concurrent and not self._shutdown_event.is_set():
+            while len(pending) < max_concurrent and not stop_scheduling and not self._shutdown_event.is_set():
                 try:
                     item = next(item_iterator)
                 except StopIteration:
@@ -989,9 +1016,11 @@ class AsyncPipeline:
                     except asyncio.CancelledError:
                         continue
                     except Exception as e:
-                        yield build_failed_work_item(item, e)
-                    else:
-                        yield work_item
+                        work_item = build_failed_work_item(item, e)
+                    if self._stop_on_error and self._work_item_failed(work_item):
+                        # Stop scheduling new items; in-flight items drain below.
+                        stop_scheduling = True
+                    yield work_item
 
                 if shutdown_waiter in done:
                     for task in pending:
@@ -1037,6 +1066,9 @@ class AsyncPipeline:
 
             work_item = await self.process_item(item)
             yield work_item
+
+            if self._stop_on_error and self._work_item_failed(work_item):
+                break
 
         self._metrics.total_processing_time = time.time() - start_time
         self._metrics.update_throughput()

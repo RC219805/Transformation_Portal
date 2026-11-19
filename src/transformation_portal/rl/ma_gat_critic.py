@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from transformation_portal.rl.gat import GATLayer, create_gat_layer
+from transformation_portal.rl.gat import GATLayer, batch_edge_index, create_gat_layer
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class GATQMIXCritic:
         Agent Q-values + Context -> QMIX mixing -> Q_total
 
     Example:
-        >>> critic = GATQMIXCritic(state_dim=28, n_agents=3)
+        >>> critic = GATQMIXCritic(state_dim=28, n_agents=3, global_state_dim=20)
         >>> q_total = critic.forward(agent_qs, agent_states, global_state, edge_index)
     """
 
@@ -72,6 +72,7 @@ class GATQMIXCritic:
         num_gat_layers: int = 2,
         alpha: float = 0.8,
         gat_dropout: float = 0.0,
+        global_state_dim: int | None = None,
     ) -> None:
         """Initialize GAT-QMIX critic.
 
@@ -83,13 +84,19 @@ class GATQMIXCritic:
             num_gat_layers: Number of GAT layers
             alpha: QMIX weight (1.0 = pure QMIX, 0.0 = pure VDN)
             gat_dropout: Dropout in GAT layers
+            global_state_dim: Global state dimension fed to the QMIX
+                hypernetworks (defaults to ``state_dim``). The package's own
+                encoders produce different widths
+                (``ma_state.get_state_dim()`` vs ``ma_state.get_global_dim()``).
         """
         torch, nn, F = _get_torch()
 
         self.state_dim = state_dim
+        self.global_state_dim = state_dim if global_state_dim is None else global_state_dim
         self.n_agents = n_agents
         self.embed_dim = embed_dim
         self.alpha = alpha
+        self.training = True
 
         # Node embedding
         self.node_embed = nn.Linear(state_dim, embed_dim)
@@ -110,18 +117,18 @@ class GATQMIXCritic:
 
         # QMIX hypernetworks
         self.hyper_w1 = nn.Sequential(
-            nn.Linear(state_dim, embed_dim),
+            nn.Linear(self.global_state_dim, embed_dim),
             nn.ReLU(),
             nn.Linear(embed_dim, n_agents * embed_dim),
         )
-        self.hyper_b1 = nn.Linear(state_dim, embed_dim)
+        self.hyper_b1 = nn.Linear(self.global_state_dim, embed_dim)
 
         self.hyper_w2 = nn.Sequential(
-            nn.Linear(state_dim, embed_dim),
+            nn.Linear(self.global_state_dim, embed_dim),
             nn.ReLU(),
             nn.Linear(embed_dim, embed_dim),
         )
-        self.hyper_b2 = nn.Linear(state_dim, 1)
+        self.hyper_b2 = nn.Linear(self.global_state_dim, 1)
 
     def _run_gat(self, x: Any, edge_index: Any) -> Any:
         """Run GAT layers.
@@ -152,7 +159,7 @@ class GATQMIXCritic:
         Args:
             agent_qs: Per-agent Q-values [batch, n_agents]
             agent_states: Per-agent states [batch, n_agents, state_dim]
-            global_state: Global state [batch, state_dim]
+            global_state: Global state [batch, global_state_dim]
             edge_index: DAG edges [2, num_edges]
 
         Returns:
@@ -162,21 +169,10 @@ class GATQMIXCritic:
 
         B, N, D = agent_states.shape
 
-        # Process each batch item through GAT
-        # (GAT operates on single graphs, so we loop over batch)
-        embeddings = []
-
-        for b in range(B):
-            # Embed node states
-            x = self.node_embed(agent_states[b])  # [N, embed_dim]
-
-            # Run GAT
-            x = self._run_gat(x, edge_index)  # [N, embed_dim]
-
-            embeddings.append(x)
-
-        # Stack embeddings
-        embeddings = torch.stack(embeddings, dim=0)  # [B, N, embed_dim]
+        # Run the whole batch as one graph of B disjoint copies of the DAG
+        x = self.node_embed(agent_states.reshape(B * N, D))  # [B*N, embed_dim]
+        x = self._run_gat(x, batch_edge_index(edge_index, B, N))  # [B*N, embed_dim]
+        embeddings = x.view(B, N, self.embed_dim)  # [B, N, embed_dim]
 
         # Aggregate to context (mean pooling)
         context = embeddings.mean(dim=1)  # [B, embed_dim]
@@ -219,7 +215,7 @@ class GATQMIXCritic:
         Args:
             agent_qs: Per-agent Q-values [batch, n_agents]
             agent_states: Per-agent states [batch, n_agents, state_dim]
-            global_state: Global state [batch, state_dim]
+            global_state: Global state [batch, global_state_dim]
             edge_index: DAG edges [2, num_edges]
 
         Returns:
@@ -262,6 +258,17 @@ class GATQMIXCritic:
         q_total = self.alpha * qmix + (1.0 - self.alpha) * vdn
 
         return q_total, all_attentions
+
+    def train(self, mode: bool = True) -> "GATQMIXCritic":
+        """Set training mode on the GAT layers (``gat_dropout`` applies only while training)."""
+        self.training = bool(mode)
+        for gat in self.gat_layers:
+            gat.train(mode)
+        return self
+
+    def eval(self) -> "GATQMIXCritic":
+        """Set evaluation mode (disables GAT attention dropout)."""
+        return self.train(False)
 
     def parameters(self):
         """Get all parameters."""

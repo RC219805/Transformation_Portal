@@ -16,7 +16,11 @@ Test Coverage:
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
+import shutil
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Dict
@@ -181,6 +185,84 @@ class TestComputeCodeHash:
 
         # Hash should change
         assert hash1 != hash2
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git executable required")
+class TestComputeCodeHashTracksTheWorkingTree:
+    """The git-based code hash must follow the code on disk, not only the last commit."""
+
+    @staticmethod
+    def _git(repo: Path, *arguments: str) -> str:
+        identity = ["-c", "user.name=tester", "-c", "user.email=tester@example.invalid", "-c", "commit.gpgsign=false"]
+        completed = subprocess.run(
+            ["git", *identity, "-C", str(repo), *arguments],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        return completed.stdout
+
+    @pytest.fixture
+    def repo(self, tmp_path, monkeypatch):
+        repo = tmp_path / "repo"
+        (repo / "src" / "pkg").mkdir(parents=True)
+        (repo / "src" / "pkg" / "stage.py").write_text("def run(x):\n    return x * 2\n")
+        (repo / "src" / "pkg" / "helper.py").write_text("FACTOR = 2\n")
+        (repo / "docs.md").write_text("notes\n")
+        self._git(repo, "init", "-q")
+        self._git(repo, "add", ".")
+        self._git(repo, "commit", "-q", "-m", "init")
+        monkeypatch.chdir(repo)
+        return repo
+
+    def test_clean_tree_hash_is_the_tree_listing_hash(self, repo):
+        listing = self._git(repo, "ls-tree", "-r", "HEAD", "src/")
+
+        assert compute_code_hash(["src/"]) == "sha256:" + hashlib.sha256(listing.encode("utf-8")).hexdigest()
+
+    def test_uncommitted_edit_changes_the_hash_and_reverting_restores_it(self, repo):
+        stage = repo / "src" / "pkg" / "stage.py"
+        clean = compute_code_hash(["src/"])
+
+        stage.write_text("def run(x):\n    return x * 3\n")
+        edited = compute_code_hash(["src/"])
+        stage.write_text("def run(x):\n    return x * 4\n")
+        edited_again = compute_code_hash(["src/"])
+        stage.write_text("def run(x):\n    return x * 2\n")
+
+        assert len({clean, edited, edited_again}) == 3
+        assert compute_code_hash(["src/"]) == clean
+
+    def test_staged_edit_changes_the_hash(self, repo):
+        clean = compute_code_hash(["src/"])
+        (repo / "src" / "pkg" / "helper.py").write_text("FACTOR = 3\n")
+        self._git(repo, "add", "src/pkg/helper.py")
+
+        assert compute_code_hash(["src/"]) != clean
+
+    def test_deleted_tracked_file_changes_the_hash(self, repo):
+        clean = compute_code_hash(["src/"])
+        (repo / "src" / "pkg" / "helper.py").unlink()
+
+        assert compute_code_hash(["src/"]) != clean
+
+    def test_edit_is_seen_from_a_subdirectory_with_an_absolute_code_path(self, repo, monkeypatch):
+        """Changed files are located from the repository root, not the working directory."""
+        code_path = str(repo / "src" / "pkg")
+        monkeypatch.chdir(repo / "src")
+        clean = compute_code_hash([code_path])
+
+        (repo / "src" / "pkg" / "stage.py").write_text("def run(x):\n    return x * 5\n")
+
+        assert compute_code_hash([code_path]) != clean
+
+    def test_changes_outside_the_code_paths_and_untracked_files_do_not_matter(self, repo):
+        clean = compute_code_hash(["src/"])
+        (repo / "docs.md").write_text("edited notes\n")
+        (repo / "src" / "pkg" / "scratch.py").write_text("print('untracked')\n")
+
+        assert compute_code_hash(["src/"]) == clean
 
 
 class TestComputeConfigHash:
@@ -634,6 +716,47 @@ class TestComputeStageCodeHash:
 
         hash1 = compute_stage_code_hash(my_stage)
         assert hash1.startswith("sha256:")
+
+    @staticmethod
+    def _hash_stage_from_module(directory: Path, body: str, class_name: str, monkeypatch) -> str:
+        """Hash an instance of ``class_name`` defined in a fresh ``stagemod`` module under ``directory``."""
+        directory.mkdir()
+        (directory / "stagemod.py").write_text(
+            "class CallableStage:\n"
+            "    def __call__(self, x):\n"
+            f"        {body}\n"
+            "\n"
+            "class PlainStage:\n"
+            "    def execute(self, x):\n"
+            f"        {body}\n"
+        )
+        with monkeypatch.context() as scoped:
+            scoped.syspath_prepend(str(directory))
+            scoped.delitem(sys.modules, "stagemod", raising=False)
+            importlib.invalidate_caches()
+            module = importlib.import_module("stagemod")
+            try:
+                return compute_stage_code_hash(getattr(module, class_name)())
+            finally:
+                sys.modules.pop("stagemod", None)
+
+    def test_callable_instance_hash_changes_with_its_call_body(self, tmp_path, monkeypatch):
+        """An instance with __call__ is hashed from its class source, not only its name."""
+        doubled = self._hash_stage_from_module(tmp_path / "v1", "return x * 2", "CallableStage", monkeypatch)
+        tripled = self._hash_stage_from_module(tmp_path / "v2", "return x * 3", "CallableStage", monkeypatch)
+
+        assert doubled != tripled
+
+    @pytest.mark.parametrize("class_name", ["CallableStage", "PlainStage"])
+    def test_identical_stage_source_hashes_the_same_in_any_directory(self, tmp_path, monkeypatch, class_name):
+        """The checkout location is not part of the code identity."""
+        first = self._hash_stage_from_module(tmp_path / "checkout_a", "return x * 2", class_name, monkeypatch)
+        second = self._hash_stage_from_module(tmp_path / "checkout_b", "return x * 2", class_name, monkeypatch)
+
+        assert first == second
+
+    def test_callables_without_source_are_told_apart_by_name(self):
+        assert compute_stage_code_hash(len) != compute_stage_code_hash(sorted)
 
 
 class TestLockfileHash:

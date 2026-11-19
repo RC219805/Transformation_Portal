@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -111,6 +112,48 @@ def _eligible_for_stac(row: dict[str, Any], *, datetime_field: str) -> tuple[boo
     return True, lat, lon, dt
 
 
+def _stac_item_id(row: dict[str, Any]) -> str:
+    relpath = str(row.get("relpath") or "")
+    return str(row.get("provenance_id") or "") or Path(relpath).stem or relpath.replace("/", "_")
+
+
+def _validate_stac_item_ids(rows: list[dict[str, Any]], *, datetime_field: str) -> None:
+    """Reject STAC item ids that are unsafe as filenames or that would overwrite each other.
+
+    Item files are written as ``<items_dir>/<id>.json``; an id with a path separator escapes
+    ``items_dir`` and two rows sharing an id (for example the ``Path(relpath).stem`` fallback
+    for ``a/IMG_1.jpg`` and ``b/IMG_1.jpg``) silently overwrite one another.
+    """
+    seen: dict[str, str] = {}
+    for row in rows:
+        if str(row.get("hash_status") or "") != "ok":
+            continue
+        eligible, _, _, _ = _eligible_for_stac(row, datetime_field=datetime_field)
+        if not eligible:
+            continue
+        relpath = str(row.get("relpath") or "")
+        item_id = _stac_item_id(row)
+        if not item_id or item_id in {".", ".."} or any(char in item_id for char in ("/", "\\", "\x00")):
+            raise ValueError(f"STAC item id {item_id!r} for relpath {relpath!r} is not a safe filename")
+        if item_id in seen:
+            raise ValueError(
+                f"Duplicate STAC item id {item_id!r} for relpaths {seen[item_id]!r} and {relpath!r}; "
+                "set a unique provenance_id on each row"
+            )
+        seen[item_id] = relpath
+
+
+def _relative_href(target: Path, start_dir: Path) -> str:
+    """Return the relative reference from ``start_dir`` to ``target`` as the operator spelled them.
+
+    The relation is lexical (no symlink resolution), matching how a relative href is resolved.
+    Resolving symlinks would point the item ``parent`` link at the previous target of a catalog
+    path that is a symlink (the atomic write replaces the link itself) and would change the
+    default-layout hrefs whenever ``items`` is a symlinked directory.
+    """
+    return Path(os.path.relpath(target, start_dir)).as_posix()
+
+
 def _write_stac_outputs(
     *,
     rows: list[dict[str, Any]],
@@ -130,7 +173,7 @@ def _write_stac_outputs(
 
         relpath = str(row.get("relpath") or "")
         mime = str(row.get("mime") or "application/octet-stream")
-        item_id = str(row.get("provenance_id") or "") or Path(relpath).stem or relpath.replace("/", "_")
+        item_id = _stac_item_id(row)
         item_filename = f"{item_id}.json"
 
         item_payload = {
@@ -156,7 +199,7 @@ def _write_stac_outputs(
             "links": [
                 {
                     "rel": "parent",
-                    "href": "../catalog.json",
+                    "href": _relative_href(catalog_path, items_dir),
                     "type": "application/json",
                 }
             ],
@@ -168,7 +211,7 @@ def _write_stac_outputs(
                 item_payload,
                 {
                     "rel": "item",
-                    "href": f"items/{item_filename}",
+                    "href": _relative_href(items_dir / item_filename, catalog_path.parent),
                     "type": "application/geo+json",
                 },
             )
@@ -192,7 +235,7 @@ def _write_stac_outputs(
         "links": [
             {
                 "rel": "self",
-                "href": "catalog.json",
+                "href": catalog_path.name,
                 "type": "application/json",
             },
             *sorted(item_links, key=lambda link: str(link["href"])),
@@ -244,6 +287,12 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_INPUT_ERROR
 
     stac_requested = bool(args.out_stac_catalog)
+    if stac_requested:
+        try:
+            _validate_stac_item_ids(rows, datetime_field=args.datetime_field)
+        except ValueError as exc:
+            print(f"Input error: {exc}", file=sys.stderr)
+            return EXIT_INPUT_ERROR
     if stac_requested and args.require_stac and _count_stac_eligible_rows(rows, datetime_field=args.datetime_field) == 0:
         print("STAC export unavailable: no entries with gps_latitude/gps_longitude and datetime", file=sys.stderr)
         return EXIT_STAC_UNAVAILABLE

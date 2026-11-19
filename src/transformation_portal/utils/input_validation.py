@@ -139,8 +139,9 @@ class ImageValidator:
     # Common image formats for architectural rendering
     DEFAULT_FORMATS = {"JPEG", "PNG", "TIFF", "WEBP", "BMP", "EXR", "HDR"}
 
-    # Supported color modes
-    SUPPORTED_MODES = {"RGB", "RGBA", "L", "LA", "P", "I", "F"}
+    # Supported color modes ("I;16*" is how Pillow opens 16-bit greyscale, e.g. the
+    # repository's own *_depth16.png outputs).
+    SUPPORTED_MODES = {"RGB", "RGBA", "L", "LA", "P", "I", "I;16", "I;16B", "I;16L", "F"}
 
     def __init__(
         self,
@@ -431,6 +432,13 @@ class ImageValidator:
                 "RGB_REQUIRED",
                 f"{prefix}RGB image required but got 2D (grayscale) array",
             )
+
+        if array.size == 0:
+            result.add_error(
+                "EMPTY_ARRAY",
+                f"{prefix}Array has no elements (shape {array.shape})",
+            )
+            return
 
         # Check data type and range
         if array.dtype in (np.float32, np.float64):

@@ -525,7 +525,9 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   and verify with
   `./.venv/bin/python tools/verify_run_card_attestation.py --run-card <run-card.json> --require-native --require-dsse --gpg`.
   `--key-id` must resolve to the signing primary fingerprint; native GPG
-  verification also binds the exact canonical attestation preimage.
+  verification also binds the exact canonical attestation preimage. `--gpg`
+  binds both the native `key_id` and the DSSE `keyid` to the verified signer
+  and rejects revoked or expired keys and expired signatures.
 - Archive/fixity:
   `./scripts/pipelines/run_sealed_eval_72h.sh --archive-index <path> --archive-root <path>`
   and

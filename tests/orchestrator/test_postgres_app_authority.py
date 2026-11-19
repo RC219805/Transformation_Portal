@@ -7,6 +7,7 @@ offline CI unless ``TP_TEST_POSTGRES_URL`` is provided by the operator.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -19,6 +20,8 @@ import app as orchestrator_app
 from transformation_portal.orchestrator import reset_singletons
 from transformation_portal.orchestrator.artifact_store import reset_singleton as reset_artifact_store_singleton
 from transformation_portal.orchestrator.queue import reset_singleton as reset_queue_singleton
+from transformation_portal.orchestrator.queue.base import JobEnqueueRequest
+from transformation_portal.orchestrator.queue.memory import MemoryQueueBroker
 from transformation_portal.orchestrator.recovery import WORKER_LOST_REASON_CODE, sweep_orphaned_jobs
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
@@ -224,3 +227,132 @@ async def test_postgres_restart_sweep_exposes_worker_lost_after_runtime_cache_cl
     body = response.json()["data"]
     assert body["state"] == "worker_lost"
     assert body["error"]["code"] == WORKER_LOST_REASON_CODE
+
+
+async def test_postgres_legacy_artifact_delete_refuses_an_overlapping_durable_job(
+    postgres_app_client: tuple[AsyncClient, Any], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    client, repo = postgres_app_client
+    monkeypatch.setattr(orchestrator_app, "ALLOWED_OUTPUT_ROOTS", [tmp_path.resolve()])
+    now = orchestrator_app._now()
+    output = tmp_path / "shared"
+    output.mkdir()
+    files = [output / "first.txt", output / "second.txt"]
+    for path in files:
+        path.write_text(path.name, encoding="utf-8")
+    first = orchestrator_app.Job(
+        id="pg_overlap_first",
+        created_at=now - 100,
+        started_at=now - 80,
+        finished_at=now + 10,
+        state="succeeded",
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output)}},
+    )
+    second = orchestrator_app.Job(
+        id="pg_overlap_second",
+        created_at=now - 70,
+        started_at=now - 60,
+        finished_at=now + 20,
+        state="succeeded",
+        request=first.request,
+    )
+    orchestrator_app._index_job_run_artifacts(first)
+    assert set(first.artifact_lookup) == {"first.txt", "second.txt"}
+    for job in (first, second):
+        await repo.create(orchestrator_app._record_from_job(job))
+
+    response = await client.delete(f"/v1/jobs/{first.id}/artifacts")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["details"]["reason"] == "ambiguous_artifact_ownership"
+    assert [path.read_text(encoding="utf-8") for path in files] == ["first.txt", "second.txt"]
+
+
+@pytest.mark.parametrize("finalize_during_outage", [False, True])
+async def test_postgres_reclaim_retries_an_uncached_job_between_runner_exit_and_finalization(
+    postgres_app_client: tuple[AsyncClient, Any], monkeypatch: pytest.MonkeyPatch, finalize_during_outage: bool
+) -> None:
+    client, repo = postgres_app_client
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id="pg_reclaim_unfinalized",
+        created_at=now - 100,
+        started_at=now - 80,
+        state="succeeded",
+        exit_code=0,
+        request={"pipeline": "lux-depth-v3"},
+    )
+    await repo.create(orchestrator_app._record_from_job(job))
+    broker = MemoryQueueBroker()
+    await broker.enqueue(JobEnqueueRequest(job.id, ["unused"]))
+    lease = await broker.acquire_lease("departed-worker", lease_seconds=1)
+    assert lease is not None
+    real_get, real_update = repo.get, repo.update
+    read_entered, read_released = asyncio.Event(), asyncio.Event()
+    terminal_writes = 0
+
+    async def interrupted_first_read(job_id):
+        if not read_entered.is_set():
+            read_entered.set()
+            await read_released.wait()
+            raise ConnectionError("temporary reclaim hydration failure")
+        return await real_get(job_id)
+
+    async def interrupted_terminal_write(job_id, **fields):
+        nonlocal terminal_writes
+        if fields.get("state") == "worker_lost":
+            terminal_writes += 1
+            if terminal_writes <= 2:
+                raise ConnectionError("temporary reclaim projection failure")
+        return await real_update(job_id, **fields)
+
+    async def expired_time() -> float:
+        return lease.deadline + 1
+
+    def forbidden_execution():
+        pytest.fail("a pending reclaim must never launch a legacy command")
+
+    monkeypatch.setattr(broker, "server_time", expired_time)
+    monkeypatch.setattr(repo, "get", interrupted_first_read)
+    monkeypatch.setattr(repo, "update", interrupted_terminal_write)
+    monkeypatch.setattr(orchestrator_app, "_job_execution_service", forbidden_execution)
+    pending = {}
+    sweep = asyncio.create_task(orchestrator_app._reclaim_sweep_once(broker, repo, pending=pending))
+    try:
+        await asyncio.wait_for(read_entered.wait(), timeout=5)
+        assert pending == {job.id: None}
+        replacement = await broker.acquire_lease("replacement-worker", lease_seconds=60)
+        assert replacement is not None
+        await orchestrator_app._orchestrator_job_executor(
+            replacement.request, asyncio.Event(), pending_legacy_reclaims=pending
+        )
+        await broker.release_lease("replacement-worker", job.id)
+    finally:
+        read_released.set()
+        assert await asyncio.wait_for(sweep, timeout=5) == [job.id]
+
+    assert pending == {job.id: None}
+    assert job.id not in orchestrator_app.JOBS
+    assert terminal_writes == 0
+    if finalize_during_outage:
+        # Durable completion takes precedence when the row is readable again.
+        await orchestrator_app._publish_event(job.id, "done", {"id": job.id, "state": "succeeded"})
+        await real_update(job.id, finished_at=now, done_published_at=now)
+        expected_state = "succeeded"
+    else:
+        expected_state = "worker_lost"
+        for attempts in (1, 2):
+            assert await orchestrator_app._reclaim_sweep_once(broker, repo, pending=pending) == []
+            assert pending[job.id].state == "worker_lost" and terminal_writes == attempts
+            provisional = await real_get(job.id)
+            assert provisional.state == "succeeded" and provisional.finished_at is None
+    assert await orchestrator_app._reclaim_sweep_once(broker, repo, pending=pending) == []
+    assert pending == {}
+
+    response = await client.get(f"/v1/jobs/{job.id}")
+    assert response.status_code == 200
+    assert response.json()["data"]["state"] == expected_state
+    completed = await repo.get(job.id)
+    assert completed is not None and completed.finished_at is not None and completed.done_published_at is not None
+    events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
+    assert [event.payload["state"] for event in events if event.event_type == "done"] == [expected_state]

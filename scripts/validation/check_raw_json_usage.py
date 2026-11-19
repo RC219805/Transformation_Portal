@@ -32,17 +32,41 @@ class JsonCallSite:
 
 
 class JsonCallVisitor(ast.NodeVisitor):
-    """Collect direct json.dump/json.dumps call-sites from an AST."""
+    """Collect json.dump/json.dumps call-sites from an AST, including aliased imports.
+
+    ``import json as _j`` and ``from json import dumps [as d]`` bind the same
+    functions under other names, so the binding names are collected before the
+    calls are matched (mirrors ``check_yaml_governance_boundary.py``).
+    """
 
     def __init__(self) -> None:
         self.calls: list[tuple[int, int, str]] = []
+        self.json_module_names: set[str] = {"json"}
+        self.json_function_names: dict[str, str] = {}
+
+    def _collect_import_bindings(self, tree: ast.AST) -> None:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "json":
+                        self.json_module_names.add(alias.asname or alias.name)
+            elif isinstance(node, ast.ImportFrom) and node.module == "json" and node.level == 0:
+                for alias in node.names:
+                    if alias.name in JSON_CALLS:
+                        self.json_function_names[alias.asname or alias.name] = alias.name
+
+    def visit_Module(self, node: ast.Module) -> None:
+        self._collect_import_bindings(node)
+        self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
         func = node.func
         if isinstance(func, ast.Attribute) and func.attr in JSON_CALLS:
             owner = func.value
-            if isinstance(owner, ast.Name) and owner.id == "json":
+            if isinstance(owner, ast.Name) and owner.id in self.json_module_names:
                 self.calls.append((node.lineno, node.col_offset, func.attr))
+        elif isinstance(func, ast.Name) and func.id in self.json_function_names:
+            self.calls.append((node.lineno, node.col_offset, self.json_function_names[func.id]))
         self.generic_visit(node)
 
 

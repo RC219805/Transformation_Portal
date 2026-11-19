@@ -14,6 +14,7 @@ Key Features:
 
 import functools
 import logging
+import platform
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
@@ -46,6 +47,28 @@ class BackendCapability:
     recommended_for_inference: bool
     recommended_for_training: bool
     special_features: List[str]
+
+
+def _coreml_runtime_available() -> bool:
+    """Return True only on macOS when ``coremltools`` can actually be imported."""
+    if platform.system() != "Darwin":
+        return False
+    try:
+        import coremltools  # noqa: F401  # lazy: optional Apple-only dependency
+    except ImportError:
+        return False
+    return True
+
+
+# Errors that indicate a device/backend problem (unsupported op, OOM, device
+# unavailable) and therefore justify retrying on the next backend. Torch raises
+# these as RuntimeError (NotImplementedError and OutOfMemoryError subclass it).
+# Any other exception type raised by the operation is a caller error and
+# propagates unchanged. Failures while moving the inputs onto a device are
+# always device problems, whatever their type: torch raises AssertionError
+# ("Torch not compiled with CUDA enabled") and TypeError ("Cannot convert a MPS
+# Tensor to float64 dtype") there, so those still fall back.
+_FALLBACK_ERRORS = (RuntimeError,)
 
 
 class BackendRegistry:
@@ -91,8 +114,8 @@ class BackendRegistry:
             )
             logger.info("✓ CUDA backend available")
 
-        # CoreML (Apple Neural Engine)
-        try:
+        # CoreML (Apple Neural Engine): only on macOS with coremltools importable.
+        if _coreml_runtime_available():
             self.backends[BackendType.COREML] = BackendCapability(
                 backend=BackendType.COREML,
                 available=True,
@@ -105,7 +128,7 @@ class BackendRegistry:
                 special_features=["neural_engine", "low_power", "optimized_inference"],
             )
             logger.info("✓ CoreML backend available")
-        except ImportError:
+        else:
             logger.debug("CoreML not available")
 
         # CPU (always available)
@@ -255,18 +278,36 @@ class HardwareAbstraction:
             Operation result
 
         Raises:
-            RuntimeError: If operation fails on all backends
+            RuntimeError: If operation fails with a device error on all backends.
+                Non-device errors (e.g. ``ValueError``) propagate unchanged.
         """
         errors = []
+        attempted_devices = set()
+        last_error: Optional[BaseException] = None
 
         for backend in self.fallback_chain:
+            device = self._backend_to_device(backend)
+            # Several backends map to the same torch device (e.g. CoreML -> cpu);
+            # retrying on a device that already failed would run the op twice.
+            if device in attempted_devices:
+                continue
+            attempted_devices.add(device)
             try:
-                device = self._backend_to_device(backend)
-
-                # Move tensors to target device
+                # Move tensors to target device. Any failure here is a device
+                # problem (unavailable device, unsupported dtype), never a
+                # caller error, so it always qualifies for fallback.
                 args_on_device = self._move_to_device(args, device)
                 kwargs_on_device = self._move_to_device(kwargs, device)
+            except Exception as e:
+                errors.append((backend, str(e)))
+                last_error = e
+                logger.debug(f"{operation_name} could not move inputs to {backend.value}: {e}")
 
+                if not self.enable_auto_fallback:
+                    raise
+                continue
+
+            try:
                 # Execute operation
                 result = operation(*args_on_device, **kwargs_on_device)
 
@@ -279,8 +320,9 @@ class HardwareAbstraction:
 
                 return result
 
-            except Exception as e:
+            except _FALLBACK_ERRORS as e:
                 errors.append((backend, str(e)))
+                last_error = e
                 logger.debug(f"{operation_name} failed on {backend.value}: {e}")
 
                 if not self.enable_auto_fallback:
@@ -290,7 +332,7 @@ class HardwareAbstraction:
         error_msg = f"{operation_name} failed on all backends:\n"
         for backend, error in errors:
             error_msg += f"  {backend.value}: {error}\n"
-        raise RuntimeError(error_msg)
+        raise RuntimeError(error_msg) from last_error
 
     def _move_to_device(self, obj: Any, device: torch.device) -> Any:
         """Recursively move tensors/modules to device."""
@@ -302,6 +344,8 @@ class HardwareAbstraction:
             return {k: self._move_to_device(v, device) for k, v in obj.items()}
         elif isinstance(obj, (list, tuple)):
             moved = [self._move_to_device(item, device) for item in obj]
+            if isinstance(obj, tuple) and hasattr(obj, "_fields"):
+                return type(obj)(*moved)  # namedtuple: positional fields
             return type(obj)(moved)
         else:
             return obj

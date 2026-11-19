@@ -27,12 +27,20 @@ Example:
 from __future__ import annotations
 
 import logging
+import numbers
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# GPU out-of-memory indicators, matched case-insensitively. The phrases match
+# anywhere, as they always did. The acronym must not be part of a longer run of
+# letters ("room", "zoom", "bloom"); digits, punctuation and underscores still
+# delimit it ("CUDA_OOM", "oom-killer").
+_GPU_OOM_PATTERN = re.compile(r"out of memory|cudnn error|allocation failed|(?<![a-z])oom(?![a-z])", re.IGNORECASE)
 
 
 if "ErrorRecoveryStrategy" not in globals():
@@ -139,7 +147,14 @@ class ErrorHandler:
             backoff_factor: Exponential backoff multiplier.
             initial_delay: Initial retry delay in seconds.
             max_delay: Maximum retry delay in seconds.
+
+        Raises:
+            ValueError: If ``max_retries`` is not an integer >= 1. With fewer
+                than one attempt the retry strategies would raise without
+                ever calling the stage function.
         """
+        if isinstance(max_retries, bool) or not isinstance(max_retries, numbers.Integral) or max_retries < 1:
+            raise ValueError(f"max_retries must be an integer >= 1, got {max_retries!r}")
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
         self.initial_delay = initial_delay
@@ -257,8 +272,14 @@ class ErrorHandler:
         """
         last_error: Optional[Exception] = None
         delay = self.initial_delay
+        # The GPU->CPU switch happens at most once. When it is triggered by the
+        # last attempt, one more attempt is granted so the rebuilt CPU backend
+        # actually runs instead of being discarded unused.
+        attempt_limit = self.max_retries
+        attempt = 0
 
-        for attempt in range(1, self.max_retries + 1):
+        while attempt < attempt_limit:
+            attempt += 1
             try:
                 # Update device in kwargs if it's a parameter
                 if "device" in kwargs:
@@ -277,10 +298,12 @@ class ErrorHandler:
                     device = "cpu"
                     if on_device_change is not None:
                         on_device_change(device, attempt, e)
+                    if attempt >= attempt_limit:
+                        attempt_limit = attempt + 1
                     continue
 
                 # If this is the last attempt, raise
-                if attempt >= self.max_retries:
+                if attempt >= attempt_limit:
                     break
 
                 # Exponential backoff
@@ -288,7 +311,7 @@ class ErrorHandler:
                     "Stage '%s' failed (attempt %d/%d), retrying in %.1fs: %s",
                     stage,
                     attempt,
-                    self.max_retries,
+                    attempt_limit,
                     delay,
                     e,
                 )
@@ -299,9 +322,9 @@ class ErrorHandler:
         # All retries exhausted
         raise PipelineError(
             stage=stage,
-            message=f"Failed after {self.max_retries} attempts",
+            message=f"Failed after {attempt} attempts",
             original_error=last_error,
-            context={"attempts": self.max_retries, "device": device},
+            context={"attempts": attempt, "device": device},
         ) from last_error
 
     def _execute_skip_on_error(self, func: Callable[..., Any], stage: str, device: str, **kwargs: Any) -> Optional[Any]:
@@ -332,15 +355,10 @@ class ErrorHandler:
         Returns:
             True if OOM error.
         """
-        error_str = str(error).lower()
-        oom_indicators = [
-            "out of memory",
-            "oom",
-            "cuda out of memory",
-            "cudnn error",
-            "allocation failed",
-        ]
-        return any(indicator in error_str for indicator in oom_indicators)
+        # "oom" must not sit inside a longer word: a bare substring test also
+        # matched "room", "zoom" or "bloom" in paths and messages, so any
+        # unrelated failure triggered the CPU fallback.
+        return _GPU_OOM_PATTERN.search(str(error)) is not None
 
     def _record_error(self, stage: str, attempt: int, device: str, error: Exception) -> None:
         """Record error in history.

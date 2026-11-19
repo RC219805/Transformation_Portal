@@ -197,6 +197,78 @@ def compute_ast_hash_safe(source: str, *, canonicalize: bool = True) -> ASTHashR
         )
 
 
+def _hash_definition(node: ast.stmt) -> str:
+    """Hash one function or class definition as a stand-alone module.
+
+    The node is canonicalized in place; pass a copy when the tree it belongs
+    to is still needed.
+    """
+    # Create a module containing just this definition
+    def_tree, _ = canonicalize_ast(ast.Module(body=[node], type_ignores=[]))
+    ast_dict = _ast_to_dict(def_tree)
+    payload = json.dumps(ast_dict, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def compute_definition_hashes(source: str) -> tuple[dict[str, str], dict[str, str]]:
+    """Hash every function and class definition of ``source`` with a single parse.
+
+    Returns ``(functions, classes)`` mapping a definition key to the hash that
+    compute_function_hash()/compute_class_hash() give for it. The key is the
+    bare name when that name is defined once in the file; same-named
+    definitions (for example ``run`` methods of two classes) are keyed by
+    their dotted qualified name (``A.run``, ``B.run``) so they no longer
+    collapse into one entry. Definitions are visited in ``ast.walk`` order and
+    the first one wins when even the qualified name repeats.
+
+    Raises:
+        SyntaxError: If ``source`` is not valid Python.
+    """
+    import copy
+
+    tree = ast.parse(source)
+    qualnames: dict[int, str] = {}
+    stack: list[tuple[ast.AST, str]] = [(tree, "")]
+    while stack:
+        parent, prefix = stack.pop()
+        for child in ast.iter_child_nodes(parent):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                qualname = f"{prefix}.{child.name}" if prefix else child.name
+                qualnames[id(child)] = qualname
+                stack.append((child, qualname))
+            else:
+                stack.append((child, prefix))
+
+    functions_nodes: list[ast.stmt] = []
+    class_nodes: list[ast.stmt] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            functions_nodes.append(node)
+        elif isinstance(node, ast.ClassDef):
+            class_nodes.append(node)
+
+    def _hash_all(nodes: list[ast.stmt]) -> dict[str, str]:
+        name_counts: dict[str, int] = {}
+        for node in nodes:
+            name = node.name  # type: ignore[attr-defined]
+            name_counts[name] = name_counts.get(name, 0) + 1
+        hashes: dict[str, str] = {}
+        for node in nodes:
+            name = node.name  # type: ignore[attr-defined]
+            key = name if name_counts[name] == 1 else qualnames[id(node)]
+            if key in hashes:
+                continue
+            try:
+                # Copy: canonicalization mutates, and enclosing definitions
+                # share their nodes with the definitions nested inside them.
+                hashes[key] = _hash_definition(copy.deepcopy(node))
+            except Exception as e:  # pragma: no cover - defensive, mirrors compute_function_hash
+                logger.warning("Error computing definition hash for %s: %s", key, e)
+        return hashes
+
+    return _hash_all(functions_nodes), _hash_all(class_nodes)
+
+
 def compute_function_hash(source: str, function_name: str) -> Optional[str]:
     """Compute hash of a specific function within source code.
 
@@ -216,14 +288,7 @@ def compute_function_hash(source: str, function_name: str) -> Optional[str]:
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if node.name == function_name:
-                    # Create a module containing just this function
-                    func_tree = ast.Module(body=[node], type_ignores=[])
-                    func_tree, _ = canonicalize_ast(func_tree)
-
-                    ast_dict = _ast_to_dict(func_tree)
-                    payload = json.dumps(ast_dict, sort_keys=True, separators=(",", ":"))
-
-                    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+                    return _hash_definition(node)
 
         return None
 
@@ -251,14 +316,7 @@ def compute_class_hash(source: str, class_name: str) -> Optional[str]:
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 if node.name == class_name:
-                    # Create a module containing just this class
-                    class_tree = ast.Module(body=[node], type_ignores=[])
-                    class_tree, _ = canonicalize_ast(class_tree)
-
-                    ast_dict = _ast_to_dict(class_tree)
-                    payload = json.dumps(ast_dict, sort_keys=True, separators=(",", ":"))
-
-                    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+                    return _hash_definition(node)
 
         return None
 

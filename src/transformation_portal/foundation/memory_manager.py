@@ -76,6 +76,15 @@ class AllocationInfo:
     tag: Optional[str] = None
 
 
+def _release_tracked_allocation(
+    manager_ref: "weakref.ReferenceType[MemoryManager]", tensor_id: int, info: AllocationInfo
+) -> None:
+    """Finalizer: drop a tracked allocation once its tensor is garbage-collected."""
+    manager = manager_ref()
+    if manager is not None:
+        manager._forget_allocation(tensor_id, info)
+
+
 class MemoryPool:
     """Memory pool for efficient tensor reuse."""
 
@@ -138,10 +147,21 @@ class MemoryPool:
             return False
 
         key = (tuple(tensor.shape), tensor.dtype)
-        if key not in self.available:
-            self.available[key] = []
+        bucket = self.available.get(key, [])
 
-        self.available[key].append(tensor)
+        # A tensor (or another view of the same memory) that is already pooled
+        # must not be pooled twice: two later allocations would alias it.
+        data_ptr = tensor.data_ptr()
+        if any(cached.data_ptr() == data_ptr for cached in bucket):
+            logger.debug("Skipping pool cache for tensor already present in the pool")
+            return False
+
+        if key not in self.available:
+            self.available[key] = bucket
+
+        # Pooled storage is handed out as fresh memory: drop autograd state so a
+        # reused tensor does not come back with requires_grad=True or a grad_fn.
+        bucket.append(tensor.detach())
         self.allocated_bytes += tensor_size
         return True
 
@@ -190,6 +210,7 @@ class MemoryManager:
 
         # Allocation tracking
         self.allocations: Dict[int, AllocationInfo] = {}
+        self._tracked_bytes = 0  # running sum of allocations[*].size_bytes
         self.allocation_stats = defaultdict(lambda: {"count": 0, "total_bytes": 0})
 
         # Memory pressure monitoring
@@ -270,11 +291,8 @@ class MemoryManager:
         Returns:
             True if returned to pool, False otherwise
         """
-        tensor_id = id(tensor)
-
         # Remove from tracking
-        if tensor_id in self.allocations:
-            del self.allocations[tensor_id]
+        self._forget_allocation(id(tensor))
 
         # Return to pool if requested
         if return_to_pool and self.config.strategy in [
@@ -356,7 +374,7 @@ class MemoryManager:
         if self.config.enable_profiling:
             stats["allocations"] = {
                 "active_count": len(self.allocations),
-                "total_allocated_mb": sum(a.size_bytes for a in self.allocations.values()) / (1024**2),
+                "total_allocated_mb": self._tracked_bytes / (1024**2),
                 "by_tag": dict(self.allocation_stats),
             }
 
@@ -375,6 +393,9 @@ class MemoryManager:
             import gc
 
             gc.collect()
+            mps_empty_cache = getattr(getattr(torch, "mps", None), "empty_cache", None)
+            if callable(mps_empty_cache):
+                mps_empty_cache()
 
         logger.info("Memory cache cleared")
 
@@ -423,11 +444,25 @@ class MemoryManager:
         """Get current memory usage in bytes."""
         if self.device.type == "cuda":
             return torch.cuda.memory_allocated(self.device)
-        elif self.device.type == "mps":
-            # Estimate from tracked allocations
-            return sum(a.size_bytes for a in self.allocations.values())
-        else:
-            return 0
+        if self.device.type == "mps":
+            # Ask the MPS allocator; it sees every live tensor, not only the
+            # ones tracked while profiling is enabled.
+            current_allocated = getattr(getattr(torch, "mps", None), "current_allocated_memory", None)
+            if callable(current_allocated):
+                try:
+                    return int(current_allocated())
+                except RuntimeError:
+                    logger.debug("MPS allocator query failed; using tracked allocations")
+        # Estimate from tracked (live) allocations
+        return self._tracked_bytes
+
+    def _forget_allocation(self, tensor_id: int, expected: Optional[AllocationInfo] = None) -> None:
+        """Remove a tracked allocation (only ``expected`` when given) and its byte count."""
+        info = self.allocations.get(tensor_id)
+        if info is None or (expected is not None and info is not expected):
+            return
+        del self.allocations[tensor_id]
+        self._tracked_bytes = max(self._tracked_bytes - info.size_bytes, 0)
 
     def _aggressive_cleanup(self):
         """Perform aggressive memory cleanup."""
@@ -482,8 +517,14 @@ class MemoryManager:
             tag=tag,
         )
 
+        self._forget_allocation(tensor_id)
         self.allocations[tensor_id] = info
+        self._tracked_bytes += size_bytes
         self.tracked_tensors[tensor_id] = tensor
+        # Tensors dropped without deallocate() must stop counting as active
+        # once they are garbage-collected.
+        finalizer = weakref.finalize(tensor, _release_tracked_allocation, weakref.ref(self), tensor_id, info)
+        finalizer.atexit = False
 
         # Update stats
         if tag:
@@ -491,8 +532,7 @@ class MemoryManager:
             self.allocation_stats[tag]["total_bytes"] += size_bytes
 
         # Update peak memory
-        current_total = sum(a.size_bytes for a in self.allocations.values())
-        self.peak_memory_bytes = max(self.peak_memory_bytes, current_total)
+        self.peak_memory_bytes = max(self.peak_memory_bytes, self._tracked_bytes)
 
     def get_allocation_summary(self) -> str:
         """Get human-readable allocation summary."""

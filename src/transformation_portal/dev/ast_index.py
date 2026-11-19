@@ -31,8 +31,7 @@ from typing import Iterator, Optional
 from transformation_portal.dev.ast_hash import (
     ASTHashResult,
     compute_ast_hash_safe,
-    compute_class_hash,
-    compute_function_hash,
+    compute_definition_hashes,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,10 +54,10 @@ class IndexEntry:
     """File size in bytes."""
 
     functions: dict[str, str] = field(default_factory=dict)
-    """Map of function names to their hashes."""
+    """Map of function names to their hashes (dotted qualified names for names defined more than once)."""
 
     classes: dict[str, str] = field(default_factory=dict)
-    """Map of class names to their hashes."""
+    """Map of class names to their hashes (dotted qualified names for names defined more than once)."""
 
 
 @dataclass
@@ -135,9 +134,8 @@ class ASTEquivalenceIndex:
             size_bytes=len(source.encode("utf-8")),
         )
 
-        # Index functions and classes
-        entry.functions = self._extract_function_hashes(source)
-        entry.classes = self._extract_class_hashes(source)
+        # Index functions and classes (one parse for all definitions)
+        entry.functions, entry.classes = self._extract_definition_hashes(source)
 
         # Store in indices
         self.entries[path] = entry
@@ -153,37 +151,12 @@ class ASTEquivalenceIndex:
 
         return entry
 
-    def _extract_function_hashes(self, source: str) -> dict[str, str]:
-        """Extract hashes for all functions in the source."""
-        import ast
-
-        result = {}
+    def _extract_definition_hashes(self, source: str) -> tuple[dict[str, str], dict[str, str]]:
+        """Extract hashes for all functions and classes in the source."""
         try:
-            tree = ast.parse(source)
-            for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    func_hash = compute_function_hash(source, node.name)
-                    if func_hash:
-                        result[node.name] = func_hash
+            return compute_definition_hashes(source)
         except Exception:
-            pass
-        return result
-
-    def _extract_class_hashes(self, source: str) -> dict[str, str]:
-        """Extract hashes for all classes in the source."""
-        import ast
-
-        result = {}
-        try:
-            tree = ast.parse(source)
-            for node in ast.walk(tree):
-                if isinstance(node, ast.ClassDef):
-                    class_hash = compute_class_hash(source, node.name)
-                    if class_hash:
-                        result[node.name] = class_hash
-        except Exception:
-            pass
-        return result
+            return {}, {}
 
     def build(self, root: Path, *, exclude_patterns: Optional[list[str]] = None) -> int:
         """Build the index from a directory.

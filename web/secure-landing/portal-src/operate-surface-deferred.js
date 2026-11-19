@@ -716,6 +716,7 @@ export function createDeferredOperateSurfaceApi(host) {
 
     return {
         renderLogs: tools.renderLogs,
+        appendLog: tools.appendLog,
         clearLogs: tools.clearLogs,
         renderJobQueue,
         scheduleRenderJobQueue,

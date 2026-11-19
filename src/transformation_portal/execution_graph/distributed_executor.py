@@ -166,6 +166,13 @@ class DistributedDAGExecutor:
         Uses Ray's remote execution for parallel node execution
         while respecting dependencies.
         """
+        # The local backend validates inside scheduler.run(). The planned
+        # order simply leaves out nodes behind a missing dependency or a
+        # cycle, so without this check they would be skipped without an error.
+        errors = self.scheduler.validate()
+        if errors:
+            raise DistributedExecutorError(f"DAG validation failed: {errors}")
+
         results: dict[str, Any] = dict(inputs or {})
         futures: dict[str, Any] = {}
 
@@ -202,7 +209,7 @@ class DistributedDAGExecutor:
                 dep_results = {}
                 for dep in deps:
                     if dep in futures:
-                        dep_results[dep] = ray.get(futures[dep])
+                        dep_results[dep] = self._ray_result(dep, futures[dep])
                     elif dep in results:
                         dep_results[dep] = results[dep]
 
@@ -218,16 +225,24 @@ class DistributedDAGExecutor:
 
         # Collect results
         for node_id, future in futures.items():
-            try:
-                results[node_id] = ray.get(
-                    future,
-                    timeout=self.config.timeout_per_node,
-                )
-            except Exception as exc:
-                logger.error("Node '%s' failed: %s", node_id, exc)
-                raise DistributedExecutorError(f"Node '{node_id}' execution failed: {exc}") from exc
+            results[node_id] = self._ray_result(node_id, future)
 
         return results
+
+    def _ray_result(self, node_id: str, future: Any) -> Any:
+        """Wait for one node's Ray task, within the configured node timeout.
+
+        Used for final results and while waiting for a dependency, so a
+        failed or stuck upstream node is reported the same way in both places.
+        """
+        try:
+            return ray.get(
+                future,
+                timeout=self.config.timeout_per_node,
+            )
+        except Exception as exc:
+            logger.error("Node '%s' failed: %s", node_id, exc)
+            raise DistributedExecutorError(f"Node '{node_id}' execution failed: {exc}") from exc
 
     def shutdown(self) -> None:
         """Shutdown the executor and clean up resources."""

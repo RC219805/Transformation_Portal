@@ -8,6 +8,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, List, Optional, Sequence
 
+from transformation_portal.core.security.path_safety import resolve_rejecting_symlink_loops
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 _UNSAFE_PATH_SEGMENT_RE = re.compile(r"[\x00/\\]")
 _GLOB_PATH_CHARS = set("*?[]{}")
@@ -113,7 +115,7 @@ def _resolve_untrusted_request_path(path_value: str, *, repo_root: Path | None =
     candidate = Path(raw)
     if not candidate.is_absolute():
         candidate = _repo_root(repo_root) / candidate
-    return Path(os.path.realpath(candidate))
+    return resolve_rejecting_symlink_loops(candidate)
 
 
 def _validate_path_against_roots(

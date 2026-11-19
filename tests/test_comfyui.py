@@ -191,6 +191,67 @@ class TestBaseNode:
         assert isinstance(result, np.ndarray)
         assert result.shape == (64, 64, 3)
 
+    def test_to_numpy_converts_comfyui_float_image_to_uint8(self):
+        """ComfyUI IMAGE tensors are float [0, 1]; wrapped components need uint8 0..255 (M-29)."""
+        import torch
+
+        from transformation_portal.comfyui.custom_nodes import BaseNode
+
+        class TestNode(BaseNode):
+            @classmethod
+            def INPUT_TYPES(cls):
+                return {"required": {}}
+
+            @classmethod
+            def RETURN_TYPES(cls):
+                return ()
+
+            def execute(self):
+                return ()
+
+        node = TestNode()
+        tensor = torch.tensor([[[[0.0, 0.5, 1.0], [1.5, -0.2, 90 / 255]]]], dtype=torch.float32)
+        result = node._to_numpy(tensor)
+
+        assert result.dtype == np.uint8
+        assert result.tolist() == [[[0, 128, 255], [255, 0, 90]]]
+
+    def test_skygan_node_float_image_yields_sky_mask(self, monkeypatch):
+        """A float [0, 1] blue-sky-over-wall frame must be segmented like its uint8 source (M-29)."""
+        import torch
+
+        from transformation_portal.atmosphere.sky_blending import CorrectionSuggestion, SkyBlender
+        from transformation_portal.comfyui.custom_nodes import SkyGANNode
+
+        img8 = np.zeros((64, 64, 3), np.uint8)
+        img8[:32] = (90, 150, 235)
+        img8[32:] = (120, 110, 100)
+        seen = {}
+
+        class _StubBlender:
+            def smart_render(self, source_image, **kwargs):
+                seen["dtype"] = source_image.dtype
+                return source_image, CorrectionSuggestion(0.0, 0.0, 0.0, kwargs["sky_params"], "stub")
+
+            def _segment_sky(self, image):
+                return SkyBlender._segment_sky(self, image)
+
+        monkeypatch.setattr(custom_nodes, "SkyBlender", _StubBlender)
+        image = torch.from_numpy(img8.astype(np.float32) / 255.0)[None, ...]
+        _, mask, _ = SkyGANNode().execute(
+            image=image,
+            location="montecito",
+            season="summer",
+            time_of_day=next(iter(SkyGANNode._TIME_OF_DAY_HOURS)),
+            cloud_coverage=0.3,
+            auto_correct=False,
+            strict_physics=False,
+        )
+
+        assert seen["dtype"] == np.uint8
+        assert float(mask[0, :24].mean()) > 0.9
+        assert float(mask[0, 40:].mean()) < 0.1
+
     def test_to_tensor_helper(self):
         """_to_tensor should convert numpy to torch tensor with batch dim."""
         import torch

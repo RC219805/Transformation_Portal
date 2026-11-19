@@ -1,10 +1,13 @@
 """Tests for PLY export functionality (Phase 2.3 MVP)."""
 
 import json
+import os
+import stat
 
 import numpy as np
 import pytest
 
+from transformation_portal.spatial_ai.reconstruction._atomic_io import atomic_open
 from transformation_portal.spatial_ai.reconstruction.contracts import (
     CameraParams,
     GaussianSplat,
@@ -17,6 +20,36 @@ from transformation_portal.spatial_ai.reconstruction.export_ply import (
 )
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.mark.skipif(os.name != "posix", reason="requires POSIX file modes and umask")
+@pytest.mark.parametrize(
+    ("existing_mode", "creation_umask", "temporary_mode", "published_mode"),
+    [
+        pytest.param(0o600, 0o022, 0o600, 0o600, id="private-replacement"),
+        pytest.param(0o664, 0o077, 0o600, 0o664, id="umask-restricts-replacement-temporary-file"),
+        pytest.param(None, 0o027, 0o640, 0o640, id="new-file-honors-umask"),
+    ],
+)
+def test_atomic_export_permissions_while_writing(tmp_path, existing_mode, creation_umask, temporary_mode, published_mode):
+    output = tmp_path / "scene.ply"
+    if existing_mode is not None:
+        output.write_bytes(b"old export")
+        output.chmod(existing_mode)
+
+    previous_umask = os.umask(creation_umask)
+    try:
+        with atomic_open(output, "wb") as handle:
+            handle.write(b"new export")
+            handle.flush()
+            assert stat.S_IMODE(os.fstat(handle.fileno()).st_mode) == temporary_mode
+            if existing_mode is not None:
+                assert output.read_bytes() == b"old export"
+    finally:
+        os.umask(previous_umask)
+
+    assert stat.S_IMODE(output.stat().st_mode) == published_mode
+    assert output.read_bytes() == b"new export"
 
 
 @pytest.fixture

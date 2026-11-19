@@ -16,6 +16,15 @@ gitleaks_contract = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(gitleaks_contract)
 
 
+def historical_seed_fixture_pattern() -> str:
+    config = tomllib.loads((PROJECT_ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
+    rule = next(rule for rule in config["rules"] if rule["id"] == gitleaks_contract.EXPECTED_RULE_ID)
+    exception = next(
+        item for item in rule["allowlists"] if item["paths"] == [gitleaks_contract.EXPECTED_SEED_FIXTURE_PATH_REGEX]
+    )
+    return exception["regexes"][0]
+
+
 def valid_config_text() -> str:
     return f"""
 title = "Transformation Portal gitleaks config"
@@ -64,6 +73,14 @@ condition = "AND"
 regexTarget = "secret"
 regexes = ['''{gitleaks_contract.EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX}''']
 paths = ['''{gitleaks_contract.EXPECTED_CATALOG_PATH_REGEX}''']
+
+[[rules.allowlists]]
+description = "Ignore two verified historical inline seed-user test fixtures"
+condition = "AND"
+regexTarget = "line"
+commits = ["{gitleaks_contract.EXPECTED_SEED_FIXTURE_COMMIT}"]
+paths = ['''{gitleaks_contract.EXPECTED_SEED_FIXTURE_PATH_REGEX}''']
+regexes = ['''{historical_seed_fixture_pattern()}''']
 """
 
 
@@ -472,3 +489,57 @@ def test_chunk_exception_cannot_be_copied_to_an_additional_rule() -> None:
     assert "public catalog chunk digest exceptions must belong only to generic-api-key" in gitleaks_contract._validate_config(
         config
     )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "unbound_commit",
+        "additional_commit",
+        "different_commit",
+        "path_only",
+        "broader_path",
+        "broader_line",
+        "other_target",
+        "or_condition",
+        "additional_match_field",
+        "global_exception",
+        "global_commit",
+        "legacy_rule_allowlist",
+        "additional_rule",
+    ],
+)
+def test_historical_fixture_exception_cannot_be_widened(mutation: str) -> None:
+    config = tomllib.loads(valid_config_text())
+    rule = config["rules"][0]
+    fixture = next(item for item in rule["allowlists"] if "commits" in item)
+    assert not gitleaks_contract._validate_config(config)
+
+    if mutation == "unbound_commit":
+        fixture.pop("commits")
+    elif mutation == "additional_commit":
+        fixture["commits"].append("a" * 40)
+    elif mutation == "different_commit":
+        fixture["commits"] = ["a" * 40]
+    elif mutation == "path_only":
+        fixture.pop("regexes")
+    elif mutation == "broader_path":
+        fixture["paths"] = [r"^web/secure-landing/tests/.*$"]
+    elif mutation == "broader_line":
+        fixture["regexes"] = [r'.*"']
+    elif mutation == "other_target":
+        fixture["regexTarget"] = "secret"
+    elif mutation == "or_condition":
+        fixture["condition"] = "OR"
+    elif mutation == "additional_match_field":
+        fixture["stopwords"] = ["password"]
+    elif mutation == "global_exception":
+        config["allowlists"] = [fixture]
+    elif mutation == "global_commit":
+        config["allowlist"]["commits"] = fixture["commits"]
+    elif mutation == "legacy_rule_allowlist":
+        rule["allowlist"] = {"paths": fixture["paths"]}
+    else:
+        config["rules"].append({"id": "unrelated-secret-rule", "allowlists": [fixture]})
+
+    assert gitleaks_contract._validate_config(config)

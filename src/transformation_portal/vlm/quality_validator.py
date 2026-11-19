@@ -11,6 +11,7 @@ Uses LLaVA-1.5 for intelligent quality assessment.
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -25,6 +26,55 @@ if TYPE_CHECKING:
 LLaVAProcessor: Any = None
 
 logger = logging.getLogger(__name__)
+
+# Whole-word verdict tokens of the quick assessment ("Rate overall: PASS / WARNING / FAIL").
+# Substring matching made "bypass" a pass and ignored "would not pass".
+_VERDICT_TOKEN_RE = re.compile(
+    r"\b(?:(?P<pass>pass(?:es|ed|ing)?)|(?P<warning>warnings?)|(?P<fail>fail(?:s|ed|ing|ures?)?))\b",
+    re.IGNORECASE,
+)
+# An explicit rating label followed by exactly one verdict ("Rating: FAIL"), but not
+# a menu of verdicts echoed back ("PASS / WARNING / FAIL", "PASS, WARNING or FAIL")
+# or a question ("Result: pass?"), which leave the decision to the rest of the text.
+_EXPLICIT_VERDICT_RE = re.compile(
+    r"\b(?:rate(?:d)?\s+overall|overall\s+rating|rating|verdict|result)\s*[:\-]\s*\**\s*(pass|warning|fail)\b"
+    r"(?!\s*(?:[/,|?]|or\b))",
+    re.IGNORECASE,
+)
+# Negation words that, shortly before a verdict token, reverse it ("would not pass",
+# "I don't think this would pass"). Any "...n't" contraction counts; a conjunction
+# between the negation and the token ends its reach ("no issues so pass").
+_NEGATION_BEFORE_RE = re.compile(
+    r"(?:\b(?:not|never|no|nor|neither|nothing|cannot|hardly|unlikely\s+to|unable\s+to)|\b\w+n['\u2019]t)\s+"
+    r"(?:(?!(?:but|so|and|yet|though|although|however|still|then)\b)\w+\s+){0,3}$",
+    re.IGNORECASE,
+)
+# A line that opens the next section of the detailed assessment (markdown emphasis
+# or heading marks may precede the number).
+_SECTION_HEADING_RE = re.compile(
+    r"^[\s*#]*(?:\d+\.\s+\S|artifacts\s*:|recommendations\s*:|overall\s+assessment)", re.IGNORECASE
+)
+# Artifact clauses that deny the artifact ("No halos or noise are visible", "None").
+_NEGATED_CLAUSE_RE = re.compile(r"^\W*(?:no|none|not|n/a|without|free\s+of|nothing)\b", re.IGNORECASE)
+# Clause boundaries: a contrast word starts a new clause, so the artifact asserted
+# after a denial is kept ("No major artifacts, though slight halos remain").
+_CLAUSE_SPLIT_RE = re.compile(
+    r"[.;:!?\n]|\b(?:but|however|though|although|except|yet|apart\s+from|aside\s+from|other\s+than)\b",
+    re.IGNORECASE,
+)
+# Inside a denied list ("no halos, banding or noise") an item that opens with a
+# presence word asserts again ("no halos, some noise in the shadows").
+_PRESENCE_START_RE = re.compile(
+    r"^\s*(?:and\s+)?(?:some|slight(?:ly)?|minor|mild|moderate|noticeable|visible|obvious|significant|severe|heavy"
+    r"|strong|faint|subtle|a\s+(?:bit|few|little|lot))\b",
+    re.IGNORECASE,
+)
+# Inflected forms of an artifact keyword that still name it (blurry, blurred,
+# haloing, inconsistently, artifacts); other longer words do not (noiseless).
+_ARTIFACT_SUFFIX = r"(?:s|es|y|ry|ed|red|ing|ring|ly)?"
+# An issues line that reports no issue: "none" / "n/a" anywhere ("there are none"),
+# or an opening "no issues" / "no significant issues" / "nothing".
+_NO_ISSUES_RE = re.compile(r"\bnone\b|\bn/a\b|^\W*(?:na\b|nothing\b|no\s+(?:\w+\s+){0,2}issues?\b)", re.IGNORECASE)
 
 
 def _resolve_llava_processor_class() -> Any:
@@ -344,20 +394,12 @@ List any critical issues found."""
     def _parse_quick_assessment(self, text: str) -> List[QualityScore]:
         """Parse quick assessment into scores."""
         # For quick assessment, estimate scores based on overall rating
-        text_lower = text.lower()
-
-        if "pass" in text_lower and "fail" not in text_lower:
-            base_score = 8.0
-            status = ValidationStatus.PASS
-        elif "warning" in text_lower:
-            base_score = 6.0
-            status = ValidationStatus.WARNING
-        elif "fail" in text_lower:
-            base_score = 4.0
-            status = ValidationStatus.FAIL
-        else:
-            base_score = 5.0
-            status = ValidationStatus.UNKNOWN
+        status = self._quick_verdict(text)
+        base_score = {
+            ValidationStatus.PASS: 8.0,
+            ValidationStatus.WARNING: 6.0,
+            ValidationStatus.FAIL: 4.0,
+        }.get(status, 5.0)
 
         # Create scores for all aspects with base score
         aspects = [
@@ -378,6 +420,38 @@ List any critical issues found."""
             )
             for aspect in aspects
         ]
+
+    @staticmethod
+    def _quick_verdict(text: str) -> ValidationStatus:
+        """Read the overall verdict of a quick assessment.
+
+        An explicit rating label wins. Otherwise whole-word verdict tokens are
+        collected; a negated pass ("would not pass") counts as a failure signal and
+        a negated warning or failure is ignored, so negation or ambiguity never
+        yields PASS. Unnegated tokens keep the historical precedence: PASS only when
+        it is the sole verdict, then WARNING, then FAIL.
+        """
+        explicit = _EXPLICIT_VERDICT_RE.search(text)
+        if explicit:
+            return ValidationStatus(explicit.group(1).lower())
+
+        verdicts = set()
+        negated_pass = False
+        for match in _VERDICT_TOKEN_RE.finditer(text):
+            kind = match.lastgroup
+            negated = _NEGATION_BEFORE_RE.search(text[max(0, match.start() - 40) : match.start()]) is not None
+            if negated:
+                negated_pass = negated_pass or kind == "pass"
+                continue
+            verdicts.add(kind)
+
+        if verdicts == {"pass"} and not negated_pass:
+            return ValidationStatus.PASS
+        if "warning" in verdicts:
+            return ValidationStatus.WARNING
+        if "fail" in verdicts or negated_pass:
+            return ValidationStatus.FAIL
+        return ValidationStatus.UNKNOWN
 
     def _extract_score(self, text: str, aspect_name: str) -> float:
         """Extract numerical score for an aspect."""
@@ -422,10 +496,20 @@ List any critical issues found."""
         # Look for "Issues:" after aspect name
         section = self._extract_section(text, aspect_name, 300)
 
+        # Bound the section at the next heading so a later aspect's "Issues:" line
+        # is never attributed to this one.
+        lines = section.split("\n")
+        bounded = [lines[0]]
+        for line in lines[1:]:
+            if _SECTION_HEADING_RE.match(line):
+                break
+            bounded.append(line)
+        section = "\n".join(bounded)
+
         if "issues:" in section:
-            issues_text = section.split("issues:")[-1].split("\n")[0]
+            issues_text = section.split("issues:", 1)[1].split("\n")[0]
             # Clean and split
-            if "none" in issues_text.lower() or "n/a" in issues_text.lower():
+            if not issues_text.strip() or _NO_ISSUES_RE.search(issues_text):
                 return []
             return [issues_text.strip()]
 
@@ -459,11 +543,29 @@ List any critical issues found."""
                 "posterization",
             ]
 
+            # Only clauses that assert an artifact count: "No halos or noise are
+            # visible" denies both keywords it contains.
+            asserted = " | ".join(self._asserted_text(clause) for clause in _CLAUSE_SPLIT_RE.split(artifacts_section))
             for keyword in artifact_keywords:
-                if keyword in artifacts_section:
+                if re.search(rf"\b{re.escape(keyword)}{_ARTIFACT_SUFFIX}\b", asserted):
                     artifacts.append(keyword)
 
         return artifacts
+
+    @staticmethod
+    def _asserted_text(clause: str) -> str:
+        """Return the part of an artifact clause that asserts artifacts.
+
+        A clause that opens with a denial denies the whole comma list after it,
+        up to the first item that opens with a presence word.
+        """
+        if not _NEGATED_CLAUSE_RE.match(clause):
+            return clause
+        items = clause.split(",")
+        for index, item in enumerate(items[1:], start=1):
+            if _PRESENCE_START_RE.match(item):
+                return ",".join(items[index:])
+        return ""
 
     def _extract_issues_quick(self, text: str) -> List[str]:
         """Extract issues from quick assessment."""

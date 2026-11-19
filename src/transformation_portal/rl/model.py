@@ -68,6 +68,8 @@ class PolicyValueNet:
 
         self.state_dim = state_dim
         self.action_dim = action_dim
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
 
         # Build shared layers
         layers = []
@@ -258,6 +260,8 @@ class PolicyValueNet:
                 "state_dict": self.state_dict(),
                 "state_dim": self.state_dim,
                 "action_dim": self.action_dim,
+                "hidden_dim": self.hidden_dim,
+                "num_layers": self.num_layers,
             },
             path,
         )
@@ -279,6 +283,9 @@ class PolicyValueNet:
         model = cls(
             state_dim=data["state_dim"],
             action_dim=data["action_dim"],
+            # Checkpoints written before these fields were saved used the defaults.
+            hidden_dim=data.get("hidden_dim", 256),
+            num_layers=data.get("num_layers", 2),
         )
         model.load_state_dict(data["state_dict"])
         logger.info("Loaded model from %s", path)

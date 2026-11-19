@@ -98,6 +98,9 @@ class AuditReport:
     unmarked_functions: int = 0
     violations: list[MarkerViolation] = field(default_factory=list)
     marker_counts: dict[str, int] = field(default_factory=dict)
+    files_scanned: int = 0
+    tests_root_missing: bool = False
+    unparseable_files: int = 0
 
     @property
     def coverage_percent(self) -> float:
@@ -157,23 +160,32 @@ class TestMarkerVisitor(ast.NodeVisitor):
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """Handle test classes with class-level markers."""
         if node.name.startswith("Test"):
-            class_markers = self._extract_markers_from_decorators(node.decorator_list)
-            # Visit methods within the class
-            for item in node.body:
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if item.name.startswith("test_"):
-                        method_markers = self._extract_markers_from_decorators(item.decorator_list)
-                        all_markers = method_markers | class_markers | self._module_markers
-                        self.test_functions.append(
-                            TestFunction(
-                                file_path=self.file_path,
-                                name=f"{node.name}.{item.name}",
-                                lineno=item.lineno,
-                                markers=all_markers,
-                            )
-                        )
+            self._visit_test_class(node, prefix=node.name, inherited_markers=frozenset())
         else:
             self.generic_visit(node)
+
+    def _visit_test_class(self, node: ast.ClassDef, prefix: str, inherited_markers: frozenset[str]) -> None:
+        """Collect test methods of a Test class, recursing into nested Test classes.
+
+        pytest collects ``Test*`` classes nested inside ``Test*`` classes, and
+        markers applied to an enclosing class apply to the nested class too.
+        """
+        class_markers = self._extract_markers_from_decorators(node.decorator_list) | inherited_markers
+        for item in node.body:
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if item.name.startswith("test_"):
+                    method_markers = self._extract_markers_from_decorators(item.decorator_list)
+                    all_markers = method_markers | class_markers | self._module_markers
+                    self.test_functions.append(
+                        TestFunction(
+                            file_path=self.file_path,
+                            name=f"{prefix}.{item.name}",
+                            lineno=item.lineno,
+                            markers=all_markers,
+                        )
+                    )
+            elif isinstance(item, ast.ClassDef) and item.name.startswith("Test"):
+                self._visit_test_class(item, prefix=f"{prefix}.{item.name}", inherited_markers=class_markers)
 
     def _extract_markers_from_decorators(self, decorators: list[ast.expr]) -> frozenset[str]:
         """Extract pytest.mark.X markers from decorator list."""
@@ -213,24 +225,45 @@ class TestMarkerVisitor(ast.NodeVisitor):
         return None
 
 
-def scan_file(file_path: Path) -> list[TestFunction]:
-    """Scan a single file for test functions and their markers."""
+def _scan_file_checked(file_path: Path) -> tuple[list[TestFunction], MarkerViolation | None]:
+    """Scan a file; an unreadable or unparseable file yields a violation instead of functions.
+
+    A file whose markers cannot be validated must not pass the gate silently.
+    """
     try:
         source = file_path.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(file_path))
     except SyntaxError as e:
         lineno_info = f" at line {e.lineno}" if e.lineno else ""
         msg_info = f": {e.msg}" if e.msg else ""
-        print(
-            f"WARNING: Cannot validate markers in {file_path} due to syntax error{lineno_info}{msg_info}. "
-            "Fix syntax errors before running marker validation.",
-            file=sys.stderr,
+        return [], MarkerViolation(
+            file_path=file_path,
+            name="<module>",
+            lineno=e.lineno or 0,
+            issue=f"cannot validate markers: syntax error{lineno_info}{msg_info}",
         )
-        return []
+    except (UnicodeDecodeError, ValueError) as e:
+        return [], MarkerViolation(
+            file_path=file_path,
+            name="<module>",
+            lineno=0,
+            issue=f"cannot validate markers: unreadable source ({type(e).__name__})",
+        )
 
     visitor = TestMarkerVisitor(file_path)
     visitor.visit(tree)
-    return visitor.test_functions
+    return visitor.test_functions, None
+
+
+def scan_file(file_path: Path) -> list[TestFunction]:
+    """Scan a single file for test functions and their markers."""
+    test_functions, parse_violation = _scan_file_checked(file_path)
+    if parse_violation is not None:
+        print(
+            f"WARNING: {file_path}: {parse_violation.issue}. Fix the file before running marker validation.",
+            file=sys.stderr,
+        )
+    return test_functions
 
 
 def get_directory_type(file_path: Path) -> str | None:
@@ -281,8 +314,9 @@ def audit_test_directory(tests_root: Path, verbose: bool = False) -> AuditReport
     """Perform full audit of test marker coverage."""
     report = AuditReport()
 
-    if not tests_root.exists():
+    if not tests_root.is_dir():
         print(f"ERROR: Tests directory not found: {tests_root}", file=sys.stderr)
+        report.tests_root_missing = True
         return report
 
     # Collect test files matching pytest's python_files config (test_*.py only)
@@ -294,7 +328,13 @@ def audit_test_directory(tests_root: Path, verbose: bool = False) -> AuditReport
         if "__pycache__" in test_file.parts:
             continue
 
-        test_functions = scan_file(test_file)
+        report.files_scanned += 1
+        test_functions, parse_violation = _scan_file_checked(test_file)
+        if parse_violation is not None:
+            report.unparseable_files += 1
+            report.violations.append(parse_violation)
+            if verbose:
+                print(f"  UNPARSEABLE: {test_file}: {parse_violation.issue}")
 
         for func in test_functions:
             report.total_test_functions += 1
@@ -328,7 +368,9 @@ def check_files(files: Sequence[Path]) -> list[MarkerViolation]:
         if not file_path.name.startswith("test_"):
             continue
 
-        test_functions = scan_file(file_path)
+        test_functions, parse_violation = _scan_file_checked(file_path)
+        if parse_violation is not None:
+            violations.append(parse_violation)
 
         for func in test_functions:
             violation = check_marker_requirements(func)
@@ -394,6 +436,14 @@ def main() -> int:
         print(f"Auditing test markers in {args.tests_root}/...")
         report = audit_test_directory(args.tests_root, verbose=args.verbose)
 
+        # Fail closed: an audit that scanned nothing (wrong working directory,
+        # mistyped --tests-root) must not report a vacuous 100% coverage pass.
+        if report.tests_root_missing:
+            return 2
+        if report.files_scanned == 0:
+            print(f"ERROR: No test files (test_*.py) found under {args.tests_root}", file=sys.stderr)
+            return 2
+
         print("\n" + "=" * 60)
         print("TEST MARKER AUDIT REPORT (ADR-044)")
         print("=" * 60)
@@ -416,6 +466,11 @@ def main() -> int:
                 print(f"    {v.issue}")
             if len(report.violations) > MAX_VIOLATIONS_DISPLAY:
                 print(f"  ... and {len(report.violations) - MAX_VIOLATIONS_DISPLAY} more")
+
+        if report.unparseable_files:
+            print(f"\n⚠ {report.unparseable_files} test file(s) could not be parsed; their markers were not validated")
+            if args.strict:
+                return 1
 
         # ADR-044 target: <5% unmarked
         target_coverage = 95.0

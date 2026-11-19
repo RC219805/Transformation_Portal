@@ -238,6 +238,68 @@ def test_geometric_validator_nonidentity_public_coverage() -> None:
     assert coverage == {"mean_points_per_view": 2.0, "min_points_per_view": 1, "max_points_per_view": 3, "coverage_std": 1.0}
 
 
+def _with_extra_positions(scene: Scene3D, extra: np.ndarray) -> Scene3D:
+    positions = np.vstack([scene.splats.positions, np.asarray(extra, dtype=np.float32)])
+    return Scene3D(
+        splats=_splats(positions=positions, colors=np.full((len(positions), 3), 0.5, dtype=np.float32)),
+        cameras=scene.cameras,
+        metadata={},
+        convergence="converged",
+        iteration=1,
+        rmse=0.02,
+    )
+
+
+def test_geometric_validator_coverage_excludes_splats_behind_the_camera() -> None:
+    # R-6: (8, 2, 1) is (0, 0, -2) in the rotated camera's frame. The pinhole
+    # division still maps it to pixel (2, 3) inside the image, but the camera
+    # cannot see it; for the identity camera it projects outside the image.
+    scene = _with_extra_positions(_nonidentity_projection_scene(), [[8.0, 2.0, 1.0]])
+
+    coverage = GeometricValidator().compute_coverage(scene)
+
+    assert coverage == {"mean_points_per_view": 2.0, "min_points_per_view": 1, "max_points_per_view": 3, "coverage_std": 1.0}
+
+
+def test_geometric_validator_coverage_counts_only_points_in_front() -> None:
+    # One splat in front of the identity camera, three behind it near the optical axis.
+    camera = CameraParams(
+        intrinsics=np.array([[30.0, 0.0, 12.0], [0.0, 30.0, 12.0], [0.0, 0.0, 1.0]], dtype=np.float32),
+        extrinsics=np.eye(4, dtype=np.float32),
+        width=24,
+        height=24,
+    )
+    positions = np.array([[0.0, 0.0, 3.0], [0.0, 0.0, -3.0], [0.1, 0.0, -5.0], [0.0, 0.1, -4.0]], dtype=np.float32)
+    scene = Scene3D(
+        splats=_splats(positions=positions, colors=np.full((4, 3), 0.5, dtype=np.float32)),
+        cameras=[camera, camera],
+        metadata={},
+        convergence="converged",
+        iteration=1,
+        rmse=0.02,
+    )
+
+    coverage = GeometricValidator().compute_coverage(scene)
+
+    assert coverage == {"mean_points_per_view": 1.0, "min_points_per_view": 1, "max_points_per_view": 1, "coverage_std": 0.0}
+
+
+def test_geometric_validator_depth_consistency_ignores_unobserved_splats() -> None:
+    # R-6: the behind-camera splat lands on the valid reference pixel (2, 3)
+    # through the pinhole division and the NaN splat has no pixel; neither is
+    # observed by the view, so the three in-front splats stay fully consistent.
+    # GaussianSplat rejects non-finite positions (R-7), so the NaN splat is
+    # injected after construction to keep the validator's own guard covered.
+    scene = _with_extra_positions(_nonidentity_projection_scene(), [[8.0, 2.0, 1.0], [0.0, 0.0, 0.0]])
+    scene.splats.positions[-1, 0] = np.nan
+    depth_map = np.zeros((7, 8), dtype=np.float32)
+    depth_map[3, 2], depth_map[5, 3], depth_map[0, 1] = 2.0, 3.0, 4.0
+
+    consistency = GeometricValidator().compute_depth_consistency(scene, [depth_map, np.zeros_like(depth_map)])
+
+    assert consistency == pytest.approx(1.0)
+
+
 @pytest.mark.parametrize(
     ("rmse", "grade"),
     [
@@ -376,3 +438,66 @@ def test_ply_exporter_rejects_malformed_binary_shapes(
 
     with pytest.raises(ValueError, match=message):
         PLYExporter().export(scene, tmp_path / f"bad_{field}.ply")
+
+
+def _scene_with_splats(splats: Any) -> SimpleNamespace:
+    return SimpleNamespace(
+        splats=splats,
+        cameras=[_camera(), _camera()],
+        rmse=0.02,
+        quality_score=90.0,
+        convergence="converged",
+        iteration=1,
+        metadata={},
+    )
+
+
+@pytest.mark.parametrize("writer", ["ply_binary", "ply_ascii", "mesh_ply_binary", "mesh_ply_ascii", "obj"])
+def test_failed_export_keeps_the_previous_file(tmp_path: Path, writer: str) -> None:
+    # R-7: every writer used to open the destination in place, so a write that
+    # failed after the header truncated the previously exported file.
+    output_path = tmp_path / ("scene.obj" if writer == "obj" else "scene.ply")
+    broken_field = "positions" if writer in {"mesh_ply_ascii", "obj"} else "colors"
+    broken_value = np.zeros((2, 2), dtype=np.float32) if broken_field == "positions" else np.zeros((1, 3), dtype=np.float32)
+    broken = _scene_with_splats(_MalformedSplats(**{broken_field: broken_value}))
+
+    def export(scene: Any) -> None:
+        if writer == "ply_binary":
+            PLYExporter().export(scene, output_path, write_sidecar=False)
+        elif writer == "ply_ascii":
+            PLYExporter(PLYExportConfig(binary=False)).export(scene, output_path, write_sidecar=False)
+        elif writer == "mesh_ply_binary":
+            MeshExporter().export_ply(scene, output_path, binary=True)
+        elif writer == "mesh_ply_ascii":
+            MeshExporter().export_ply(scene, output_path, binary=False)
+        else:
+            MeshExporter().export_obj(scene, output_path, vertex_colors=False)
+
+    export(_scene())
+    previous = output_path.read_bytes()
+
+    with pytest.raises((ValueError, IndexError)):
+        export(broken)
+
+    assert output_path.read_bytes() == previous
+    assert sorted(path.name for path in tmp_path.iterdir()) == [output_path.name]
+
+
+def test_failed_sidecar_write_keeps_the_previous_sidecar(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import transformation_portal.spatial_ai.reconstruction.export_ply as export_ply_module
+
+    output_path = tmp_path / "scene.ply"
+    PLYExporter().export(_scene(), output_path)
+    sidecar_path = output_path.with_suffix(".provenance.json")
+    previous = sidecar_path.read_bytes()
+
+    def failing_dump(payload: Any, handle: Any, **kwargs: Any) -> None:
+        handle.write('{"partial": ')
+        raise OSError("disk full")
+
+    monkeypatch.setattr(export_ply_module, "dump_json", failing_dump)
+    with pytest.raises(OSError, match="disk full"):
+        PLYExporter().export(_scene(), output_path)
+
+    assert sidecar_path.read_bytes() == previous
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["scene.ply", "scene.provenance.json"]

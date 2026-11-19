@@ -241,3 +241,72 @@ def test_get_processing_recommendations_matrix(
 
     for key, expected_value in expected.items():
         assert recommendations[key] == expected_value
+
+
+def test_structured_space_type_answer_beats_keywords_elsewhere() -> None:
+    analyzer = _analyzer(
+        "1. SPACE TYPE: Interior view of a kitchen.\n"
+        "2. ROOM TYPE: kitchen with overhead pendant lights\n"
+        "4. MATERIALS: an open SPACE plan\n"
+        "6. LIGHTING:\nnatural light"
+    )
+
+    analysis = analyzer.analyze("image-token")
+
+    assert analysis.space_type is SpaceType.INTERIOR
+    assert analysis.room_type is RoomType.KITCHEN
+    assert analysis.luxury_features == []
+    assert analysis.lighting_conditions == "natural light"
+    assert analyzer.get_processing_recommendations(analysis)["suggested_preset"] == "kitchen-bright"
+
+
+def test_luxury_feature_spa_matches_whole_word_only() -> None:
+    analyzer = _analyzer()
+
+    assert analyzer._extract_luxury_features("A spacious room with a home spa.") == ["spa"]
+    assert analyzer._extract_luxury_features("A spacious open space.") == []
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Luxury interiors with layered textures", SpaceType.INTERIOR),
+        ("Two bedrooms open onto the hall", SpaceType.INTERIOR),
+        ("Building exteriors and facades at dusk", SpaceType.EXTERIOR),
+        ("Captured by drones above the estate", SpaceType.AERIAL),
+        ("A kitchen with overhead pendant lights", SpaceType.AERIAL),
+        ("Overheated glasshouse", SpaceType.UNKNOWN),
+    ],
+)
+def test_space_type_keywords_keep_plural_forms(text: str, expected: SpaceType) -> None:
+    assert _analyzer()._extract_space_type(text) is expected
+
+
+def test_luxury_features_keep_suffixed_forms_of_long_keywords() -> None:
+    analyzer = _analyzer()
+
+    text = "Customized cabinetry, high ceilings, two fireplaces and spas. A spacious plan."
+    assert analyzer._extract_luxury_features(text) == ["high ceiling", "custom", "fireplace", "spa"]
+    assert analyzer._extract_luxury_features("An accustomed, spacious space.") == []
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # An echoed prompt precedes the answers: the last label line carries the answer.
+        (
+            "6. LIGHTING: Describe the lighting conditions.\n   (natural light, artificial, etc.)\n\n"
+            "1. SPACE TYPE: exterior\n6. LIGHTING: golden hour",
+            "golden hour",
+        ),
+        # A mention inside a later answer is not the label.
+        ("6. LIGHTING: natural light\n7. NOTES: accent lighting: warm", "natural light"),
+        ("**6. LIGHTING:**\nsoft morning light\n", "soft morning light"),
+        # No label line at all: the last mention is used, as before.
+        ("The accent lighting: warm and dim", "warm and dim"),
+        # An empty answer followed by the next heading falls back to keywords.
+        ("6. LIGHTING:\n7. NOTES: bright and airy", "bright"),
+    ],
+)
+def test_lighting_answer_comes_from_the_last_label_line(text: str, expected: str) -> None:
+    assert _analyzer()._extract_lighting(text) == expected

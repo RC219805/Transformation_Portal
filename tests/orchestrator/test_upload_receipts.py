@@ -586,6 +586,48 @@ def test_frozen_member_symlinks_cannot_change_containment_or_identity(tmp_path, 
         frozen_selection_paths({"root": str(root), "files": [{"id": "selected", "path": "photo.jpg"}]})
 
 
+@pytest.mark.asyncio
+async def test_frozen_read_through_a_symlink_loop_cannot_bind_its_identity(tmp_path):
+    (tmp_path / "loop").symlink_to("loop")
+
+    class Session:
+        async def scalars(self, _statement):
+            pytest.fail("an unresolvable frozen read must fail before any ledger query")
+
+        async def scalar(self, _statement):
+            pytest.fail("an unresolvable frozen read must fail before any ledger query")
+
+    with pytest.raises(UploadOwnershipLost):
+        await bind_upload_references(
+            Session(),
+            JobRecord(id="job_loop_read", created_at=1.0, request={}),
+            "tenant_a",
+            frozen_read_paths=(tmp_path / "loop",),
+        )
+
+
+def test_upload_read_base_through_a_symlink_loop_is_not_server_owned(tmp_path):
+    from transformation_portal.orchestrator.upload_receipts import _resolved_source_paths
+
+    (tmp_path / "loop").symlink_to("loop", target_is_directory=True)
+    selected = tmp_path / "selected"
+    selected.mkdir()
+    # Absolute reads never join the base, so only base resolution can fail.
+    with pytest.raises(UploadOwnershipLost, match="server-owned base"):
+        _resolved_source_paths([str(selected)], upload_read_base=tmp_path / "loop")
+
+
+@pytest.mark.parametrize("absolute", [False, True])
+def test_upload_read_selector_cannot_normalize_through_a_symlink_loop(tmp_path, absolute):
+    (tmp_path / "loop").symlink_to("loop", target_is_directory=True)
+    (tmp_path / "selected").mkdir()
+    selector = Path("missing/../loop/../selected")
+    payload = {"pipeline": "lux-depth-v5", "args": {"input_dir": str(tmp_path / selector if absolute else selector)}}
+
+    with pytest.raises(UploadOwnershipLost, match="path resolution is unavailable"):
+        upload_source_paths(payload, upload_read_base=tmp_path)
+
+
 def test_photographic_frozen_members_keep_their_existing_portable_path_limits(tmp_path):
     from transformation_portal.orchestrator.photography_adapter import PhotographyBindings
     from transformation_portal.orchestrator.upload_receipts import _admitted_source_paths

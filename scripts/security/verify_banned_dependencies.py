@@ -23,14 +23,36 @@ CONSTRAINTS_PATH = Path("requirements/constraints.txt")
 DOC_GUIDANCE_PATH = "docs/architecture/ADR-032-dependency-pinning-strategy.md"
 
 
+_EGG_FRAGMENT_RE = re.compile(r"[#&]egg=([A-Za-z0-9][A-Za-z0-9._-]*)")
+
+
+def canonicalize_name(name: str) -> str:
+    """PEP 503 normalization: case-insensitive, runs of ``-``, ``_`` and ``.`` are equivalent."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
 def _normalize_package_name(raw: str) -> str:
-    """Extract the package name from a dependency specifier."""
-    text = raw.split("#", 1)[0].strip()
-    if not text or text.startswith(("-r", "-c")):
+    """Extract the package name from a dependency specifier.
+
+    Handles PEP 508 specifiers, ``name @ url`` direct references and pip URL
+    requirements that name the project with a ``#egg=`` fragment. Comments
+    follow pip's rule (``#`` at line start or after whitespace), so URL
+    fragments are not mistaken for comments.
+
+    A leading PEP 508 name always wins: in ``name @ url#egg=other`` the
+    installed project is ``name``, so the fragment is only consulted for bare
+    URL, path and editable requirements.
+    """
+    text = re.sub(r"(^|\s)#.*$", "", raw).strip()
+    if not text or text.startswith(("-r", "-c", "--requirement", "--constraint")):
         return ""
-    text = text.split(";", 1)[0].strip()
-    text = re.split(r"[<>=!~\s\[]", text, 1)[0].strip()
-    return text
+    if not text.startswith(("-e", "--editable")):
+        name = re.split(r"[<>=!~@;#\s\[(\\]", text, maxsplit=1)[0].strip()
+        if name and "/" not in name and ":" not in name:
+            return name
+    # Bare URL, path or editable requirement: the only project name is an egg fragment.
+    egg = _EGG_FRAGMENT_RE.search(text)
+    return egg.group(1) if egg is not None else ""
 
 
 def _is_hard_block_constraint(raw_line: str) -> bool:
@@ -60,7 +82,7 @@ def load_banned_registry() -> Dict[str, Dict[str, str]]:
             raise ValueError(
                 f"Invalid banned package entry in {BANNED_REGISTRY_PATH}: each entry needs non-empty name and reason"
             )
-        registry[name.lower()] = {
+        registry[canonicalize_name(name)] = {
             "name": name,
             "reason": reason,
             "migration": migration,
@@ -98,24 +120,36 @@ def load_pyproject_dependencies() -> Set[str]:
     return deps
 
 
-def check_requirements_files(banned_registry: Dict[str, Dict[str, str]]) -> List[str]:
-    """Check requirements/*.txt files for banned packages (constraints allowed only as hard-block pins)."""
-    violations: List[str] = []
+def _requirement_files() -> List[Path]:
+    """Return every requirement source/lock the repository can install from.
+
+    Root ``requirements*.txt`` files (what CI installs; they do not apply
+    ``requirements/constraints.txt``) plus ``requirements/**/*.txt`` and
+    ``requirements/**/*.in`` (lock sources and nested lock directories).
+    """
+    files: Set[Path] = {path for path in Path(".").glob("requirements*.txt") if path.is_file()}
     req_dir = Path("requirements")
+    if req_dir.is_dir():
+        for pattern in ("*.txt", "*.in"):
+            files.update(path for path in req_dir.rglob(pattern) if path.is_file())
+    return sorted(files)
 
-    if not req_dir.exists():
-        return violations
 
-    for req_file in req_dir.glob("*.txt"):
-        is_constraints = req_file.name == "constraints.txt"
+def check_requirements_files(banned_registry: Dict[str, Dict[str, str]]) -> List[str]:
+    """Check requirement files for banned packages (constraints allowed only as hard-block pins)."""
+    violations: List[str] = []
 
-        with open(req_file, encoding="utf-8") as f:
+    for req_file in _requirement_files():
+        is_constraints = req_file == CONSTRAINTS_PATH
+
+        # utf-8-sig: pip strips a UTF-8 BOM, so the first requirement of such a file is live.
+        with open(req_file, encoding="utf-8-sig") as f:
             for line_num, raw_line in enumerate(f, 1):
                 pkg = _normalize_package_name(raw_line)
                 if not pkg:
                     continue
 
-                meta = banned_registry.get(pkg.lower())
+                meta = banned_registry.get(canonicalize_name(pkg))
                 if meta is None:
                     continue
 
@@ -135,13 +169,13 @@ def check_constraints_sync(banned_registry: Dict[str, Dict[str, str]]) -> List[s
         return [f"Missing constraints file: {CONSTRAINTS_PATH}"]
 
     hard_blocked: Set[str] = set()
-    with open(CONSTRAINTS_PATH, encoding="utf-8") as f:
+    with open(CONSTRAINTS_PATH, encoding="utf-8-sig") as f:
         for raw_line in f:
             pkg = _normalize_package_name(raw_line)
             if not pkg:
                 continue
             if _is_hard_block_constraint(raw_line):
-                hard_blocked.add(pkg.lower())
+                hard_blocked.add(canonicalize_name(pkg))
 
     for banned in sorted(banned_registry):
         if banned not in hard_blocked:
@@ -169,7 +203,7 @@ def main() -> int:
     pyproject_deps = load_pyproject_dependencies()
     pyproject_violations: List[str] = []
     for dep in sorted(pyproject_deps):
-        meta = banned_registry.get(dep.lower())
+        meta = banned_registry.get(canonicalize_name(dep))
         if meta is not None:
             pyproject_violations.append(f"pyproject.toml - {dep} ({meta['reason']})")
 

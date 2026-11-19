@@ -190,6 +190,64 @@ class TestGetExecutionOrder:
         """No nodes → empty order."""
         assert not PriorityDAGScheduler().get_execution_order()
 
+    @pytest.mark.parametrize("count", [2, 3, 10, 16])
+    def test_independent_nodes_appear_exactly_once(self, count):
+        """Nodes that are ready at the same time must not be listed again for each completed node."""
+        s = PriorityDAGScheduler()
+        names = [f"node-{index:02d}" for index in range(count)]
+        for name in names:
+            s.add_node(name, _make_node())
+
+        order = s.get_execution_order()
+
+        assert len(order) == count
+        assert sorted(order) == names
+
+    def test_diamond_lists_every_node_once_after_its_dependencies(self):
+        s = PriorityDAGScheduler()
+        s.add_node("source", _make_node())
+        s.add_node("left", _make_node(), deps=["source"])
+        s.add_node("right", _make_node(), deps=["source"])
+        s.add_node("merge", _make_node(), deps=["left", "right"])
+        s.add_node("side", _make_node())
+
+        order = s.get_execution_order()
+
+        assert sorted(order) == ["left", "merge", "right", "side", "source"]
+        assert order.index("source") < min(order.index("left"), order.index("right"))
+        assert order.index("merge") > max(order.index("left"), order.index("right"))
+
+    def test_ready_nodes_are_listed_by_priority(self):
+        s = PriorityDAGScheduler()
+        s.add_node("low", _make_node(), priority=1)
+        s.add_node("high", _make_node(), priority=5)
+        s.add_node("mid", _make_node(), priority=3)
+        s.add_node("after-low", _make_node(), deps=["low"], priority=9)
+
+        assert s.get_execution_order() == ["high", "mid", "low", "after-low"]
+
+    def test_planned_order_matches_the_order_run_uses(self):
+        """The plan is a faithful dry run: same order, one execution per node."""
+        executed = []
+
+        def recording_node(name):
+            node = MagicMock()
+            node.run.side_effect = lambda **_inputs: executed.append(name) or name
+            return node
+
+        s = PriorityDAGScheduler()
+        s.add_node("ingest", recording_node("ingest"), priority=2)
+        s.add_node("thumbnail", recording_node("thumbnail"), priority=7)
+        s.add_node("segment", recording_node("segment"), deps=["ingest"], priority=5)
+        s.add_node("audit", recording_node("audit"), priority=1)
+        s.add_node("report", recording_node("report"), deps=["segment", "thumbnail"])
+
+        planned = s.get_execution_order()
+        s.run()
+
+        assert planned == executed
+        assert len(planned) == 5
+
 
 class TestGetResourceSummary:
     def test_counts_gpu_nodes(self):

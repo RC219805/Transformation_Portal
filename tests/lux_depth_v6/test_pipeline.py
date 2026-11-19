@@ -199,6 +199,34 @@ def test_closed_plan_and_processing_drift(v5_parent, tmp_path):
     assert not prepared.output_root.exists()
 
 
+def test_constrained_verify_replays_retained_parent_once(v5_parent, tmp_path, monkeypatch):
+    # LN-5: a caller budget made verification replay the full V5 parent twice.
+    from transformation_portal.lux_depth_v6 import source as v6_source
+    from transformation_portal.lux_depth_v6.source import SourceLimits
+
+    result = run(prepare(LuxDepthV6Request(v5_parent, tmp_path / "v6")))
+    baseline = verify_execution_evidence(result.output_root, source_root=v5_parent)
+    replays = []
+    real_replay = v6_source.verify_execution_evidence_v3
+
+    def counting_replay(*args, **kwargs):
+        replays.append(args)
+        return real_replay(*args, **kwargs)
+
+    monkeypatch.setattr(v6_source, "verify_execution_evidence_v3", counting_replay)
+    admitted = SourceLimits()
+    for limits in (admitted, replace(admitted, memory_mib=admitted.memory_mib - 1)):
+        replays.clear()
+        verified = verify_execution_evidence(result.output_root, source_root=v5_parent, source_limits=limits)
+        assert len(replays) == 1
+        assert verified.canonical_bytes == baseline.canonical_bytes
+        assert verified.plan_sha256 == baseline.plan_sha256
+    replays.clear()
+    with pytest.raises(ValueError, match="pixel"):
+        verify_execution_evidence(result.output_root, source_root=v5_parent, source_limits=replace(admitted, max_pixels=1))
+    assert replays == []
+
+
 def test_cli_plan_and_execution_and_verify(v5_parent, tmp_path, capsys):
     arguments = ["--input-dir", str(v5_parent), "--output-dir", str(tmp_path / "cli")]
     assert main([*arguments, "--plan"]) == 0

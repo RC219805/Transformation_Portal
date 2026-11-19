@@ -317,7 +317,7 @@ qualification. Presentation and processing-stage authority remain independent.
 
 The pure-data `native_resource_contract.py` freezes the profile's functional
 source closure, current `pyproject.toml` and `requirements/base.in` declarations,
-CPython executable, five native extensions, package versions and Darwin arm64
+CPython executable, compiled extension modules, package versions and Darwin arm64
 runtime. Qualification checks every active direct core requirement against the
 actual installed versions, using the host's requirement markers. Stale installed
 project metadata cannot authorize an older dependency floor. Missing, conflicting
@@ -330,11 +330,10 @@ another platform/build selects fallback. Set `OMP_NUM_THREADS`,
 contract cannot grant capacity. It is reviewed release data; never regenerate it
 merely to make a mismatched installation qualify.
 
-The recorded resource capsule remains historical after the Markdown parser
-security floor moves to `markdown-it-py>=4.3.0,<5`. Its source and direct-package
-identities do not authorize the updated dependency closure. Preserve the capsule
-and its measurements; the current installation uses conservative analytical
-costing until a separately reviewed successor is qualified. A dependency audit,
+The recorded resource capsule remains historical because the current source
+closure has changed. Preserve the capsule and its measurements. The current
+source selects conservative analytical costing until a separately reviewed
+successor is qualified. A dependency audit,
 parser regression test, or source-lock refresh does not establish native resource
 acceptance or enable additional capacity.
 

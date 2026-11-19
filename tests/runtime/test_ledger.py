@@ -560,3 +560,258 @@ class TestImmutableLedgerPersistence:
         assert len(entries) == 2
         assert entries[0].manifest["run_id"] == "alpha"
         assert entries[1].manifest["run_id"] == "beta"
+
+
+class TestImmutableLedgerAppendRobustness:
+    """Regression tests for audit finding T-06 (append atomicity and locking)."""
+
+    def test_failed_append_does_not_brick_verification(self, tmp_path: Path) -> None:
+        """A non-serialisable metadata value fails before any state changes."""
+        import datetime as _dt
+
+        path = tmp_path / "failed.ledger"
+        ledger = ImmutableLedger(path)
+        for i in range(3):
+            ledger.append(create_test_manifest(f"run_{i}"), create_test_certificate(f"run_{i}"))
+        before = path.read_bytes()
+
+        with pytest.raises(TypeError):
+            ledger.append(
+                create_test_manifest("bad"),
+                create_test_certificate("bad"),
+                metadata={"finished": _dt.datetime.now()},
+            )
+
+        assert path.read_bytes() == before
+        assert ledger.entry_count == 3
+        entry = ledger.append(create_test_manifest("run_3"), create_test_certificate("run_3"))
+        assert entry.entry_id == 4
+        assert [e.entry_id for e in ledger.get_entries()] == [1, 2, 3, 4]
+        assert ledger.verify() is True
+
+    def test_failed_write_is_rolled_back(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An I/O failure while persisting leaves neither a torn line nor stale state."""
+        import transformation_portal.runtime.ledger as ledger_mod
+
+        path = tmp_path / "rollback.ledger"
+        ledger = ImmutableLedger(path)
+        ledger.append(create_test_manifest("run_0"), create_test_certificate("run_0"))
+        before = path.read_bytes()
+        head = ledger.last_hash
+
+        def _boom(_fd: int) -> None:
+            raise OSError("disk full")
+
+        monkeypatch.setattr(ledger_mod.os, "fsync", _boom)
+        with pytest.raises(OSError, match="disk full"):
+            ledger.append(create_test_manifest("run_1"), create_test_certificate("run_1"))
+        monkeypatch.undo()
+
+        assert path.read_bytes() == before
+        assert (ledger.entry_count, ledger.last_hash) == (1, head)
+        assert ledger.append(create_test_manifest("run_1"), create_test_certificate("run_1")).entry_id == 2
+        assert ledger.verify() is True
+
+    def test_torn_tail_fails_closed(self, tmp_path: Path) -> None:
+        """Nothing is chained onto a partially written last line."""
+        path = tmp_path / "torn.ledger"
+        ledger = ImmutableLedger(path)
+        ledger.append(create_test_manifest("run_0"), create_test_certificate("run_0"))
+        with path.open("ab") as handle:
+            handle.write(b'{"entry_id": 2, "prev_ha')
+        before = path.read_bytes()
+
+        with pytest.raises(LedgerError):
+            ledger.append(create_test_manifest("run_1"), create_test_certificate("run_1"))
+        assert path.read_bytes() == before
+        assert ledger.verify() is False
+
+    def test_two_handles_do_not_fork_the_chain(self, tmp_path: Path) -> None:
+        """Interleaved appends through two handles keep one linear chain."""
+        path = tmp_path / "shared.ledger"
+        led_a = ImmutableLedger(path)
+        for i in range(3):
+            led_a.append(create_test_manifest(f"a_{i}"), create_test_certificate(f"a_{i}"))
+        led_b = ImmutableLedger(path)
+
+        led_a.append(create_test_manifest("from_a"), create_test_certificate("from_a"))
+        entry_b = led_b.append(create_test_manifest("from_b"), create_test_certificate("from_b"))
+
+        assert entry_b.entry_id == 5
+        assert [e.entry_id for e in led_a.get_entries()] == [1, 2, 3, 4, 5]
+        assert led_a.verify() is True
+        assert led_b.verify() is True
+
+    def test_concurrent_threads_on_separate_handles_keep_one_chain(self, tmp_path: Path) -> None:
+        """Threads appending through their own handles are serialised by the file lock."""
+        import threading
+
+        path = tmp_path / "threads.ledger"
+        ImmutableLedger(path)
+        workers, per_worker = 4, 15
+        barrier = threading.Barrier(workers)
+        errors: list[BaseException] = []
+
+        def _work(worker: int) -> None:
+            try:
+                handle = ImmutableLedger(path)
+                barrier.wait(timeout=10)
+                for i in range(per_worker):
+                    handle.append(create_test_manifest(f"w{worker}_{i}"), create_test_certificate(f"w{worker}_{i}"))
+            except BaseException as exc:  # pragma: no cover - surfaced below
+                errors.append(exc)
+
+        threads = [threading.Thread(target=_work, args=(w,)) for w in range(workers)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+
+        assert not errors
+        assert not any(thread.is_alive() for thread in threads)
+        final = ImmutableLedger(path)
+        assert [e.entry_id for e in final.get_entries()] == list(range(1, workers * per_worker + 1))
+        assert final.verify() is True
+
+    def test_metadata_is_hashed_after_json_round_trip(self, tmp_path: Path) -> None:
+        """Metadata whose JSON form differs from the Python value still verifies."""
+        path = tmp_path / "intkeys.ledger"
+        ledger = ImmutableLedger(path)
+        entry = ledger.append(
+            create_test_manifest("run_0"),
+            create_test_certificate("run_0"),
+            metadata={"gpu_seconds_by_device": {2: 1.5, 10: 0.5}},
+        )
+
+        assert entry.metadata == {"gpu_seconds_by_device": {"2": 1.5, "10": 0.5}}
+        assert ledger.verify() is True
+        assert ImmutableLedger(path).verify() is True
+
+
+class TestImmutableLedgerTamperDetection:
+    """Regression tests for audit finding T-06 (tampering must not verify)."""
+
+    @staticmethod
+    def _rows(path: Path) -> list[dict]:
+        return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+    @staticmethod
+    def _write_rows(path: Path, rows: list[dict]) -> None:
+        path.write_text("".join(json.dumps(row, sort_keys=True) + "\n" for row in rows))
+
+    def _populated(self, path: Path) -> ImmutableLedger:
+        ledger = ImmutableLedger(path)
+        for i in range(3):
+            ledger.append(create_test_manifest(f"run_{i}"), create_test_certificate(f"run_{i}"))
+        return ledger
+
+    def test_back_dated_timestamp_is_detected(self, tmp_path: Path) -> None:
+        path = tmp_path / "backdate.ledger"
+        self._populated(path)
+        rows = self._rows(path)
+        rows[1]["timestamp"] = "1999-12-31T23:59:59+00:00"
+        self._write_rows(path, rows)
+
+        assert ImmutableLedger(path).verify() is False
+
+    def test_truncation_and_emptying_are_detected_on_the_writing_handle(self, tmp_path: Path) -> None:
+        path = tmp_path / "truncate.ledger"
+        ledger = self._populated(path)
+        first_line = path.read_text().splitlines()[0]
+
+        path.write_text(first_line + "\n")
+        assert ledger.verify() is False
+
+        path.write_text("")
+        assert ledger.verify() is False
+
+    def test_replaced_head_is_detected_on_the_writing_handle(self, tmp_path: Path) -> None:
+        """A rewritten (recomputed) last entry no longer matches the cached head."""
+        path = tmp_path / "head.ledger"
+        ledger = self._populated(path)
+        rows = self._rows(path)
+        last = rows[-1]
+        last["manifest"]["run_id"] = "FORGED"
+        last["entry_hash"] = ledger._compute_entry_hash(
+            last["prev_hash"],
+            last["manifest"],
+            last["certificate"],
+            last["metadata"],
+            entry_id=last["entry_id"],
+            timestamp=last["timestamp"],
+        )
+        self._write_rows(path, rows)
+
+        assert ImmutableLedger(path).verify() is True  # a fresh handle cannot tell (unkeyed chain)
+        assert ledger.verify() is False
+
+    def test_malformed_line_verifies_false_instead_of_raising(self, tmp_path: Path) -> None:
+        path = tmp_path / "garbage.ledger"
+        ledger = self._populated(path)
+        with path.open("a") as handle:
+            handle.write("not json\n")
+
+        assert ledger.verify() is False
+
+    def test_rewritten_manifest_with_signed_certificate_is_detected(self, tmp_path: Path) -> None:
+        """Recomputed chain hashes do not hide a manifest that no longer matches its certificate."""
+        pytest.importorskip("cryptography")
+        from transformation_portal.core.security.signing import CertificateSigner, generate_ed25519_keypair
+
+        priv, _pub = generate_ed25519_keypair()
+        signer = CertificateSigner(priv, issuer="test-ci")
+        path = tmp_path / "signed.ledger"
+        ledger = ImmutableLedger(path, signer=signer)
+        for i in range(3):
+            manifest = json.dumps({"run_id": f"run-{i}", "root_hash": "0" * 64, "qa_verdict": "FAIL"})
+            ledger.append(manifest, signer.sign_manifest(manifest))
+        assert ledger.verify() is True
+
+        rows = self._rows(path)
+        rows[1]["manifest"]["qa_verdict"] = "PASS"
+        prev = rows[0]["entry_hash"]
+        for row in rows[1:]:
+            row["prev_hash"] = prev
+            row["entry_hash"] = ledger._compute_entry_hash(
+                prev,
+                row["manifest"],
+                row["certificate"],
+                row["metadata"],
+                entry_id=row["entry_id"],
+                timestamp=row["timestamp"],
+            )
+            prev = row["entry_hash"]
+        self._write_rows(path, rows)
+
+        assert ImmutableLedger(path, signer=signer).verify() is False
+
+    def test_legacy_entries_still_verify(self, tmp_path: Path) -> None:
+        """Entries hashed with the earlier body (no entry_id/timestamp) remain valid."""
+        path = tmp_path / "legacy.ledger"
+        helper = ImmutableLedger(tmp_path / "helper.ledger")
+        prev = ImmutableLedger.GENESIS_HASH
+        rows = []
+        for i in range(3):
+            manifest = json.loads(create_test_manifest(f"legacy_{i}"))
+            certificate = json.loads(create_test_certificate(f"legacy_{i}").to_json())
+            entry_hash = helper._compute_entry_hash(prev, manifest, certificate, {})
+            rows.append(
+                {
+                    "entry_id": i + 1,
+                    "prev_hash": prev,
+                    "entry_hash": entry_hash,
+                    "timestamp": "2025-01-01T00:00:00+00:00",
+                    "manifest": manifest,
+                    "certificate": certificate,
+                    "metadata": {},
+                }
+            )
+            prev = entry_hash
+        self._write_rows(path, rows)
+
+        ledger = ImmutableLedger(path)
+        assert ledger.verify() is True
+        appended = ledger.append(create_test_manifest("new"), create_test_certificate("new"))
+        assert appended.entry_id == 4
+        assert appended.prev_hash == prev
+        assert ledger.verify() is True

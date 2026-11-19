@@ -138,6 +138,13 @@ PYTHONPATH=src ./.venv/bin/python -m transformation_portal.lux_depth_v6 \
   --input-dir "$TP_V6_ORIGINALS" --output-dir "$TP_V6_DEPTH_PRO_OUTPUT" --verify
 ```
 
+Depth Pro admits each original only when `pixels * 512 + file_bytes + 8 GiB`
+fits within `--memory-mib` and `pixels` is within `--max-pixels`; the header
+geometry is checked before pixels are decoded. With the default 16 GiB budget this
+admits roughly 16.7 million pixels, so a 24-megapixel original needs about
+`--memory-mib 20480`. A geometry refusal from the memory reserve reports the required
+`--memory-mib`; a refusal from `--max-pixels` says `max_pixels`.
+
 Use `--device cpu` when an accelerator is unavailable. The input-color modes are
 `auto` (default), `auto_assume_srgb`, `srgb`, and `linear_srgb`. Auto modes convert
 supported embedded profiles; the assumption mode only falls back for genuinely
@@ -184,9 +191,9 @@ Execution still performs full decoding and validation. Shared heartbeat and
 same-origin managed artifact delivery behavior is described in the
 [portal quickstart](../guides/PORTAL_ORCHESTRATOR_QUICKSTART.md#endpoints).
 
-Deploy matching API and worker code and the packaged plan schema together.
-Apply `make db-upgrade` through `0007_photography_bindings`; V6 reuses that
-migration's immutable physical bindings and needs no additional migration.
+Apply `make db-upgrade` to the current head, at least `0010_upload_receipts`.
+Then deploy matching API and worker code with the packaged plan schema.
+V6 uses the immutable physical bindings introduced in `0007_photography_bindings`.
 Before upgrades or rollback, stop admission and drain workers. An older worker
 cannot consume `tp.execution.plan.v5`; disable V6 admission and drain those jobs
 before returning to older worker code.
@@ -485,6 +492,10 @@ or `pixels * 320 + native_pixels * 128 + 256 MiB` with depth products; the
 upstream verification also accounts for its proxy and ICC storage. Output
 admission reserves every float product, TIFF, bounded PNG, metadata, plan, and completion before writing.
 These ceilings are frozen and rechecked by plan parsing and source admission.
+The 100-million-pixel per-image ceiling is fixed for retained-V5 grading:
+`--max-pixels` (bounded at 200 million for standalone Depth Pro originals) can
+only lower it, and source admission rejects a larger retained frame with
+"V6 image exceeds the pixel ceiling" before the V5 parent replay runs.
 They are conservative numerical admission bounds, not hard operating-system
 memory isolation. Cancellation and deadlines are observed at processing and
 verification checkpoints, including retained-source validation before output creation.

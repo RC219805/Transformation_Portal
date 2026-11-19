@@ -9,6 +9,7 @@ from importlib.resources import files
 import jsonschema
 import pytest
 
+from transformation_portal.core import execution_identity_v4
 from transformation_portal.core.execution_identity_v4 import MaterializedExecutionIdentityV4
 from transformation_portal.core.execution_plan import ExecutionPlanError
 from transformation_portal.core.execution_plan_v2 import (
@@ -181,6 +182,79 @@ def test_identity_is_factory_only_and_rejects_forged_plan_carriers():
     object.__setattr__(forged, "canonical_bytes", canonicalize_json(changed))
     with pytest.raises(ExecutionPlanError):
         identity(forged)
+
+
+@pytest.fixture
+def plan_validations(monkeypatch):
+    """Record every full plan validation done on behalf of identity materialization."""
+
+    def forget_validated_plans():
+        cache = getattr(execution_identity_v4, "_validated_plan", None)
+        if cache is not None:
+            cache.cache_clear()
+
+    validated = []
+    parse = execution_identity_v4.parse_photography_plan
+
+    def recording_parse(data):
+        validated.append(data)
+        return parse(data)
+
+    forget_validated_plans()
+    monkeypatch.setattr(execution_identity_v4, "parse_photography_plan", recording_parse)
+    yield validated
+    forget_validated_plans()
+
+
+def test_identities_for_one_plan_validate_its_carrier_once(plan_validations):
+    """Per-stage, per-input identities must not re-validate the whole inventory each time."""
+    value = payload()
+    value["inputs"] = [
+        {"id": f"input-{index:04d}", "path": f"image-{index:04d}.png", "sha256": f"{index + 1:064x}", "size_bytes": 100}
+        for index in range(12)
+    ]
+    plan = ExecutionPlanV2.from_payload(signed(value))
+
+    identities = [identity(plan, input_id=f"input-{index:04d}") for index in range(12)]
+    depth = identity(plan, node_id="depth", inputs={"proxy": "d" * 64}, model="e" * 64)
+
+    assert plan_validations == [plan.canonical_bytes]
+    assert len({item.execution_identity_sha256 for item in identities}) == 12
+    assert depth.to_payload()["plan_fingerprint_sha256"] == plan.plan_fingerprint_sha256
+
+
+def test_memoized_plan_validation_still_rejects_forged_carriers(plan_validations):
+    plan = ExecutionPlanV2.from_payload(payload())
+    original = identity(plan)
+
+    # Different bytes are a different carrier: they get the full validation.
+    tampered = payload()
+    tampered["device"] = "mps"
+    forged = object.__new__(ExecutionPlanV2)
+    object.__setattr__(forged, "canonical_bytes", canonicalize_json(tampered))
+    with pytest.raises(ExecutionPlanError, match="fingerprint mismatch"):
+        identity(forged)
+
+    # A carrier that is not bytes is refused outright.
+    textual = object.__new__(ExecutionPlanV2)
+    object.__setattr__(textual, "canonical_bytes", plan.canonical_bytes.decode("utf-8"))
+    with pytest.raises(ExecutionPlanError, match="must be bytes"):
+        identity(textual)
+
+    # The same validated bytes in another object are the same plan.
+    twin = object.__new__(ExecutionPlanV2)
+    object.__setattr__(twin, "canonical_bytes", bytes(bytearray(plan.canonical_bytes)))
+    assert identity(twin) == original
+
+
+def test_identity_payload_edits_cannot_reach_later_identities():
+    plan = ExecutionPlanV2.from_payload(payload())
+    first = identity(plan)
+    projection = first.to_payload()
+    projection["source_input"]["sha256"] = "f" * 64
+    projection["inputs"].clear()
+
+    assert identity(plan).canonical_bytes == first.canonical_bytes
 
 
 def test_identity_separates_planned_inputs_with_identical_bytes():

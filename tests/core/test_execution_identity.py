@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import subprocess
+import sys
 from unittest.mock import patch
 
 import pytest
 
+from transformation_portal.core import platform_matrix
 from transformation_portal.core.execution_identity import (
     ArtifactMetadata,
     ExecutionIdentity,
@@ -14,6 +18,7 @@ from transformation_portal.core.execution_identity import (
     create_artifact_metadata,
     explain_cache_miss,
     is_ci_environment,
+    is_compatible,
 )
 
 pytestmark = pytest.mark.unit
@@ -203,3 +208,120 @@ class TestCreateArtifactMetadata:
         d = meta.to_dict()
         for key in ("artifact_id", "stage", "code_hash", "config_hash"):
             assert key in d
+
+
+class TestEnvFingerprint:
+    """The environment fingerprint describes the running interpreter, once per process."""
+
+    @pytest.fixture
+    def pip_calls(self, monkeypatch):
+        """Record pip invocations and answer them with a fixed freeze listing."""
+        calls: list[list[str]] = []
+
+        def fake_run(command, **_kwargs):
+            calls.append(list(command))
+            stdout = "pip 99.1 from /site-packages/pip (python 3.13)\n" if command[-1] == "--version" else "b==2\na==1\n"
+            return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
+
+        def clear_cache() -> None:
+            for name in ("_pip_freeze_fingerprint", "get_env_fingerprint"):
+                getattr(getattr(platform_matrix, name, None), "cache_clear", lambda: None)()
+
+        monkeypatch.setattr(platform_matrix.subprocess, "run", fake_run)
+        clear_cache()
+        yield calls
+        clear_cache()
+
+    def test_uses_the_pip_of_the_running_interpreter(self, pip_calls):
+        fingerprint = platform_matrix.get_env_fingerprint()
+
+        assert pip_calls == [[sys.executable, "-P", "-m", "pip", "freeze"]]
+        assert fingerprint == "sha256:" + hashlib.sha256(b"a==1\nb==2").hexdigest()
+
+    def test_pip_version_uses_the_pip_of_the_running_interpreter(self, pip_calls):
+        assert platform_matrix.get_pip_version() == "99.1"
+        assert pip_calls == [[sys.executable, "-P", "-m", "pip", "--version"]]
+
+    def test_is_computed_once_per_process(self, pip_calls):
+        first = platform_matrix.get_env_fingerprint()
+        second = platform_matrix.get_env_fingerprint()
+
+        assert first == second
+        assert len(pip_calls) == 1
+
+    def test_identity_and_compatibility_checks_share_one_computation(self, pip_calls):
+        """One pip subprocess per stage, plus one per cache hit, made warm runs slow."""
+        identities = [
+            compute_cas_id(stage, ["sha256:in"], {}, code_hash="sha256:code", lockfile_hash="sha256:lock")
+            for stage in ("depth", "enhance", "output")
+        ]
+        metadata = create_artifact_metadata("sha256:artifact", identities[0])
+
+        assert is_compatible(metadata) is True
+        assert {identity.env_fingerprint for identity in identities} == {metadata.env_fingerprint}
+        assert len(pip_calls) == 1
+
+    @pytest.mark.parametrize(
+        ("failure", "placeholder"),
+        [
+            (FileNotFoundError("no interpreter"), "sha256:unknown-pip-unavailable"),
+            (subprocess.TimeoutExpired(cmd="pip", timeout=30), "sha256:unknown-pip-timeout"),
+        ],
+        ids=["unavailable", "timeout"],
+    )
+    def test_failure_placeholders_are_kept(self, pip_calls, monkeypatch, failure, placeholder):
+        def failing_run(command, **_kwargs):
+            raise failure
+
+        monkeypatch.setattr(platform_matrix.subprocess, "run", failing_run)
+
+        assert platform_matrix.get_env_fingerprint() == placeholder
+
+    @pytest.mark.parametrize(
+        ("failure", "placeholder"),
+        [
+            (subprocess.TimeoutExpired(cmd="pip", timeout=30), "sha256:unknown-pip-timeout"),
+            (BlockingIOError("cannot start a process right now"), "sha256:unknown-pip-unavailable"),
+        ],
+        ids=["timeout", "process-not-started"],
+    )
+    def test_passing_failure_is_asked_again_instead_of_kept_for_the_process(
+        self, pip_calls, monkeypatch, failure, placeholder
+    ):
+        answering_run = platform_matrix.subprocess.run
+        attempts = []
+
+        def failing_once(command, **kwargs):
+            attempts.append(command)
+            if len(attempts) == 1:
+                raise failure
+            return answering_run(command, **kwargs)
+
+        monkeypatch.setattr(platform_matrix.subprocess, "run", failing_once)
+
+        assert platform_matrix.get_env_fingerprint() == placeholder
+        recovered = platform_matrix.get_env_fingerprint()
+        assert recovered == "sha256:" + hashlib.sha256(b"a==1\nb==2").hexdigest()
+        assert platform_matrix.get_env_fingerprint() == recovered
+        assert len(attempts) == 2
+
+    def test_interpreter_without_pip_is_asked_once(self, pip_calls, monkeypatch):
+        attempts = []
+
+        def no_pip(command, **_kwargs):
+            attempts.append(command)
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="No module named pip")
+
+        monkeypatch.setattr(platform_matrix.subprocess, "run", no_pip)
+
+        assert platform_matrix.get_env_fingerprint() == "sha256:unknown-pip-freeze-failed"
+        assert platform_matrix.get_env_fingerprint() == "sha256:unknown-pip-freeze-failed"
+        assert len(attempts) == 1
+
+    def test_frozen_application_is_not_started_to_list_its_packages(self, pip_calls, monkeypatch):
+        """In a frozen build ``sys.executable`` is the application, not an interpreter."""
+        monkeypatch.setattr(sys, "frozen", True, raising=False)
+
+        assert platform_matrix.get_env_fingerprint() == "sha256:unknown-pip-unavailable"
+        assert platform_matrix.get_pip_version() == "unknown"
+        assert pip_calls == []

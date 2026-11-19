@@ -25,6 +25,9 @@ Functions
 image_to_float
     Convert PIL Image to normalized float32 RGB array.
 
+read_full_precision_pixels
+    Read the samples of 16-bit RGB(A) TIFFs that Pillow decodes at 8 bits.
+
 float_to_dtype_array
     Convert float array back to target dtype with proper scaling.
 
@@ -44,7 +47,7 @@ from pathlib import Path
 from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageMode
 
 try:  # Optional high-fidelity TIFF writer
     import tifffile  # type: ignore
@@ -303,7 +306,7 @@ class ImageToFloatResult:
         yield self.base_channels
 
 
-def image_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+def image_to_float(
     image: Image.Image,
     return_format: Literal["tuple3", "tuple4", "object"] = "object",
 ) -> Union[
@@ -328,7 +331,23 @@ def image_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-man
     if image.mode not in supported_modes:
         image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
 
-    arr = np.array(image)
+    return pixels_to_float(np.array(image), return_format=return_format)
+
+
+def pixels_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    arr: np.ndarray,
+    return_format: Literal["tuple3", "tuple4", "object"] = "object",
+) -> Union[
+    Tuple[np.ndarray, np.dtype, Optional[np.ndarray]],
+    Tuple[np.ndarray, np.dtype, Optional[np.ndarray], int],
+    ImageToFloatResult,
+]:
+    """Convert a decoded ``(H, W)`` or ``(H, W, C)`` sample array to an RGB float32 array in the 0-1 range.
+
+    This is the array half of :func:`image_to_float`; it also takes samples
+    decoded without Pillow (see :func:`read_full_precision_pixels`).
+    """
+
     alpha_channel: Optional[np.ndarray] = None
 
     if arr.ndim == 2:
@@ -398,6 +417,111 @@ def image_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-man
     if return_format not in allowed_formats:
         raise ValueError(f"Unsupported return_format: {return_format}. Allowed values are: {allowed_formats}")
     return result
+
+
+# Pillow decodes these modes at 8 bits per band and image_to_float consumes them unconverted.
+_PILLOW_8BIT_PASSTHROUGH_MODES = frozenset({"L", "LA", "RGB", "RGBA"})
+# Photometric interpretations whose stored samples tifffile returns in the layout those modes describe.
+_TIFFFILE_PIXEL_PHOTOMETRICS = frozenset({1, 2})  # MINISBLACK, RGB
+
+
+def _tag_ints(tags: Any, tag: int) -> Tuple[int, ...]:
+    try:
+        value = tags.get(tag)
+    except (AttributeError, TypeError, ValueError, KeyError):  # pragma: no cover - metadata best effort
+        return ()
+    if value is None:
+        return ()
+    values = value if isinstance(value, (tuple, list)) else (value,)
+    try:
+        return tuple(int(item) for item in values)
+    except (TypeError, ValueError):
+        return ()
+
+
+def read_full_precision_pixels(source: Path, image: Image.Image) -> Optional[np.ndarray]:
+    """Return full-precision TIFF samples with straight alpha when present.
+
+    Pillow opens 16-bit RGB and RGBA TIFFs as 8-bit ``RGB``/``RGBA`` images, so
+    reading pixels through Pillow alone drops the low byte of every sample. For
+    such sources the samples are read with tifffile instead; Pillow stays the
+    source of the tags and the ICC profile.
+
+    Returns ``None`` when Pillow's decode already holds every stored bit (all
+    8-bit sources, and the ``I;16``/``I``/``F`` modes), so those keep the Pillow
+    path unchanged. It also returns ``None`` when tifffile cannot supply an
+    equivalent array; that case is logged as a warning because the image is
+    then processed at Pillow's reduced precision.
+    """
+
+    tags = getattr(image, "tag_v2", None)
+    if tags is None:
+        return None
+    try:
+        decoded_bits = np.dtype(ImageMode.getmode(image.mode).typestr).itemsize * 8
+    except (KeyError, TypeError, ValueError):  # pragma: no cover - unknown Pillow mode
+        return None
+    bits = _tag_ints(tags, 258)
+    if not bits or max(bits) <= decoded_bits:
+        return None
+
+    reduced = f"{source} stores {max(bits)} bits per sample but is decoded at {decoded_bits} bits"
+    if image.mode not in _PILLOW_8BIT_PASSTHROUGH_MODES:
+        LOGGER.warning("%s: Pillow mode %s is not read at full precision.", reduced, image.mode)
+        return None
+    if tifffile is None:
+        LOGGER.warning("%s: install 'tifffile' to process it at full precision.", reduced)
+        return None
+    photometric = _tag_ints(tags, 262)
+    if len(photometric) != 1 or photometric[0] not in _TIFFFILE_PIXEL_PHOTOMETRICS:
+        LOGGER.warning("%s: photometric interpretation %s is not read at full precision.", reduced, photometric)
+        return None
+    try:
+        with tifffile.TiffFile(os.fspath(source)) as tif:
+            page = tif.pages[0]
+            samples = page.asarray()
+            axes = page.axes
+            associated_alpha = tifffile.EXTRASAMPLE.ASSOCALPHA in page.extrasamples
+    except Exception as exc:  # pylint: disable=broad-exception-caught  # tifffile/codec errors are not a closed set
+        LOGGER.warning("%s: tifffile could not decode it (%s: %s).", reduced, type(exc).__name__, exc)
+        return None
+
+    if axes == "SYX":  # PlanarConfiguration=2 (separate planes)
+        samples = np.moveaxis(samples, 0, -1)
+    elif axes not in ("YX", "YXS"):
+        LOGGER.warning("%s: tifffile sample layout %r is not supported.", reduced, axes)
+        return None
+    bands = len(image.getbands())
+    expected = (image.height, image.width) if bands == 1 else (image.height, image.width, bands)
+    if samples.shape != expected or samples.dtype.itemsize * 8 != max(bits):
+        LOGGER.warning(
+            "%s: tifffile returned %s %s samples, Pillow describes %s.", reduced, samples.dtype, samples.shape, expected
+        )
+        return None
+    samples = np.ascontiguousarray(samples, dtype=samples.dtype.newbyteorder("="))
+    if associated_alpha:
+        if samples.dtype != np.uint16 or bands not in (2, 4):
+            raise ValueError(f"{source}: associated alpha requires unsigned 16-bit LA or RGBA samples")
+        if not samples.flags.writeable:
+            samples = samples.copy()
+        _straighten_uint16_alpha(samples)
+    return samples
+
+
+def _straighten_uint16_alpha(samples: np.ndarray) -> None:
+    """Convert premultiplied colors in place with one channel of uint32 scratch."""
+    maximum = np.iinfo(np.uint16).max
+    alpha = samples[..., -1]
+    nonzero = alpha != 0
+    half_alpha = alpha // 2
+    for channel in np.moveaxis(samples[..., :-1], -1, 0):
+        # Round to the nearest native sample. Even the largest numerator fits uint32.
+        straight = np.multiply(channel, maximum, dtype=np.uint32)
+        straight += half_alpha
+        np.floor_divide(straight, alpha, out=straight, where=nonzero)
+        np.copyto(straight, 0, where=~nonzero)
+        np.minimum(straight, maximum, out=straight)
+        channel[:] = straight
 
 
 def float_to_dtype_array(  # pylint: disable=too-many-branches
@@ -543,6 +667,60 @@ def _metadata_to_extratag(tag: int, value: Any) -> Optional[tuple[int, str, int,
     return None
 
 
+# Tags the tifffile branch of ``save_image`` writes itself (from the array, the
+# keyword arguments or the ICC profile); tifffile refuses them as extratags.
+_TIFFFILE_WRITER_OWNED_TAGS = frozenset({258, 259, 262, 277, 278, 282, 283, 284, 296, 305, 317, 338, 339, 34675})
+_TIFF_SOFTWARE_TAG = 305
+_TIFF_ICC_PROFILE_TAG = 34675
+_TIFF_RESOLUTION_UNITS = frozenset({1, 2, 3})  # NONE, INCH, CENTIMETER
+_TIFF_DEFAULT_RESOLUTION_UNIT = 2  # TIFF 6.0 default when ResolutionUnit is absent
+
+
+def _resolution_component(value: Any) -> Optional[Union[Tuple[int, int], float]]:
+    """Return one X/YResolution value as a tifffile rational, or None when unusable."""
+
+    if isinstance(value, (tuple, list)) and len(value) == 1:
+        value = value[0]
+    numerator = getattr(value, "numerator", None)
+    denominator = getattr(value, "denominator", None)
+    if isinstance(numerator, int) and isinstance(denominator, int) and not isinstance(value, bool):
+        if numerator > 0 and denominator > 0 and numerator <= 0xFFFFFFFF and denominator <= 0xFFFFFFFF:
+            return (numerator, denominator)
+    if isinstance(value, (tuple, list)) and len(value) == 2 and all(isinstance(item, int) for item in value):
+        if value[0] > 0 and value[1] > 0:
+            return (int(value[0]), int(value[1]))
+        return None
+    try:
+        as_float = float(value)
+    except (TypeError, ValueError):
+        return None
+    if math.isfinite(as_float) and as_float > 0:
+        return as_float
+    return None
+
+
+def _tifffile_resolution_kwargs(metadata: Optional[Dict[int, Any]]) -> Dict[str, Any]:
+    """Map source X/YResolution/ResolutionUnit tags to tifffile's keyword arguments."""
+
+    if not metadata or 282 not in metadata or 283 not in metadata:
+        return {}
+    x_res = _resolution_component(metadata[282])
+    y_res = _resolution_component(metadata[283])
+    if x_res is None or y_res is None:
+        LOGGER.debug("Skipping unusable TIFF resolution %r x %r", metadata[282], metadata[283])
+        return {}
+    unit = metadata.get(296, _TIFF_DEFAULT_RESOLUTION_UNIT)
+    if isinstance(unit, (tuple, list)) and len(unit) == 1:
+        unit = unit[0]
+    try:
+        unit = int(unit)
+    except (TypeError, ValueError):
+        unit = _TIFF_DEFAULT_RESOLUTION_UNIT
+    if unit not in _TIFF_RESOLUTION_UNITS:
+        unit = _TIFF_DEFAULT_RESOLUTION_UNIT
+    return {"resolution": (x_res, y_res), "resolutionunit": unit}
+
+
 def save_image(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     # pylint: disable=too-many-branches,too-many-statements
     destination: Path,
@@ -590,12 +768,22 @@ def save_image(  # pylint: disable=too-many-arguments,too-many-positional-argume
             "metadata": None,
         }
         if extrasample_needed or (array_to_write.ndim == 3 and array_to_write.shape[2] > 3):
-            tiff_kwargs["extrasamples"] = "unassoc"
+            tiff_kwargs["extrasamples"] = "unassalpha"
+        tiff_kwargs.update(_tifffile_resolution_kwargs(metadata))
+        software = metadata.get(_TIFF_SOFTWARE_TAG) if metadata else None
+        if isinstance(software, str) and software:
+            # tifffile writes its own Software tag and refuses the source's as an extratag.
+            tiff_kwargs["software"] = software
         extratags = []
+        if not icc_profile and metadata and isinstance(metadata.get(_TIFF_ICC_PROFILE_TAG), (bytes, bytearray)):
+            icc_profile = bytes(metadata[_TIFF_ICC_PROFILE_TAG])
         if icc_profile:
-            extratags.append((34675, "B", len(icc_profile), icc_profile, False))
+            extratags.append((_TIFF_ICC_PROFILE_TAG, "B", len(icc_profile), icc_profile, False))
         if metadata:
             for tag, value in metadata.items():
+                with contextlib.suppress(TypeError, ValueError):
+                    if int(tag) in _TIFFFILE_WRITER_OWNED_TAGS:
+                        continue
                 extratag = _metadata_to_extratag(tag, value)
                 if extratag is not None:
                     extratags.append(extratag)
@@ -672,5 +860,7 @@ __all__ = [
     "ProcessingContext",
     "float_to_dtype_array",
     "image_to_float",
+    "pixels_to_float",
+    "read_full_precision_pixels",
     "save_image",
 ]

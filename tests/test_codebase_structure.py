@@ -96,6 +96,20 @@ class TestPackageStructure:
         error_module = _repo_root / "src" / "transformation_portal" / "utils" / "error_handling.py"
         assert error_module.exists(), "error_handling.py should exist in utils/"
 
+    def test_enhance_pool_aerial_import_has_no_side_effects(self, tmp_path, monkeypatch):
+        """Importing the in-package pool aerial script must not fail or write files (L-16)."""
+        import importlib
+
+        module_name = "transformation_portal.enhancers.enhance_pool_aerial"
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+        module = importlib.import_module(module_name)
+
+        assert callable(module.main)
+        assert not (tmp_path / "processed_images").exists()
+        assert list(tmp_path.iterdir()) == []
+
 
 class TestDocumentationOrganization:
     """Tests for documentation organization."""

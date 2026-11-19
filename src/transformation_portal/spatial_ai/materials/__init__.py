@@ -28,6 +28,7 @@ from transformation_portal.spatial_ai.materials.contracts import (
     MaterialInput,
     MaterialProperties,
     PBRTextures,
+    material_hint_from_label,
 )
 from transformation_portal.spatial_ai.materials.heuristic_fallback import HeuristicFallback
 from transformation_portal.spatial_ai.materials.material_backend import MaterialBackend
@@ -41,4 +42,5 @@ __all__ = [
     "MaterialBackend",
     "PBRGenerator",
     "HeuristicFallback",
+    "material_hint_from_label",
 ]

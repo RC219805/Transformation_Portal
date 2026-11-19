@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import codecs
+import locale
 import os
 import shutil
 import subprocess
@@ -52,6 +54,13 @@ FASTVLM_PROMPTS = {
     "smoke": DEFAULT_FASTVLM_PROMPT,
 }
 ADVISORY_WARNING = "FastVLM output is advisory and may hallucinate objects or under-report quality issues."
+# Characters of child stdout / stderr kept per stream. A governed caption is one
+# short line and mlx-vlm adds a few lines of statistics, so real output is a few
+# kilobytes. A misbehaving runtime can print megabytes, which would otherwise be
+# copied into the result, the raw text file and (twice) the advisory sidecar.
+# Longer output keeps its head and its tail, because the caption comes first and
+# errors come last, with a one-line marker in between.
+MAX_CAPTURED_OUTPUT_CHARS = 64 * 1024
 
 
 def _find_repo_root(start: Path | None = None) -> Path:
@@ -263,6 +272,39 @@ def _failure_result(
     )
 
 
+def _captured_output_encoding() -> str:
+    """Return the encoding of the child's pipes: the one text-mode pipes used.
+
+    The child inherits this process's locale (its ``PYTHON*`` overrides are
+    stripped), so output that decoded before keeps decoding to the same text.
+    """
+    encoding = locale.getpreferredencoding(False) or "utf-8"
+    try:
+        codecs.lookup(encoding)
+    except LookupError:
+        return "utf-8"
+    return encoding
+
+
+def _captured_text(raw: bytes | str | None) -> str:
+    """Decode captured child output to bounded text without ever raising.
+
+    The pipes are read as bytes: an undecodable byte must not turn an advisory
+    caption into an exception, and the partial output attached to
+    ``TimeoutExpired`` is bytes even for text-mode pipes.
+    """
+    if raw is None:
+        return ""
+    text = raw if isinstance(raw, str) else raw.decode(_captured_output_encoding(), errors="replace")
+    # Same newline handling as the text-mode pipes this replaces.
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    if len(text) <= MAX_CAPTURED_OUTPUT_CHARS:
+        return text
+    keep = MAX_CAPTURED_OUTPUT_CHARS // 2
+    omitted = len(text) - 2 * keep
+    return f"{text[:keep]}\n[... {omitted} characters of FastVLM output omitted ...]\n{text[-keep:]}"
+
+
 def _classify_nonzero_fastvlm_status(stdout: str, stderr: str) -> str:
     """Classify non-zero FastVLM exits that represent unavailable runtime state."""
     text = f"{stdout}\n{stderr}".lower()
@@ -348,27 +390,25 @@ def run_fastvlm_caption(
             command,
             cwd=str(runtime_dir),
             capture_output=True,
-            text=True,
             timeout=config.timeout_seconds,
             check=False,
             env=runtime_environment,
         )
     except subprocess.TimeoutExpired as exc:
         runtime_seconds = time.monotonic() - start
-        stdout = exc.stdout if isinstance(exc.stdout, str) else ""
-        stderr = exc.stderr if isinstance(exc.stderr, str) else ""
         result = _failure_result(
             status="timeout",
             error=f"FastVLM subprocess timed out after {config.timeout_seconds}s.",
             command=command,
-            raw_stdout=stdout,
-            raw_stderr=stderr,
+            raw_stdout=_captured_text(exc.stdout),
+            raw_stderr=_captured_text(exc.stderr),
             runtime_seconds=runtime_seconds,
         )
         if config.strict:
             raise RuntimeError(result.error)
         return result
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
+        # ValueError: an argument the OS cannot take, such as a NUL in the prompt.
         runtime_seconds = time.monotonic() - start
         result = _failure_result(
             status="error",
@@ -381,16 +421,18 @@ def run_fastvlm_caption(
         return result
 
     runtime_seconds = time.monotonic() - start
-    parsed = parse_fastvlm_caption(completed.stdout)
+    stdout = _captured_text(completed.stdout)
+    stderr = _captured_text(completed.stderr)
+    parsed = parse_fastvlm_caption(stdout)
     success = completed.returncode == 0
-    status = "ok" if success else _classify_nonzero_fastvlm_status(completed.stdout, completed.stderr)
+    status = "ok" if success else _classify_nonzero_fastvlm_status(stdout, stderr)
     error = None if success else f"FastVLM subprocess exited with code {completed.returncode}."
     result = FastVLMRuntimeResult(
         success=success,
         status=status,
         caption_parse=parsed,
-        raw_stdout=completed.stdout,
-        raw_stderr=completed.stderr,
+        raw_stdout=stdout,
+        raw_stderr=stderr,
         returncode=completed.returncode,
         command=command,
         runtime_seconds=runtime_seconds,

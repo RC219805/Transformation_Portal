@@ -210,6 +210,74 @@ class TestApexEvaluationHarness:
         assert result.score == 0.90
         assert result.passes is True
 
+    @pytest.mark.parametrize("metric_weight", [0.5, 0.75, 0.8, 1.0])
+    def test_fail_on_vlm_error_fails_gate_regardless_of_weight(self, metric_weight):
+        """M-07: with fail_on_vlm_error=True a VLM error fails even when metrics alone clear the threshold."""
+        mock_vlm = MagicMock()
+        mock_vlm.evaluate_images.side_effect = RuntimeError("CUDA out of memory")
+
+        def good_metric(paths):
+            return 0.95
+
+        harness = ApexEvaluationHarness(
+            llava_backend=mock_vlm,
+            metric_fns=[good_metric],
+            threshold=0.70,
+            metric_weight=metric_weight,
+            fail_on_vlm_error=True,
+        )
+
+        result = harness.evaluate(image_paths=[Path("x.png")])
+
+        assert result.passes is False
+        assert result.details["vlm_raw"]["error"] == "CUDA out of memory"
+        assert result.details["vlm_error_fails"] is True
+
+    @pytest.mark.parametrize("fail_on_vlm_error", [True, False])
+    def test_unparseable_vlm_answer_counts_as_vlm_error(self, fail_on_vlm_error):
+        """M-07: a parse_error result (score 0.0, no exception) fails the gate under fail_on_vlm_error."""
+        from transformation_portal.evals.vision_language.llava_schema import parse_vqa_result
+
+        mock_vlm = MagicMock()
+        mock_vlm.evaluate_images.return_value = parse_vqa_result("m", "I cannot answer that.")
+
+        def good_metric(paths):
+            return 0.95
+
+        harness = ApexEvaluationHarness(
+            llava_backend=mock_vlm,
+            metric_fns=[good_metric],
+            threshold=0.70,
+            metric_weight=0.8,
+            fail_on_vlm_error=fail_on_vlm_error,
+        )
+
+        result = harness.evaluate(image_paths=[Path("x.png")])
+
+        assert result.score == pytest.approx(0.76)
+        assert result.details["vlm_error_fails"] is fail_on_vlm_error
+        assert result.passes is (not fail_on_vlm_error)
+        if fail_on_vlm_error:
+            assert "could not be parsed" in result.details["vlm_raw"]["error"]
+        else:
+            assert "error" not in result.details["vlm_raw"]
+
+    def test_fail_on_vlm_error_without_error_still_passes(self):
+        mock_vlm = MagicMock()
+        mock_vlm.evaluate_images.return_value = MagicMock(
+            summary_score=0.9, passes_basic_quality=True, issues=[], raw_text="{}", model_key="m"
+        )
+
+        def good_metric(paths):
+            return 0.95
+
+        harness = ApexEvaluationHarness(llava_backend=mock_vlm, metric_fns=[good_metric], fail_on_vlm_error=True)
+
+        result = harness.evaluate(image_paths=[Path("x.png")])
+
+        assert result.passes is True
+        assert result.details["vlm_error_fails"] is False
+
     def test_metric_aggregation(self):
         """Test metric score aggregation."""
         harness = ApexEvaluationHarness()
@@ -287,6 +355,35 @@ class TestApexEvaluationHarness:
         results = harness._run_metrics([Path("dummy.png")])
 
         assert results[0].score == 1.0  # Clamped
+
+    @pytest.mark.regression
+    @pytest.mark.parametrize("bad_score", [float("nan"), float("inf"), float("-inf")])
+    def test_run_metrics_non_finite_score_fails_closed(self, bad_score):
+        """A NaN/inf metric score must score 0.0 with an error, never clamp to 1.0 (M-01)."""
+
+        def broken_metric(paths):
+            return bad_score
+
+        harness = ApexEvaluationHarness(metric_fns=[broken_metric])
+
+        results = harness._run_metrics([Path("dummy.png")])
+
+        assert results[0].score == 0.0
+        assert "non-finite" in results[0].metadata["error"]
+
+    @pytest.mark.regression
+    def test_evaluate_nan_metric_does_not_pass_gate(self):
+        """A metric that divides 0/0 must not pass a 0.99 threshold (M-01)."""
+
+        def flat_image_ratio_metric(paths):
+            return float("nan")
+
+        harness = ApexEvaluationHarness(metric_fns=[flat_image_ratio_metric], threshold=0.99)
+
+        result = harness.evaluate(image_paths=[Path("does-not-matter.png")])
+
+        assert result.score == 0.0
+        assert result.passes is False
 
     def test_evaluate_passes_threshold(self, tmp_path):
         """Test pass/fail threshold logic."""
@@ -420,6 +517,41 @@ class TestBuiltInMetrics:
             assert score == 0.0
         except ImportError:
             pytest.skip("OpenCV not available")
+
+    @pytest.mark.parametrize("metric", [sharpness_metric, contrast_metric, brightness_metric])
+    def test_unreadable_deliverables_lower_the_score(self, tmp_path, metric):
+        """M-07: missing or corrupt images score 0 instead of being dropped from the mean."""
+        cv2 = pytest.importorskip("cv2")
+        import numpy as np
+
+        ok = tmp_path / "ok.png"
+        img = np.zeros((64, 64), dtype=np.uint8)
+        img[:, 32:] = 255
+        img[::2, ::2] = 128
+        cv2.imwrite(str(ok), img)
+        truncated = tmp_path / "truncated.png"
+        truncated.write_bytes(b"\x89PNG\r\n\x1a\n garbage")
+
+        alone = metric([ok])
+        mixed = metric([ok, tmp_path / "missing.png", truncated])
+
+        assert alone > 0.0
+        assert mixed == pytest.approx(alone / 3)
+
+    def test_harness_fails_when_deliverables_unreadable(self, tmp_path):
+        """M-07: one readable image plus three unreadable ones must not pass the gate."""
+        cv2 = pytest.importorskip("cv2")
+        import numpy as np
+
+        ok = tmp_path / "ok.png"
+        cv2.imwrite(str(ok), np.random.default_rng(0).integers(0, 255, (128, 128, 3), dtype=np.uint8))
+        missing = [tmp_path / "missing_1.png", tmp_path / "missing_2.png", tmp_path / "missing_3.png"]
+        harness = ApexEvaluationHarness(metric_fns=[sharpness_metric, contrast_metric, brightness_metric], threshold=0.70)
+
+        assert harness.evaluate(image_paths=[ok]).passes is True
+        result = harness.evaluate(image_paths=[ok, *missing])
+        assert result.passes is False
+        assert result.score < 0.70
 
 
 class TestPromptSpecBuilder:

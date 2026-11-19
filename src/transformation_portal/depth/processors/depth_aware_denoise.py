@@ -8,7 +8,7 @@ Performance: ~180ms for 4K image (guided bilateral filter)
 """
 
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 from scipy.ndimage import gaussian_filter, sobel
@@ -21,9 +21,41 @@ except ImportError:
     CV2_AVAILABLE = False
     logging.warning("cv2 (opencv-python) not available. Some depth processing features will be limited.")
 
-from .base import DepthProcessorMixin
+from .base import DepthProcessorMixin, merge_alpha, split_alpha
 
 logger = logging.getLogger(__name__)
+
+
+def _to_8bit(image: np.ndarray) -> Tuple[np.ndarray, Optional[Tuple[float, float]]]:
+    """Quantise ``image`` to uint8 for the OpenCV filters, choosing the range from the dtype.
+
+    uint8 input is used as-is and the returned range is ``None`` (the caller keeps the 8-bit scale).
+    Any other dtype is treated as normalised float data: in-range ``[0, 1]`` data is quantised exactly
+    as before (``trunc(x * 255)``); data that leaves ``[0, 1]`` (HDR highlights, sharpening overshoot,
+    16-bit samples) is quantised over its own ``[min(0, lo), max(1, hi)]`` span so it is neither wrapped
+    by the uint8 cast nor destroyed, and :func:`_from_8bit` maps it back to that span. The filter
+    strengths stay relative to the quantised span, which keeps float frames on a 0..255 scale behaving
+    as they did when they were cast to uint8 directly.
+    """
+    if image.dtype == np.uint8:
+        return image, None
+    lo = min(0.0, float(np.min(image)))
+    hi = max(1.0, float(np.max(image)))
+    if lo == 0.0 and hi == 1.0:
+        return (image * 255).astype(np.uint8), (0.0, 1.0)
+    span = hi - lo
+    return ((image.astype(np.float32) - lo) / span * 255).astype(np.uint8), (lo, span)
+
+
+def _from_8bit(filtered: np.ndarray, value_range: Optional[Tuple[float, float]]) -> np.ndarray:
+    """Map an 8-bit filter result back to the value range recorded by :func:`_to_8bit`."""
+    if value_range is None:
+        return filtered
+    lo, span = value_range
+    result = filtered.astype(np.float32) / 255.0
+    if lo == 0.0 and span == 1.0:
+        return result
+    return result * span + lo
 
 
 class DepthAwareDenoise(DepthProcessorMixin):
@@ -81,6 +113,11 @@ class DepthAwareDenoise(DepthProcessorMixin):
         # Validate inputs
         if image.shape[:2] != depth.shape[:2]:
             raise ValueError(f"Image shape {image.shape[:2]} doesn't match depth shape {depth.shape[:2]}")
+
+        # Alpha is coverage, not colour: process RGB only and pass alpha through.
+        rgb, alpha = split_alpha(image)
+        if alpha is not None:
+            return merge_alpha(self.process(rgb, depth, mask), alpha)
 
         # Detect depth edges
         edge_map = self._detect_depth_edges(depth)
@@ -151,11 +188,8 @@ class DepthAwareDenoise(DepthProcessorMixin):
         Returns:
             Filtered image
         """
-        # Convert to 8-bit for OpenCV
-        if image.max() <= 1.0:
-            image_8bit = (image * 255).astype(np.uint8)
-        else:
-            image_8bit = image.astype(np.uint8)
+        # Convert to 8-bit for OpenCV (range chosen from the dtype, see _to_8bit)
+        image_8bit, value_range = _to_8bit(image)
 
         # Compute adaptive sigma based on depth
         # Closer objects (low depth) get less smoothing
@@ -183,11 +217,8 @@ class DepthAwareDenoise(DepthProcessorMixin):
             sigma = (self.sigma_spatial, self.sigma_spatial) + (0.0,) * (image_8bit.ndim - 2)
             filtered = gaussian_filter(image_8bit.astype(np.float32), sigma=sigma).astype(np.uint8)
 
-        # Convert back to float
-        if image.max() <= 1.0:
-            filtered = filtered.astype(np.float32) / 255.0
-
-        return filtered
+        # Convert back to the input value range
+        return _from_8bit(filtered, value_range)
 
     def _preserve_edges(
         self,
@@ -267,13 +298,8 @@ class FastDepthDenoise:
         grad_magnitude = np.sqrt(grad_x**2 + grad_y**2)
         grad_magnitude = grad_magnitude / (grad_magnitude.max() + 1e-8)
 
-        # Convert to 8-bit
-        if image.max() <= 1.0:
-            image_8bit = (image * 255).astype(np.uint8)
-            _depth_8bit = (depth * 255).astype(np.uint8)  # noqa: F841
-        else:
-            image_8bit = image.astype(np.uint8)
-            _depth_8bit = (depth * 255 / depth.max()).astype(np.uint8)  # noqa: F841
+        # Convert to 8-bit (range chosen from the dtype, see _to_8bit)
+        image_8bit, value_range = _to_8bit(image)
 
         # Non-local means with depth guidance
         if CV2_AVAILABLE:
@@ -290,9 +316,8 @@ class FastDepthDenoise:
             logger.warning("cv2 not available, using Gaussian filter instead of non-local means")
             denoised = gaussian_filter(image_8bit.astype(np.float32), sigma=(3.0, 3.0, 0.0)).astype(np.uint8)
 
-        # Convert back
-        if image.max() <= 1.0:
-            denoised = denoised.astype(np.float32) / 255.0
+        # Convert back to the input value range
+        denoised = _from_8bit(denoised, value_range)
 
         # Preserve edges
         edge_mask = (grad_magnitude > 0.05)[..., None]

@@ -81,7 +81,11 @@ class TestSceneBuilderFileLoading:
             builder.build_from_images(image_paths=fake_paths, cameras=cameras)
 
     def test_load_grayscale_image(self):
-        """Test loading grayscale images (auto-converted to RGB)."""
+        """Grayscale images load as RGB, and the loader's sample-range and gamma guards hold.
+
+        The guard checks (audit findings P-1 and I-6) live in this test because the reconstruction
+        fast-ML lane is at its collection ceiling (tests/enforcement/test_ml_fast_collection_contract.py).
+        """
         from PIL import Image
 
         builder = SceneBuilder(tier="apex_research")
@@ -106,6 +110,27 @@ class TestSceneBuilderFileLoading:
             reconstruction_input = m.call_args.args[0]
             imgs = reconstruction_input.images
             assert imgs[0].shape == (H, W, 3)  # grayscale -> RGB
+
+            # P-1: 16-bit samples are scaled by their type range, not by 255; 8-bit scaling is unchanged.
+            gray16 = Path(tmpdir) / "gray16.png"
+            Image.fromarray(np.full((H, W), 40000, dtype=np.uint16)).save(gray16)
+            rgb8 = Path(tmpdir) / "rgb8.png"
+            rgb8_values = np.full((H, W, 3), 200, dtype=np.uint8)
+            Image.fromarray(rgb8_values).save(rgb8)
+            loaded16, loaded8 = builder._load_images([gray16, rgb8], gamma=1.0)
+            assert loaded16.shape == (H, W, 3)
+            np.testing.assert_allclose(loaded16, 40000 / 65535, rtol=1e-6)
+            np.testing.assert_array_equal(loaded8, rgb8_values.astype(np.float32) / 255.0)
+
+            # P-1: samples without an unambiguous range are rejected, not divided by 255.
+            signed = Path(tmpdir) / "int32.tif"
+            Image.fromarray(np.full((H, W), 7, dtype=np.int32)).save(signed)
+            with pytest.raises(ValueError, match="Unsupported pixel format"):
+                builder._load_images([signed], gamma=1.0)
+
+            # I-6: a NaN gamma must not pass the pre-linearised image check.
+            with pytest.raises(ValueError, match="gamma=1.0"):
+                builder._load_images([], float("nan"))
 
     def test_load_rgba_image(self):
         """Test loading RGBA images (alpha dropped)."""

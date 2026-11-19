@@ -231,3 +231,62 @@ def test_create_router_requires_fastapi(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(artifact_preview, "FASTAPI_AVAILABLE", False)
     with pytest.raises(ImportError, match="FastAPI is required"):
         artifact_preview.create_preview_router()
+
+
+# --------------------------------------------------------------------------- #
+# D7 regressions: thumbnail modes and bounds, exact-length text, bounded reads
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("mode", "fmt", "suffix"),
+    [("CMYK", "JPEG", ".jpg"), ("CMYK", "TIFF", ".tif"), ("YCbCr", "TIFF", ".tif")],
+)
+def test_thumbnail_converts_modes_png_cannot_store(
+    client: TestClient, cas: _FakeCAS, tmp_path, mode: str, fmt: str, suffix: str
+) -> None:
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new(mode, (16, 16)).save(buf, format=fmt)
+    f = tmp_path / f"img{suffix}"
+    f.write_bytes(buf.getvalue())
+    cas.put("tif", f)
+
+    resp = client.get("/api/preview/artifact/tif/thumbnail", params={"size": 8})
+    assert resp.status_code == 200
+    with Image.open(io.BytesIO(resp.content)) as thumb:
+        assert thumb.format == "PNG"
+        assert thumb.mode == "RGB"
+        assert max(thumb.size) <= 8
+
+
+@pytest.mark.parametrize("size", [0, -5, 65537])
+def test_thumbnail_rejects_out_of_range_size(client: TestClient, cas: _FakeCAS, tmp_path, size: int) -> None:
+    f = tmp_path / "img.png"
+    f.write_bytes(_png_bytes())
+    cas.put("img", f)
+    assert client.get("/api/preview/artifact/img/thumbnail", params={"size": size}).status_code == 422
+
+
+def test_text_of_exactly_max_chars_is_not_truncated(client: TestClient, cas: _FakeCAS, tmp_path) -> None:
+    f = tmp_path / "exact.txt"
+    f.write_text("0123456789")
+    cas.put("exact", f)
+    body = client.get("/api/preview/artifact/exact/text", params={"max_chars": 10}).json()
+    assert body["content"] == "0123456789"
+    assert body["truncated"] is False
+
+    shorter = client.get("/api/preview/artifact/exact/text", params={"max_chars": 9}).json()
+    assert shorter["content"] == "012345678"
+    assert shorter["truncated"] is True
+
+
+@pytest.mark.parametrize("max_chars", [-1, 0, 65537])
+def test_text_rejects_unbounded_max_chars(client: TestClient, cas: _FakeCAS, tmp_path, max_chars: int) -> None:
+    f = tmp_path / "notes.txt"
+    f.write_text("hello")
+    cas.put("txt", f)
+    assert client.get("/api/preview/artifact/txt/text", params={"max_chars": max_chars}).status_code == 422

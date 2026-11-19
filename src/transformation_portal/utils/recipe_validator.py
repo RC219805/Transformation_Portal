@@ -271,6 +271,14 @@ def get_recipe_schema() -> Dict[str, Any]:
     }
 
 
+def _schema_stage_names(schema: Dict[str, Any]) -> Optional[Tuple[Any, ...]]:
+    """Return the stage-name enum declared by ``schema`` (None if it declares none)."""
+    node: Any = schema
+    for key in ("properties", "stages", "items", "enum"):
+        node = node.get(key) if isinstance(node, dict) else None
+    return tuple(node) if isinstance(node, list) else None
+
+
 class RecipeValidator:
     """Validator for recipe configurations using JSON Schema."""
 
@@ -279,8 +287,16 @@ class RecipeValidator:
 
         Args:
             schema_path: Optional path to a custom schema file.
+
+        Raises:
+            FileNotFoundError: If ``schema_path`` is given but is not a file.
+                A requested custom schema is never silently replaced by the
+                built-in one (fail closed).
         """
-        if schema_path and schema_path.exists():
+        if schema_path is not None:
+            schema_path = Path(schema_path)
+            if not schema_path.is_file():
+                raise FileNotFoundError(f"Recipe schema not found: {schema_path}")
             with open(schema_path, "r", encoding="utf-8") as f:
                 self.schema = json.load(f)
         else:
@@ -336,19 +352,13 @@ class RecipeValidator:
         elif len(recipe_dict["stages"]) == 0:
             errors.append("stages: must have at least 1 item")
 
-        # Validate stage names
-        valid_stages = {
-            "depth_estimation",
-            "ai_enhancement",
-            "material_response",
-            "color_grading",
-            "photo_finishing",
-            "branding",
-            "output",
-        }
-        for stage in recipe_dict.get("stages", []):
-            if stage not in valid_stages:
-                errors.append(f"stages: '{stage}' is not a valid stage")
+        # Validate stage names against the same enum the JSON schema uses.
+        valid_stages = _schema_stage_names(self.schema)
+        stages = recipe_dict.get("stages")
+        if valid_stages is not None and isinstance(stages, list):
+            for stage in stages:
+                if stage not in valid_stages:
+                    errors.append(f"stages: '{stage}' is not a valid stage")
 
         return (len(errors) == 0, errors)
 

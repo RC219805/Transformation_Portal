@@ -403,6 +403,62 @@ class TestAssess:
 
         assert metrics.hybrid_score == pytest.approx(metrics.heuristic_composite)
 
+    def test_assess_warns_when_perceptual_assessor_is_missing(self) -> None:
+        """M-06: the real import target is absent, so the 0.0 LPIPS fields must be flagged as unmeasured."""
+        qfb._TORCH_AVAILABLE = True  # isolate the missing-assessor branch from the torch probe
+        image = _synthetic_image()
+        bridge = QualityFeedbackBridge(hybrid_mode=True)
+
+        metrics = bridge.assess(image, image * 0.5, image_id="x")
+
+        assert metrics.lpips_available is False
+        assert any("Perceptual metrics unavailable" in w and "PerceptualQualityAssessor" in w for w in metrics.warnings)
+        assert metrics.to_dict()["metadata"]["warnings"] == metrics.warnings
+        assert "lpips_excellent" not in metrics.targets_met
+        assert metrics.hybrid_score == pytest.approx(metrics.heuristic_composite)
+
+    def test_assess_without_reference_does_not_claim_perceptual_targets(self) -> None:
+        """M-06: an available assessor with no reference image must not pass LPIPS targets on placeholder 0.0."""
+        bridge = QualityFeedbackBridge(hybrid_mode=True)
+        bridge._perceptual_assessor = object()  # assessor present, but never called without a reference
+
+        metrics = bridge.assess(_synthetic_image(), None, image_id="x")
+
+        assert metrics.lpips_available is False
+        assert any("no reference image" in w for w in metrics.warnings)
+        assert "lpips_excellent" not in metrics.targets_met
+        assert "material_98pct" not in metrics.targets_met
+        assert metrics.hybrid_score == pytest.approx(metrics.heuristic_composite)
+
+    def test_assess_with_measured_perceptual_metrics_adds_no_placeholder_warning(self) -> None:
+        from types import SimpleNamespace
+
+        class _FakeAssessor:
+            def assess(self, *, enhanced, reference, compute_material_fidelity: bool):
+                return SimpleNamespace(
+                    lpips_score=0.25,
+                    lpips_percentile=60.0,
+                    ssim_score=0.8,
+                    ms_ssim_score=0.82,
+                    niqe_score=4.0,
+                    brisque_score=30.0,
+                    naturalness_score=70.0,
+                    composite_score=65.0,
+                    material_fidelity={"oak": 0.9},
+                    overall_material_fidelity=0.9,
+                )
+
+        bridge = QualityFeedbackBridge(hybrid_mode=True)
+        bridge._perceptual_assessor = _FakeAssessor()
+        image = _synthetic_image()
+
+        metrics = bridge.assess(image, image * 0.5, image_id="x")
+
+        assert metrics.lpips_available is True
+        assert metrics.perceptual.lpips_score == pytest.approx(0.25)
+        assert not any("placeholders" in w for w in metrics.warnings)
+        assert metrics.targets_met["lpips_excellent"] is False
+
 
 class TestPipelineIntegrationHelpers:
     """Tests for the standalone pipeline-integration callbacks."""

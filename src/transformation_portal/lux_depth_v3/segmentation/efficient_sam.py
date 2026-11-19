@@ -104,6 +104,9 @@ class EfficientSAMBackend:
         self._clip_text_prompt_signature: Optional[Tuple[str, ...]] = None
         self._clip_classification_timing_ms: Dict[str, float] = {}
         self._material_confidence_evidence: Dict[str, Dict[str, Any]] = {}
+        # True when the last segment() call could not obtain SAM proposals
+        # (generator missing or raising) and substituted heuristic regions.
+        self._sam_proposals_failed = False
         self._sky_top_region_fraction = float(sky_top_region_fraction)
         self._sky_gradient_threshold = float(sky_gradient_threshold)
         self._sky_brightness_threshold = float(sky_brightness_threshold)
@@ -200,6 +203,24 @@ class EfficientSAMBackend:
         if not metadata:
             return None
         return metadata
+
+    def segmentation_degraded(self) -> bool:
+        """Return True when the last ``segment()`` call served a fallback result.
+
+        The heuristic labelling path (efficientvit missing, a real-model or CLIP
+        failure, ``SKIP_CLIP_INFERENCE``) is a degraded stand-in for the
+        requested backend, and so is a result whose regions are heuristic
+        because SAM proposal generation failed, even when CLIP then labelled
+        those regions. Such results must never be cached under the key a
+        healthy run would read, otherwise later runs replay them without the
+        backend executing.
+        """
+        if getattr(self, "_sam_proposals_failed", False):
+            return True
+        degraded_types = {HEURISTIC_MATERIAL_SCORE_TYPE, MISSING_CLIP_SCORE_FALLBACK_TYPE}
+        return any(
+            evidence.get("confidence_score_type") in degraded_types for evidence in self._material_confidence_evidence.values()
+        )
 
     def _load_clip_runtime(self) -> Tuple[Any, Any, Any]:
         """Load CLIP model/tokenizer with cache-first offline-safe resolution."""
@@ -328,6 +349,8 @@ class EfficientSAMBackend:
 
         if image.dtype != np.uint8:
             raise ValueError(f"Expected uint8 image, got dtype {image.dtype}")
+
+        self._sam_proposals_failed = False
 
         # V2: Real EfficientSAM inference if available
         if self._use_real_model and EFFICIENTVIT_AVAILABLE:
@@ -530,6 +553,7 @@ class EfficientSAMBackend:
                 "This should not happen if model loaded correctly. "
                 "Falling back to empty segments."
             )
+            self._sam_proposals_failed = True
             return []
 
         try:
@@ -564,6 +588,7 @@ class EfficientSAMBackend:
         except Exception as e:
             logger.error(f"SAM inference failed: {e}", exc_info=True)
             logger.warning("Falling back to empty segments (CLIP will classify heuristic masks)")
+            self._sam_proposals_failed = True
             return []
 
     def _classify_segments_with_clip(self, image: np.ndarray, segments: list) -> Dict[str, Tuple[np.ndarray, float]]:
@@ -606,22 +631,32 @@ class EfficientSAMBackend:
                 from scipy import ndimage
 
                 labeled, num_features = ndimage.label(mask > 0.5)
+                if num_features == 0:
+                    continue
+
+                # One pass for all component areas and bounding boxes instead of
+                # a full-image comparison per component (audit LC-12: speckled
+                # heuristic masks yield tens of thousands of components).
+                areas = np.bincount(labeled.ravel(), minlength=num_features + 1)
+                region_slices = ndimage.find_objects(labeled)
 
                 for region_id in range(1, num_features + 1):
-                    region_mask = labeled == region_id
-                    area = region_mask.sum()
+                    area = areas[region_id]
 
                     if area < 500:  # Skip small regions
                         continue
 
-                    # Compute bounding box
-                    rows, cols = np.where(region_mask)
-                    if len(rows) == 0:
+                    region_slice = region_slices[region_id - 1]
+                    if region_slice is None:
                         continue
+                    row_slice, col_slice = region_slice
 
-                    x1, x2 = cols.min(), cols.max()
-                    y1, y2 = rows.min(), rows.max()
-                    bbox = [int(x1), int(y1), int(x2 - x1 + 1), int(y2 - y1 + 1)]
+                    region_mask = np.zeros(labeled.shape, dtype=bool)
+                    region_mask[region_slice] = labeled[region_slice] == region_id
+
+                    # Bounding box [x, y, w, h] from the component's slices
+                    x1, y1 = col_slice.start, row_slice.start
+                    bbox = [int(x1), int(y1), int(col_slice.stop - x1), int(row_slice.stop - y1)]
 
                     segments.append(
                         {

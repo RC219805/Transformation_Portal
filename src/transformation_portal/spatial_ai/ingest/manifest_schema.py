@@ -16,12 +16,13 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ...ingest.canonical_json import dump_json
 from .exceptions import ManifestError, SchemaVersionError
@@ -68,11 +69,24 @@ class ImageMetadataV1(BaseModel):
     @field_validator("dimensions")
     @classmethod
     def validate_dimensions(cls, v):
-        """Validate dimensions are (H, W, 3)."""
+        """Validate dimensions are (H, W, 3) with positive H and W."""
         if len(v) != 3:
             raise ValueError(f"Dimensions must be (H, W, C), got {v}")
+        if v[0] < 1 or v[1] < 1:
+            raise ValueError(f"Height and width must be positive, got {v}")
         if v[2] != 3:
             raise ValueError(f"Expected 3 channels (RGB), got {v[2]}")
+        return v
+
+    @field_validator("value_range")
+    @classmethod
+    def validate_value_range(cls, v):
+        """Validate value_range is a finite (min, max) pair with min <= max."""
+        low, high = v
+        if not (math.isfinite(low) and math.isfinite(high)):
+            raise ValueError(f"value_range must be finite, got {v}")
+        if low > high:
+            raise ValueError(f"value_range min must not exceed max, got {v}")
         return v
 
     @field_validator("content_hash")
@@ -115,8 +129,8 @@ class DatasetMetadataV1(BaseModel):
     @field_validator("gamma")
     @classmethod
     def validate_gamma(cls, v):
-        """Validate gamma is 1.0 (linear)."""
-        if abs(v - 1.0) > 1e-6:
+        """Validate gamma is 1.0 (linear); NaN is rejected."""
+        if not abs(v - 1.0) <= 1e-6:
             raise ValueError(f"Linear datasets must have gamma=1.0, got {v}")
         return v
 
@@ -144,6 +158,15 @@ class ManifestSchemaV1(BaseModel):
         if not is_schema_version_supported(v):
             raise ValueError(f"Unsupported schema version: {v}")
         return v
+
+    @model_validator(mode="after")
+    def validate_total_images(self):
+        """Validate dataset.total_images matches the image inventory."""
+        if self.dataset.total_images != len(self.images):
+            raise ValueError(
+                f"dataset.total_images is {self.dataset.total_images} but the manifest lists {len(self.images)} images"
+            )
+        return self
 
 
 # Dataclass-based builders (for convenience)

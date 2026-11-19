@@ -33,6 +33,12 @@ class TestSegmentationInput:
                 mode="auto",
             )
 
+    def test_nan_gamma_rejected(self):
+        """I-6: NaN gamma must not pass the gamma=1.0 contract."""
+        image = np.zeros((8, 8, 3), dtype=np.float32)
+        with pytest.raises(ValueError, match="gamma=1.0"):
+            SegmentationInput(image=image, gamma=float("nan"), mode="auto")
+
     def test_dtype_enforcement(self):
         """Test float32 dtype requirement."""
         image = np.random.randint(0, 256, (512, 512, 3), dtype=np.uint8)

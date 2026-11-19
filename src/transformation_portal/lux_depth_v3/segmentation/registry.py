@@ -428,7 +428,18 @@ def segment_materials(
         runtime_metadata_for_cache = dict(runtime_metadata) if isinstance(runtime_metadata, dict) else {}
         runtime_metadata_for_cache.update(confidence_metadata)
 
-        if cache_enabled and cache_dir is not None and cache_key and cache_payload and results:
+        # Never persist a degraded fallback (heuristic labels standing in for
+        # the requested model) under the key a healthy run would read.
+        degraded_probe = getattr(backend, "segmentation_degraded", None)
+        segmentation_degraded = False
+        if callable(degraded_probe):
+            try:
+                segmentation_degraded = bool(degraded_probe())
+            except Exception as exc:
+                logger.debug("Segmentation degradation probe failed; not caching: %s", exc)
+                segmentation_degraded = True
+
+        if cache_enabled and cache_dir is not None and cache_key and cache_payload and results and not segmentation_degraded:
             t_cache_write = time.perf_counter()
             try:
                 _write_cached_material_masks(

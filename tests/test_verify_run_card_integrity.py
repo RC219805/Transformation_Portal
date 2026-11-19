@@ -1150,6 +1150,68 @@ def test_verify_run_card_integrity_rejects_reconstruction_diagnostics_missing_pe
     assert any("missing reprojection_p95" in error or "missing reprojection_p99" in error for error in errors)
 
 
+@pytest.mark.parametrize("version", ["v3", 3])
+def test_verify_run_card_integrity_reports_unsupported_version_without_crashing(tmp_path: Path, version):
+    from transformation_portal.lux_depth_v3.validators import verify_run_card_integrity
+
+    run_card_path = tmp_path / "run_card_unsupported_version.json"
+    payload = _valid_run_card_payload(module=None)  # type: ignore[arg-type]
+    payload["run_card_version"] = version
+    _write_json(run_card_path, payload)
+
+    errors = verify_run_card_integrity(run_card_path)
+
+    assert errors == [f"Unsupported run card schema version: {version!r}"]
+
+
+def _drop_artifact_type(entry: dict) -> None:
+    del entry["artifact_type"]
+
+
+@pytest.mark.parametrize(
+    ("label", "mutate"),
+    [
+        ("size_bytes_string", lambda entry: entry.__setitem__("size_bytes", "13")),
+        ("size_bytes_negative", lambda entry: entry.__setitem__("size_bytes", -1)),
+        ("size_bytes_float", lambda entry: entry.__setitem__("size_bytes", 13.5)),
+        ("artifact_type_missing", _drop_artifact_type),
+        ("artifact_type_empty", lambda entry: entry.__setitem__("artifact_type", "")),
+    ],
+)
+def test_verify_run_card_integrity_reports_malformed_v2_leaf_without_crashing(tmp_path: Path, label, mutate):
+    from transformation_portal.lux_depth_v3.validators import verify_run_card_integrity
+
+    run_card_path = tmp_path / f"run_card_{label}.json"
+    payload = _valid_run_card_v2_payload()
+    mutate(payload["artifact_index"][0])
+    _write_json(run_card_path, payload)
+
+    errors = verify_run_card_integrity(run_card_path)
+
+    assert any("artifact_index.0" in error for error in errors), errors
+    assert any("artifact_tree could not be recomputed" in error for error in errors), errors
+
+
+def test_assess_run_card_release_fails_unsupported_version_without_crashing(tmp_path: Path):
+    from transformation_portal.lux_depth_v3.validators.release_assessment import assess_run_card_release
+
+    run_card_path = tmp_path / "run_card_unsupported_release.json"
+    payload = _valid_run_card_v2_payload()
+    payload["run_card_version"] = "v9"
+    _write_json(run_card_path, payload)
+
+    report = assess_run_card_release(run_card_path=run_card_path)
+
+    assert report["status"] == "FAIL"
+    assert report["checks"] == [
+        {
+            "name": "run_card_integrity",
+            "status": "FAIL",
+            "details": ["Unsupported run card schema version: 'v9'"],
+        }
+    ]
+
+
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.regression,

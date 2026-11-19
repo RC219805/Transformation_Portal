@@ -401,8 +401,21 @@ class ExecutionManager:
                 # Mark as queued
                 run_state.nodes[node_id].status = NodeStatus.QUEUED
 
-            # Get execution order
-            execution_order = scheduler.get_execution_order()
+            # Fail closed on cyclic or dangling pipelines: the scheduler cannot
+            # order such nodes, so planning would silently drop them and the
+            # run would report COMPLETE with nothing executed.
+            validation_errors = scheduler.validate()
+            if validation_errors:
+                raise ValueError("Invalid pipeline: " + "; ".join(validation_errors))
+
+            # Get execution order. Execute each node id at most once, even if the
+            # scheduler ever hands back a duplicated plan, and refuse a plan that
+            # does not cover every node.
+            execution_order = list(dict.fromkeys(scheduler.get_execution_order()))
+            planned = set(execution_order)
+            unplanned = sorted(node_id for node_id in scheduler.nodes if node_id not in planned)
+            if unplanned or len(planned) != len(scheduler.nodes):
+                raise ValueError(f"Invalid pipeline: execution plan does not cover nodes {unplanned}")
 
             await broadcast(
                 {
@@ -418,36 +431,7 @@ class ExecutionManager:
             for idx, node_id in enumerate(execution_order):
                 # Check for cancellation before starting each node
                 if run_state.cancel_requested:
-                    # Mark this and remaining nodes as SKIPPED
-                    # Check both PENDING and QUEUED: nodes start as PENDING after prepare_run(),
-                    # then transition to QUEUED when added to scheduler. Either status indicates
-                    # the node hasn't started executing and can be safely skipped.
-                    for skip_id in execution_order[idx:]:
-                        skip_state = run_state.nodes.get(skip_id)
-                        if skip_state and skip_state.status in (NodeStatus.PENDING, NodeStatus.QUEUED):
-                            skip_state.status = NodeStatus.SKIPPED
-                            skip_state.end_time = self._now()
-                            await broadcast(
-                                {
-                                    "type": "node_skipped",
-                                    "run_id": run_id,
-                                    "node": skip_id,
-                                    "reason": "cancellation_requested",
-                                    "timestamp": skip_state.end_time,
-                                }
-                            )
-                    # Finalize as cancelled
-                    run_state.status = RunStatus.CANCELLED
-                    run_state.end_time = self._now()
-                    run_state.current_node_id = None
-                    run_state.results = results
-                    await broadcast(
-                        {
-                            "type": "run_cancelled",
-                            "run_id": run_id,
-                            "timestamp": run_state.end_time,
-                        }
-                    )
+                    await self._finalize_cancelled(run_id, run_state, execution_order[idx:], results, broadcast)
                     return
 
                 scheduled_node = scheduler.nodes[node_id]
@@ -488,7 +472,17 @@ class ExecutionManager:
                     # Execute node (with small delay for UI visibility)
                     await asyncio.sleep(0.1)
 
-                    result = scheduled_node.node.run(**inputs)
+                    # Re-check cancellation immediately before invoking the node:
+                    # a cancel that arrived during the delay above must not let
+                    # this node run.
+                    if run_state.cancel_requested:
+                        await self._finalize_cancelled(run_id, run_state, execution_order[idx:], results, broadcast)
+                        return
+
+                    # Node implementations are synchronous and may be slow (model
+                    # calls); run them off the event loop so cancel requests,
+                    # status queries and WebSocket traffic are served meanwhile.
+                    result = await asyncio.to_thread(scheduled_node.node.run, **inputs)
 
                     # Extract outputs
                     if hasattr(result, "outputs"):
@@ -601,6 +595,47 @@ class ExecutionManager:
                     "timestamp": run_state.end_time,
                 }
             )
+
+    async def _finalize_cancelled(
+        self,
+        run_id: str,
+        run_state: RunState,
+        remaining: List[str],
+        results: Dict[str, Any],
+        broadcast: BroadcastFn,
+    ) -> None:
+        """Skip every node in ``remaining`` that has not executed and end the run as cancelled.
+
+        Nodes start as PENDING after prepare_run() and become QUEUED when added
+        to the scheduler; a RUNNING node here was marked as started but its
+        implementation was never invoked (cancellation was seen just before
+        the call). All three can be safely skipped.
+        """
+        for skip_id in remaining:
+            skip_state = run_state.nodes.get(skip_id)
+            if skip_state and skip_state.status in (NodeStatus.PENDING, NodeStatus.QUEUED, NodeStatus.RUNNING):
+                skip_state.status = NodeStatus.SKIPPED
+                skip_state.end_time = self._now()
+                await broadcast(
+                    {
+                        "type": "node_skipped",
+                        "run_id": run_id,
+                        "node": skip_id,
+                        "reason": "cancellation_requested",
+                        "timestamp": skip_state.end_time,
+                    }
+                )
+        run_state.status = RunStatus.CANCELLED
+        run_state.end_time = self._now()
+        run_state.current_node_id = None
+        run_state.results = results
+        await broadcast(
+            {
+                "type": "run_cancelled",
+                "run_id": run_id,
+                "timestamp": run_state.end_time,
+            }
+        )
 
     def get_run_state(self, run_id: str) -> Optional[RunState]:
         """Get state of a run.

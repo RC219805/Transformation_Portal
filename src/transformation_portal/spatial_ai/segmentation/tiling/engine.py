@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable, Optional
 
+import numpy as np
+
 from transformation_portal.spatial_ai.segmentation.backends.tiled_backend import TiledSegmentationBackend
-from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput, SegmentationResult
+from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
 from transformation_portal.spatial_ai.segmentation.tiling.config import SegmentationTilingConfig
 from transformation_portal.spatial_ai.segmentation.tiling.interfaces import MergeValidator, TileMerger, TilingPlanner
-from transformation_portal.spatial_ai.segmentation.tiling.types import GlobalSeedHints, TileSegmentationResult
+from transformation_portal.spatial_ai.segmentation.tiling.types import GlobalSeedHints, TileManifest, TileSegmentationResult
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -27,20 +32,98 @@ class TiledSegmentationEngine:
         config: SegmentationTilingConfig,
         on_progress: Optional[Callable[[float], None]] = None,
     ) -> SegmentationResult:
-        if seg_input.image is None:
+        image = seg_input.image
+        if image is None:
             raise ValueError("TiledSegmentationEngine requires seg_input.image (non-video mode)")
-
-        H, W = int(seg_input.image.shape[0]), int(seg_input.image.shape[1])
-        rng_seed = config.seed
 
         global_hints: Optional[GlobalSeedHints] = None
         if config.global_pass.enabled:
             global_hints = backend.global_seed_pass(
-                image_linear=seg_input.image,
+                image_linear=image,
                 image_hash=image_hash,
                 longest_side=config.global_pass.longest_side,
-                rng_seed=rng_seed,
+                rng_seed=config.seed,
             )
+
+        attempt_config = config
+        retries = 0
+        while True:
+            manifest, masks, scores, metadata, merge_stats = self._run_attempt(
+                backend=backend,
+                image=image,
+                seg_input=seg_input,
+                image_hash=image_hash,
+                config=attempt_config,
+                global_hints=global_hints,
+                on_progress=on_progress,
+            )
+            if not (self.validator and config.validation.enabled):
+                break
+            ok, details = self.validator.validate(manifest=manifest, merge_stats=merge_stats, config=attempt_config)
+            if ok:
+                break
+
+            reason = details.get("warning") or details
+            retry_config = self._config_for_retry(attempt_config) if retries < config.validation.max_retries else None
+            if retry_config is None:
+                attempted = ""
+                if retries:
+                    attempted = (
+                        f" after {retries} {'retry' if retries == 1 else 'retries'}"
+                        f" (overlap_px {config.overlap_px} -> {attempt_config.overlap_px})"
+                    )
+                raise RuntimeError(f"SAM2 tiling validation failed{attempted}: {reason}")
+            retries += 1
+            logger.warning(
+                "SAM2 tiling validation failed (%s); retry %d of %d with overlap_px %d -> %d",
+                reason,
+                retries,
+                config.validation.max_retries,
+                attempt_config.overlap_px,
+                retry_config.overlap_px,
+            )
+            attempt_config = retry_config
+            # Drop the rejected attempt before the next one is built: its
+            # (N, H, W) mask stack is gigabytes on the frames that are tiled.
+            del manifest, masks, scores, metadata, merge_stats
+
+        return SegmentationResult(
+            masks=masks,
+            scores=scores,
+            metadata=metadata,
+            temporal_ids=None,
+        )
+
+    @staticmethod
+    def _config_for_retry(config: SegmentationTilingConfig) -> Optional[SegmentationTilingConfig]:
+        """Tiling for the next attempt after a failed validation, or ``None`` when a retry could not differ.
+
+        Tiling is deterministic, so repeating the same tiling repeats the
+        failure. ``validation.auto_increase_overlap`` doubles the overlap, which
+        gives both tiles of a seam more shared context. Half the tile size is
+        the limit: every pixel is then already covered by two tiles per axis.
+        """
+        if not config.validation.auto_increase_overlap:
+            return None
+        overlap_px = min(config.overlap_px * 2, config.tile_size_px // 2)
+        if overlap_px <= config.overlap_px:
+            return None
+        return replace(config, overlap_px=overlap_px)
+
+    def _run_attempt(
+        self,
+        *,
+        backend: TiledSegmentationBackend,
+        image: np.ndarray,
+        seg_input: SegmentationInput,
+        image_hash: str,
+        config: SegmentationTilingConfig,
+        global_hints: Optional[GlobalSeedHints],
+        on_progress: Optional[Callable[[float], None]],
+    ) -> tuple[TileManifest, np.ndarray, np.ndarray, list[MaskMetadata], dict]:
+        """Plan, segment and merge once with ``config``."""
+        H, W = int(image.shape[0]), int(image.shape[1])
+        rng_seed = config.seed
 
         manifest = self.planner.plan(
             image_hash=image_hash,
@@ -58,7 +141,7 @@ class TiledSegmentationEngine:
             tile = manifest.tiles[index]
             t0 = time.time()
             x0, y0, x1, y1 = tile.bbox.x0, tile.bbox.y0, tile.bbox.x1, tile.bbox.y1
-            tile_img = seg_input.image[y0:y1, x0:x1, :]
+            tile_img = image[y0:y1, x0:x1, :]
 
             instances = backend.segment_tile(
                 tile_linear=tile_img,
@@ -110,16 +193,4 @@ class TiledSegmentationEngine:
             global_hints=global_hints,
             merge_config=config.merge,
         )
-
-        if self.validator and config.validation.enabled:
-            ok, details = self.validator.validate(manifest=manifest, merge_stats=merge_stats, config=config)
-            if not ok:
-                reason = details.get("warning") or details
-                raise RuntimeError(f"SAM2 tiling validation failed: {reason}")
-
-        return SegmentationResult(
-            masks=masks,
-            scores=scores,
-            metadata=metadata,
-            temporal_ids=None,
-        )
+        return manifest, masks, scores, metadata, merge_stats

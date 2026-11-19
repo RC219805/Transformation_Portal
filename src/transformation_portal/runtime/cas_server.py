@@ -27,7 +27,7 @@ from transformation_portal.core.security.path_safety import (
     PathSafetyError,
     validate_sha256,
 )
-from transformation_portal.storage.cas_store import ArtifactStore
+from transformation_portal.storage.cas_store import ArtifactStore, CASError
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +98,19 @@ class CASHandler(socketserver.BaseRequestHandler):
             logger.error("CAS handler error: %s", e)
             self._send({"error": str(e)})
 
+    def _has_valid_object(self, sha: str) -> bool:
+        """Return True only if the object exists and its content matches ``sha``.
+
+        A torn or corrupt object must not be reported as present, otherwise
+        peers never push the good copy and the corruption is permanent.
+        """
+        if not self.cas._object_path(sha).exists():
+            return False
+        try:
+            return self.cas.verify_object(sha)
+        except (CASError, OSError):
+            return False
+
     def _handle_has_many(self, req: Dict[str, Any]) -> None:
         """Handle has_many operation."""
         shas = req.get("shas", [])
@@ -106,8 +119,7 @@ class CASHandler(socketserver.BaseRequestHandler):
         for sha in shas:
             try:
                 validate_sha256(sha)
-                path = self.cas._object_path(sha)
-                present.append(path.exists())
+                present.append(self._has_valid_object(sha))
             except PathSafetyError:
                 present.append(False)
 
@@ -127,7 +139,14 @@ class CASHandler(socketserver.BaseRequestHandler):
                 if not path.exists():
                     continue
 
-                data = path.read_bytes()
+                # Serve only bytes whose digest was verified; a corrupt object
+                # is treated as missing.
+                try:
+                    with self.cas.open_verified(sha) as handle:
+                        data = handle.read()
+                except CASError as exc:
+                    logger.warning("Not serving unverifiable CAS object %s: %s", sha[:8], exc)
+                    continue
 
                 # Optionally compress
                 if self.compress:
@@ -169,10 +188,10 @@ class CASHandler(socketserver.BaseRequestHandler):
             sha = item.get("sha")
             try:
                 validate_sha256(sha)
-                path = self.cas._object_path(sha)
 
-                # Skip if exists
-                if path.exists():
+                # Skip only objects that exist AND verify; a torn or corrupt
+                # object is repaired by the push below.
+                if self._has_valid_object(sha):
                     continue
 
                 data = _b64_decode(item["data_b64"])
@@ -187,9 +206,10 @@ class CASHandler(socketserver.BaseRequestHandler):
                     logger.warning("SHA mismatch in put_many: %s vs %s", sha[:8], actual[:8])
                     continue
 
-                # Store
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(data)
+                # Store through the CAS: temp file + fsync + digest check +
+                # os.replace, so a failed write never publishes a partial object
+                # and an existing corrupt object is replaced.
+                self.cas.add_bytes(data, verify=True)
                 stored += 1
 
             except PathSafetyError:
@@ -235,6 +255,11 @@ def start_cas_server(
         server.serve_forever()
 
 
+def _run_cas_server(cas: ArtifactStore, host: str, port: int) -> None:
+    """Process target for :class:`CASServerProcess` (module-level so it pickles under spawn)."""
+    start_cas_server(cas, host=host, port=port)
+
+
 class CASServerProcess:
     """Wrapper to run CAS server in a subprocess.
 
@@ -251,6 +276,7 @@ class CASServerProcess:
         *,
         host: str = "0.0.0.0",  # nosec B104 - CAS server intentionally binds to all interfaces
         port: int = 6000,
+        start_method: str = "spawn",
     ) -> None:
         """Initialize server wrapper.
 
@@ -258,20 +284,24 @@ class CASServerProcess:
             cas: CAS store to serve
             host: Bind address
             port: Bind port
+            start_method: Multiprocessing start method (spawn, fork, forkserver)
         """
         self.cas = cas
         self.host = host
         self.port = port
+        self.start_method = start_method
         self._process = None
 
     def start(self) -> None:
         """Start server in background process."""
         import multiprocessing
 
-        def _run():
-            start_cas_server(self.cas, host=self.host, port=self.port)
-
-        self._process = multiprocessing.Process(target=_run, daemon=True)
+        ctx = multiprocessing.get_context(self.start_method)
+        self._process = ctx.Process(
+            target=_run_cas_server,
+            args=(self.cas, self.host, self.port),
+            daemon=True,
+        )
         self._process.start()
         logger.info("Started CAS server process: pid=%d", self._process.pid)
 

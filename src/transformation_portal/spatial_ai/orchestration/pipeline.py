@@ -45,7 +45,7 @@ from transformation_portal.compliance import (
 )
 from transformation_portal.reporting.contracts import build_stage_report
 from transformation_portal.spatial_ai.ingest.linear_decoder import LinearDecoder, LinearIngestResult
-from transformation_portal.spatial_ai.materials.contracts import MaterialInput, PBRTextures
+from transformation_portal.spatial_ai.materials.contracts import MaterialInput, PBRTextures, material_hint_from_label
 from transformation_portal.spatial_ai.materials.material_backend import MaterialBackend
 from transformation_portal.spatial_ai.reconstruction.contracts import Scene3D
 from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
@@ -255,6 +255,10 @@ class SpatialAIPipeline:
 
         logger.info(f"Starting pipeline: {input_path} -> {output_dir}")
         logger.info(f"Stages: {', '.join(self.config.stages)}")
+
+        # process_multiview() pins the shared tracker to its two stages; count this
+        # run's configured stages again so progress cannot exceed 100 %.
+        self.progress_tracker.total_stages = len(self.config.stages)
 
         # Use graph-based execution if enabled (ADR-029)
         if self.config.use_execution_graph:
@@ -618,7 +622,20 @@ class SpatialAIPipeline:
                 raise FileNotFoundError(f"Image not found: {path}")
 
             with Image.open(path) as img:
-                img_array = np.array(img).astype(np.float32) / 255.0
+                # Scale by the sample type's range, not by 255: 16-bit images would
+                # otherwise exceed 1.0 by up to 257x. Float samples are already in range units.
+                raw = np.array(img)
+                if raw.dtype == np.bool_:
+                    img_array = raw.astype(np.float32)
+                elif np.issubdtype(raw.dtype, np.unsignedinteger):
+                    img_array = raw.astype(np.float32) / float(np.iinfo(raw.dtype).max)
+                elif np.issubdtype(raw.dtype, np.floating):
+                    img_array = raw.astype(np.float32)
+                else:
+                    raise ValueError(
+                        f"Unsupported pixel format {img.mode!r} ({raw.dtype}) in {path}: "
+                        "expected unsigned integer or floating-point samples"
+                    )
 
                 # Ensure RGB
                 if img_array.ndim == 2:
@@ -1032,8 +1049,9 @@ class SpatialAIPipeline:
                 per_segment_strategy = ErrorRecoveryStrategy.SKIP_STAGE
 
             for i, (mask, metadata) in enumerate(zip(seg_result.masks, seg_result.metadata)):
-                # Create material input
-                material_hint = metadata.material_label if material_hints else None
+                # Create material input. Classifier labels are phrases ("wood floor");
+                # only an unambiguous category becomes a hint, anything else is unhinted.
+                material_hint = material_hint_from_label(metadata.material_label) if material_hints else None
 
                 mat_input = MaterialInput(
                     image=ingest_result.linear_rgb,
@@ -1331,8 +1349,18 @@ class SpatialAIPipeline:
         Returns:
             PipelineConfig.
         """
+
+        def _section(value: Any, name: str) -> Dict[str, Any]:
+            # An empty YAML section ("ingest:") parses as None: treat it as "use
+            # defaults"; anything that is not a mapping is a configuration error.
+            if value is None:
+                return {}
+            if not isinstance(value, dict):
+                raise ValueError(f"Pipeline config section '{name}' must be a mapping, got {type(value).__name__}")
+            return dict(value)
+
         # Extract pipeline section
-        pipeline_data = data.get("pipeline", {})
+        pipeline_data = _section(data.get("pipeline"), "pipeline")
 
         # Parse resource limits if provided
         resource_limits = None
@@ -1363,10 +1391,19 @@ class SpatialAIPipeline:
             else:
                 logger.warning(f"Unknown error strategy '{strategy_str}', using RETRY")
 
+        def _aliased_section(canonical: str, alias: str) -> Dict[str, Any]:
+            # Validate both spellings before choosing: `a or b` would skip a falsy
+            # non-mapping value (false, 0, "", []) under the canonical key and
+            # silently run the stage with defaults. A non-empty canonical section
+            # wins, otherwise the alias is used, as before.
+            canonical_data = _section(pipeline_data.get(canonical), canonical)
+            alias_data = _section(pipeline_data.get(alias), alias)
+            return canonical_data or alias_data
+
         # Normalize stage aliases while preserving backward compatibility.
-        segmentation_data = pipeline_data.get("segmentation") or pipeline_data.get("segment", {})
-        reconstruction_data = pipeline_data.get("reconstruction") or pipeline_data.get("reconstruct", {})
-        materials_data = dict(pipeline_data.get("materials", {}))
+        segmentation_data = _aliased_section("segmentation", "segment")
+        reconstruction_data = _aliased_section("reconstruction", "reconstruct")
+        materials_data = _section(pipeline_data.get("materials"), "materials")
         materials_data.update(_extract_materials_governance_overrides(data))
         stages = list(pipeline_data.keys())
         stage_aliases = {"segment": "segmentation", "reconstruct": "reconstruction"}
@@ -1379,7 +1416,7 @@ class SpatialAIPipeline:
         config = PipelineConfig(
             tier=data.get("tier", "standard"),
             stages=stages,
-            ingest=pipeline_data.get("ingest", {}),
+            ingest=_section(pipeline_data.get("ingest"), "ingest"),
             segmentation=segmentation_data,
             materials=materials_data,
             reconstruction=reconstruction_data,

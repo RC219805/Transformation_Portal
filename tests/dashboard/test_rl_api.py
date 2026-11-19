@@ -11,6 +11,7 @@ training requires torch and is intentionally not asserted here.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -90,7 +91,17 @@ def test_optimize_uses_fresh_mock_model(
         iterations=expected_iterations,
         to_dict=Mock(return_value=result_body),
     )
-    train = Mock(return_value=result)
+    train_calls: list[bool] = []
+
+    def train(*args: object) -> SimpleNamespace:
+        # Record whether training ran on the event-loop thread.
+        try:
+            asyncio.get_running_loop()
+            train_calls.append(True)
+        except RuntimeError:
+            train_calls.append(False)
+        assert args == (env, trainer, pipeline, config)
+        return result
 
     # Replace lazy RL imports, and block torch even in an ML-enabled environment.
     modules = {
@@ -119,8 +130,9 @@ def test_optimize_uses_fresh_mock_model(
     environment_factory.assert_called_once_with(actions)
     model_factory.assert_called_once_with(13, len(actions))
     trainer_factory.assert_called_once_with(model, actions)
-    config_factory.assert_called_once_with(max_iterations=expected_iterations)
-    train.assert_called_once_with(env, trainer, pipeline, config)
+    config_factory.assert_called_once_with(max_iterations=expected_iterations, save_model=False)
+    # Training ran exactly once and off the event loop (D10).
+    assert train_calls == [False]
     assert client.get(f"/rl/status/{handshake['job_id']}").json() == {
         "status": "completed",
         "progress": 1.0,
@@ -130,11 +142,76 @@ def test_optimize_uses_fresh_mock_model(
     }
 
 
+@pytest.mark.parametrize("max_iterations", [0, -1, 10_001, "50", 2.5, True, None, [3]])
+def test_optimize_rejects_invalid_max_iterations(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, max_iterations: object
+) -> None:
+    train = Mock()
+    monkeypatch.setitem(
+        sys.modules,
+        "transformation_portal.rl.optimize_rl",
+        SimpleNamespace(RLOptimizationConfig=Mock(), train_rl=train),
+    )
+    response = client.post("/rl/optimize", json={"max_iterations": max_iterations})
+    assert response.status_code == 422
+    assert "max_iterations" in response.json()["detail"]
+    train.assert_not_called()
+
+
+@pytest.mark.ml
+def test_optimize_real_training_writes_nothing_into_working_directory(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    pytest.importorskip("torch")
+    monkeypatch.chdir(tmp_path)
+
+    response = client.post("/rl/optimize", json={"max_iterations": 2})
+    assert response.status_code == 200
+    status = client.get(f"/rl/status/{response.json()['job_id']}").json()
+    assert status["status"] == "completed", status
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_optimize_openapi_documents_mock_model_compatibility(client: TestClient) -> None:
     description = client.get("/openapi.json").json()["paths"]["/rl/optimize"]["post"]["description"]
     assert "MockPipelineEnv" in description
     assert "pre-trained model loading is unsupported" in description
     assert "model_path: Deprecated, unsupported field; accepted and ignored" in description
+
+
+def test_job_registry_evicts_finished_jobs_oldest_first(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Audit finding D12: the job registry used to grow without bound.
+    monkeypatch.setattr(rl_api, "MAX_RETAINED_JOBS", 2)
+    monkeypatch.setitem(
+        sys.modules,
+        "transformation_portal.rl.optimize_rl",
+        SimpleNamespace(RLOptimizationConfig=Mock(), train_rl=Mock(side_effect=RuntimeError("stub"))),
+    )
+    job_ids = []
+    for _ in range(3):
+        resp = client.post("/rl/optimize", json={"max_iterations": 1})
+        assert resp.status_code == 200
+        job_ids.append(resp.json()["job_id"])
+        # TestClient runs the background task before returning: the job is finished.
+        assert client.get(f"/rl/status/{job_ids[-1]}").json()["status"] in {"completed", "error"}
+
+    assert client.get(f"/rl/status/{job_ids[0]}").json() == {"error": "Job not found"}
+    for job_id in job_ids[1:]:
+        assert "status" in client.get(f"/rl/status/{job_id}").json()
+
+
+def test_job_registry_full_of_active_jobs_refuses_new_ones(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(rl_api, "MAX_RETAINED_JOBS", 2)
+    # Never run the background task, so the registered jobs stay active.
+    monkeypatch.setattr(rl_api.BackgroundTasks, "add_task", lambda self, *args, **kwargs: None)
+    first = client.post("/rl/optimize", json={"max_iterations": 1})
+    second = client.post("/rl/optimize", json={"max_iterations": 1})
+    assert first.status_code == second.status_code == 200
+
+    refused = client.post("/rl/optimize", json={"max_iterations": 1})
+
+    assert refused.status_code == 503
+    assert client.get(f"/rl/status/{first.json()['job_id']}").json()["status"] == "starting"
 
 
 def test_create_router_returns_none_without_fastapi(monkeypatch: pytest.MonkeyPatch) -> None:

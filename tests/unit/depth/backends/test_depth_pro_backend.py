@@ -268,3 +268,121 @@ def test_worker_envelope_retains_stage_focal_metadata(tmp_path, monkeypatch):
     assert payload["focal_length_px"] == focal
     assert payload["field_of_view_deg"] == 61.0
     assert payload["provenance"]["camera"]["focal_length_source"] == "model_estimated"
+
+
+def _fake_depth_pro_worker(write_depth, payload):
+    def fake_run(command, **kwargs):
+        del kwargs
+        write_depth(Path(command[command.index("--output-depth") + 1]))
+        Path(command[command.index("--output-json") + 1]).write_text(json.dumps(payload), encoding="utf-8")
+        return subprocess.CompletedProcess(args=command, returncode=0, stdout="", stderr="worker log")
+
+    return fake_run
+
+
+@pytest.mark.parametrize(
+    ("depth", "payload"),
+    [
+        (np.full((4, 5), np.nan, dtype=np.float32), {"provenance": {}}),
+        (np.full((4, 5), np.inf, dtype=np.float32), {"provenance": {}}),
+        (np.zeros((4, 5, 3), dtype=np.float32), {"provenance": {}}),
+        (np.zeros((4, 0), dtype=np.float32), {"provenance": {}}),
+        (np.zeros((4, 5), dtype=np.float32), []),
+        (None, {"provenance": {}}),
+        (np.zeros((4, 5), dtype=np.float32), {"input_size": ["x", "y"]}),
+    ],
+    ids=["nan", "inf", "three_dimensional", "empty", "json_list", "empty_npy", "bad_input_size"],
+)
+def test_subprocess_rejects_malformed_exit_zero_output(tmp_path: Path, depth, payload) -> None:
+    checkpoint = tmp_path / "depth_pro.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    backend = DepthProBackend(_depth_pro_config(checkpoint, device="cpu"))
+
+    def write_depth(path: Path) -> None:
+        if depth is None:
+            path.write_bytes(b"")
+        else:
+            np.save(path, depth, allow_pickle=False)
+
+    with patch(
+        "transformation_portal.depth.backends.depth_pro.subprocess.run",
+        side_effect=_fake_depth_pro_worker(write_depth, payload),
+    ):
+        with pytest.raises(RuntimeError, match="Depth Pro subprocess produced malformed output") as exc_info:
+            backend._compute_subprocess(np.zeros((4, 5, 3), dtype=np.uint8))
+
+    assert "worker log" in str(exc_info.value)
+
+
+def test_subprocess_accepts_valid_exit_zero_output(tmp_path: Path) -> None:
+    checkpoint = tmp_path / "depth_pro.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    backend = DepthProBackend(_depth_pro_config(checkpoint, device="cpu"))
+    depth = np.arange(20, dtype=np.float64).reshape(4, 5) + 1.0
+
+    with patch(
+        "transformation_portal.depth.backends.depth_pro.subprocess.run",
+        side_effect=_fake_depth_pro_worker(
+            lambda path: np.save(path, depth, allow_pickle=False),
+            {"provenance": {}, "input_size": [4, 5], "device": "cpu"},
+        ),
+    ):
+        result = backend._compute_subprocess(np.zeros((4, 5, 3), dtype=np.uint8))
+
+    assert result.depth_map.dtype == np.float32
+    np.testing.assert_array_equal(result.depth_map, depth.astype(np.float32))
+    assert result.input_size == (4, 5)
+
+
+def test_worker_env_strips_parent_interpreter_configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    checkpoint = tmp_path / "depth_pro.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    backend = DepthProBackend(_depth_pro_config(checkpoint, device="cpu"))
+    monkeypatch.setenv("PYTHONPATH", "/parent/site-packages")
+    monkeypatch.setenv("PYTHONHOME", "/parent/home")
+    monkeypatch.setenv("VIRTUAL_ENV", "/parent/.venv")
+    monkeypatch.setenv("TP_UNRELATED_SETTING", "kept")
+
+    env = backend._build_worker_env()
+
+    assert "PYTHONHOME" not in env
+    assert "VIRTUAL_ENV" not in env
+    assert "/parent/site-packages" not in env.get("PYTHONPATH", "")
+    assert env["PYTHONNOUSERSITE"] == "1"
+    assert env["PYTHONSAFEPATH"] == "1"
+    assert env["TP_UNRELATED_SETTING"] == "kept"
+    if backend._repo_src is not None and backend._repo_src.exists():
+        assert env["PYTHONPATH"] == str(backend._repo_src)
+
+
+def test_subprocess_calls_carry_timeout_and_fail_on_hung_worker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    checkpoint = tmp_path / "depth_pro.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    monkeypatch.setenv("TRANSFORMATION_PORTAL_DEPTH_PRO_TIMEOUT_SECONDS", "7")
+    backend = DepthProBackend(_depth_pro_config(checkpoint, device="cpu"))
+    timeouts: list[object] = []
+
+    def hung_run(command, **kwargs):
+        timeouts.append(kwargs.get("timeout"))
+        raise subprocess.TimeoutExpired(command, kwargs.get("timeout") or 0, output=b"partial", stderr=b"stuck")
+
+    with patch("transformation_portal.depth.backends.depth_pro.subprocess.run", side_effect=hung_run):
+        with pytest.raises(ImportError, match="timed out after 7s"):
+            backend.ensure_available()
+        with pytest.raises(RuntimeError, match="Depth Pro subprocess timed out") as exc_info:
+            backend._compute_subprocess(np.zeros((4, 5, 3), dtype=np.uint8))
+
+    assert timeouts == [7, 7]
+    assert "stuck" in str(exc_info.value)
+
+
+def test_subprocess_timeout_defaults_and_rejects_invalid_values(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    checkpoint = tmp_path / "depth_pro.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    monkeypatch.delenv("TRANSFORMATION_PORTAL_DEPTH_PRO_TIMEOUT_SECONDS", raising=False)
+    assert DepthProBackend(_depth_pro_config(checkpoint))._subprocess_timeout_seconds == 900
+
+    for invalid in ("0", "-3", "soon"):
+        monkeypatch.setenv("TRANSFORMATION_PORTAL_DEPTH_PRO_TIMEOUT_SECONDS", invalid)
+        with pytest.raises(ValueError, match="Depth Pro subprocess timeout"):
+            DepthProBackend(_depth_pro_config(checkpoint))

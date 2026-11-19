@@ -340,9 +340,21 @@ def suggest_fixes(
     }
 
     # Process each change
-    for change in semantic_diff.get("changes", []):
-        ctype = change.get("type", "").lower()
-        severity = change.get("severity", "medium").lower()
+    for change in semantic_diff.get("changes") or []:
+        # The payload is model output that semantic_diff accepts with null or
+        # non-string fields (it normalises its own copy): skip non-objects and
+        # coerce such fields here instead of crashing on ``None.lower()``.
+        if not isinstance(change, dict):
+            continue
+        raw_type = change.get("type")
+        ctype = raw_type.lower() if isinstance(raw_type, str) else ""
+        raw_severity = change.get("severity", "medium")
+        severity = raw_severity.lower() if isinstance(raw_severity, str) else "medium"
+        description = change.get("description")
+        if description is None and "description" in change:
+            change = {k: v for k, v in change.items() if k != "description"}
+        elif description is not None and not isinstance(description, str):
+            change = {**change, "description": str(description)}
 
         handler = type_handlers.get(ctype)
         if handler:

@@ -212,3 +212,49 @@ test("seed-frontdoor-user rejects an empty output path", () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Front-door users output path cannot be empty\./);
 });
+
+test("seed-frontdoor-user keeps everything after the first '=' in an inline flag value", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-seed-user-"));
+  const usersFile = path.join(tempDir, "frontdoor-users.json");
+  const passwordFixture = "a=deliberately fake test passphrase==";
+
+  try {
+    const result = runSeed([`--output=${usersFile}`, `--password=${passwordFixture}`, "--quiet"]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+
+    const parsed = JSON.parse(readFileSync(usersFile, "utf-8"));
+    assert.equal(await argon2.verify(parsed[0].password_hash, passwordFixture), true);
+    assert.equal(await argon2.verify(parsed[0].password_hash, "a"), false);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("seed-frontdoor-user hashes the password exactly as given without trimming", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-seed-user-"));
+  const usersFile = path.join(tempDir, "frontdoor-users.json");
+
+  try {
+    const result = runSeed(["--output", usersFile, "--password", "  padded secret  ", "--quiet"]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+
+    const parsed = JSON.parse(readFileSync(usersFile, "utf-8"));
+    assert.equal(await argon2.verify(parsed[0].password_hash, "  padded secret  "), true);
+    assert.equal(await argon2.verify(parsed[0].password_hash, "padded secret"), false);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("seed-frontdoor-user rejects a whitespace-only password", () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-seed-user-"));
+  const usersFile = path.join(tempDir, "frontdoor-users.json");
+
+  try {
+    const result = runSeed(["--output", usersFile, "--password", "   "]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Front-door password cannot be empty\./);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});

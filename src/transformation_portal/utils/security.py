@@ -20,10 +20,12 @@ See Also:
 """
 
 import os
+import re
 import signal
+import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 class SecurityError(Exception):
@@ -86,7 +88,10 @@ def validate_filepath(
         if must_exist:
             resolved = filepath.resolve(strict=True)
         else:
-            resolved = filepath.resolve(strict=False)
+            # Local import keeps this module's import surface stdlib-only.
+            from transformation_portal.core.security.path_safety import resolve_rejecting_symlink_loops
+
+            resolved = resolve_rejecting_symlink_loops(filepath)
     except (OSError, RuntimeError) as e:
         raise SecurityError(f"Cannot resolve path {filepath}: {e}")
 
@@ -273,6 +278,227 @@ def build_safe_command(executable: str, args: List[str], dangerous_chars: Option
     return [executable] + [str(arg) for arg in args]
 
 
+# Characters rejected inside FFmpeg filter graphs. The command is always an argv
+# list (no shell), so this is defence in depth rather than injection prevention.
+# Parentheses are NOT rejected: FFmpeg expressions need them ("min(1920,iw)").
+# ';' stays rejected so a -vf value cannot grow into a multi-chain graph.
+FILTER_GRAPH_REJECTED_CHARS = frozenset(DANGEROUS_SHELL_CHARS - {"(", ")"})
+
+# Filters that read files, load code or accept runtime commands in ways a static
+# check cannot confine: always rejected.
+FFMPEG_UNCONFINABLE_FILTERS = frozenset(
+    {
+        "sendcmd",  # inline commands can re-init other filters with new file options
+        "asendcmd",
+        "zmq",  # network endpoint + runtime commands
+        "azmq",
+        "frei0r",  # loads a shared library by path
+        "frei0r_src",
+        "ladspa",
+        "lv2",
+        "libvmaf",  # compound model string embeds paths
+    }
+)
+
+# Path-valued options of file-accessing filters (option names per the FFmpeg
+# filter documentation): filter -> (named path options, positional slots that
+# are paths). FFmpeg maps positional arguments onto options in declaration
+# order (e.g. drawtext's slot 0 is fontfile and slot 2 textfile; the slots were
+# checked against the FFmpeg 6.1 option tables). A positional argument before
+# the first path slot is accepted, one in a path slot is validated as a path,
+# and any other positional argument is rejected; with no known slots every
+# positional argument of the filter is rejected.
+FFMPEG_FILTER_PATH_OPTIONS = {
+    "drawtext": (frozenset({"fontfile", "textfile"}), (0, 2)),
+    "qrencode": (frozenset({"textfile"}), ()),
+    "qrencodesrc": (frozenset({"textfile"}), ()),
+    "subtitles": (frozenset({"filename", "f", "fontsdir"}), (0, 2)),
+    "ass": (frozenset({"filename", "f", "fontsdir"}), (0, 2)),
+    "movie": (frozenset({"filename"}), (0,)),
+    "amovie": (frozenset({"filename"}), (0,)),
+    "lut3d": (frozenset({"file"}), (0,)),
+    "lut1d": (frozenset({"file"}), (0,)),
+    "curves": (frozenset({"psfile", "plot"}), (6, 7)),  # plot writes a file
+    "selectivecolor": (frozenset({"psfile"}), (10,)),
+    "removelogo": (frozenset({"filename", "f"}), (0,)),
+    "cover_rect": (frozenset({"cover"}), (0,)),
+    "find_rect": (frozenset({"object"}), (0,)),
+    "fieldhint": (frozenset({"hint"}), (0,)),
+    "metadata": (frozenset({"file"}), (5,)),
+    "ametadata": (frozenset({"file"}), (5,)),
+    "psnr": (frozenset({"stats_file", "f"}), (0,)),
+    "ssim": (frozenset({"stats_file", "f"}), (0,)),
+    "ssim360": (frozenset({"stats_file", "f"}), (0,)),
+    "xpsnr": (frozenset({"stats_file", "f"}), (0,)),
+    "vmafmotion": (frozenset({"stats_file"}), (0,)),
+    "signature": (frozenset({"filename"}), (2,)),
+    "vidstabdetect": (frozenset({"result"}), (0,)),
+    "vidstabtransform": (frozenset({"input"}), (0,)),
+    "lensfun": (frozenset({"db_path"}), ()),
+    "ocr": (frozenset({"datapath"}), (0,)),
+    "sofalizer": (frozenset({"sofa"}), (0,)),
+    "arnndn": (frozenset({"model", "m"}), (0,)),
+    "asr": (frozenset({"hmm", "dict", "lm", "lmctl", "logfn"}), (1, 2, 3, 4, 6)),
+    "flite": (frozenset({"textfile"}), (3,)),
+    "firequalizer": (frozenset({"dumpfile"}), (9,)),  # writes a file
+    "derain": (frozenset({"model"}), (2,)),
+    "sr": (frozenset({"model"}), (2,)),
+    "dnn_processing": (frozenset({"model"}), (1,)),
+    "dnn_detect": (frozenset({"model", "labels"}), (1, 7)),
+    "dnn_classify": (frozenset({"model", "labels"}), (1, 7)),
+    "nnedi": (frozenset({"weights"}), (0,)),
+    "program_opencl": (frozenset({"source"}), (0,)),
+    "openclsrc": (frozenset({"source"}), (0,)),
+    "xfade_opencl": (frozenset({"source"}), (1,)),
+    "libplacebo": (frozenset({"custom_shader_path", "lut"}), (69,)),
+    "whisper": (frozenset({"model", "destination", "vad_model"}), (0,)),
+    "cellauto": (frozenset({"filename", "f"}), (0,)),
+    "life": (frozenset({"filename", "f"}), (0,)),
+    "deshake": (frozenset({"filename"}), (10,)),  # writes a log file
+    "paletteuse": (frozenset({"debug_kdtree"}), (5,)),  # writes a file
+    "showcqt": (frozenset({"fontfile", "axisfile"}), (19, 22)),
+    "fsync": (frozenset({"file", "f"}), (0,)),
+}
+
+# FFmpeg options that add inputs or filter graphs (or, FFmpeg >= 7, load an
+# option value from a file with "-/opt"); build_ffmpeg_command only accepts
+# them through its validated ``input_file`` / ``filters`` parameters.
+_FFMPEG_GRAPH_OR_INPUT_ARG = re.compile(r"^-(?:i|vf|af|lavfi|filter(?:_complex)?(?:_script)?(?::.*)?|/.*)$")
+
+_FILTER_WHITESPACE = " \n\t\r"
+_FILTER_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
+_URL_PROTOCOL_RE = re.compile(r"^[A-Za-z0-9+.\-]+:")
+
+
+def _ffmpeg_get_token(text: str, pos: int, terminators: str) -> Tuple[str, int]:
+    """Mirror FFmpeg ``av_get_token``: unescape ``\\x`` and ``'...'`` up to a terminator."""
+    while pos < len(text) and text[pos] in _FILTER_WHITESPACE:
+        pos += 1
+    out: List[str] = []
+    protected = 0  # prefix of ``out`` that trailing-whitespace trimming must keep
+    while pos < len(text) and text[pos] not in terminators:
+        char = text[pos]
+        pos += 1
+        if char == "\\" and pos < len(text):
+            out.append(text[pos])
+            pos += 1
+            protected = len(out)
+        elif char == "'":
+            while pos < len(text) and text[pos] != "'":
+                out.append(text[pos])
+                pos += 1
+            if pos < len(text):
+                # Like FFmpeg, only a closed quote protects its content from
+                # trailing-whitespace trimming.
+                pos += 1
+                protected = len(out)
+        else:
+            out.append(char)
+    while len(out) > protected and out[-1] in _FILTER_WHITESPACE:
+        out.pop()
+    return "".join(out), pos
+
+
+def _skip_link_labels(text: str, pos: int) -> int:
+    while True:
+        while pos < len(text) and text[pos] in _FILTER_WHITESPACE:
+            pos += 1
+        if pos >= len(text) or text[pos] != "[":
+            return pos
+        # FFmpeg reads a link label with av_get_token(..., "]"), so escapes and
+        # quotes apply inside labels too.
+        _, pos = _ffmpeg_get_token(text, pos + 1, "]")
+        if pos >= len(text):
+            raise SecurityError(f"Unterminated link label in filter graph: {text}")
+        pos += 1
+
+
+def _parse_filter_graph(filter_graph: str) -> List[Tuple[str, str]]:
+    """Split a filter graph into ``(filter_name, unescaped_args)`` pairs, failing closed."""
+    filters: List[Tuple[str, str]] = []
+    pos = 0
+    while True:
+        pos = _skip_link_labels(filter_graph, pos)
+        # FFmpeg reads "name[@instance]" with av_get_token(..., "=,;["), so
+        # quotes and escapes apply to it: in "drawtext@a\=b=textfile=x" the
+        # filter is drawtext (instance "a=b") and its argument is textfile=x.
+        raw_name, pos = _ffmpeg_get_token(filter_graph, pos, "=,;[")
+        name = raw_name.split("@", 1)[0]
+        if not _FILTER_NAME_RE.match(name):
+            raise SecurityError(f"Unparseable filter name {raw_name!r} in filter graph: {filter_graph}")
+        args = ""
+        if pos < len(filter_graph) and filter_graph[pos] == "=":
+            args, pos = _ffmpeg_get_token(filter_graph, pos + 1, "[],;")
+        filters.append((name, args))
+        pos = _skip_link_labels(filter_graph, pos)
+        if pos >= len(filter_graph):
+            return filters
+        if filter_graph[pos] not in ",;":
+            raise SecurityError(f"Unparseable filter graph near offset {pos}: {filter_graph}")
+        pos += 1
+
+
+def _parse_filter_options(args: str) -> List[Tuple[Optional[str], str]]:
+    """Split filter arguments into ``(key, value)`` pairs like FFmpeg (key None = positional)."""
+    options: List[Tuple[Optional[str], str]] = []
+    pos = 0
+    while pos < len(args):
+        key: Optional[str] = None
+        scan = pos
+        while scan < len(args) and args[scan] in _FILTER_WHITESPACE:
+            scan += 1
+        key_start = scan
+        while scan < len(args) and args[scan].isascii() and (args[scan].isalnum() or args[scan] in "-_/."):
+            scan += 1
+        key_end = scan
+        while scan < len(args) and args[scan] in _FILTER_WHITESPACE:
+            scan += 1
+        if scan < len(args) and args[scan] == "=":
+            key = args[key_start:key_end]
+            pos = scan + 1
+        value, pos = _ffmpeg_get_token(args, pos, ":")
+        options.append((key, value))
+        if pos < len(args):
+            pos += 1  # skip the ':' separator
+    return options
+
+
+def _validate_filter_path(filter_name: str, option: str, value: str, allowed_dirs: Optional[List[Path]]) -> None:
+    if not value:
+        return
+    label = f"'{filter_name}' option {option!r}"
+    if allowed_dirs is None:
+        raise SecurityError(f"Filter {label} references a file but no allowed_dirs were given: {value}")
+    if _URL_PROTOCOL_RE.match(value) or value.startswith("subfile,"):
+        raise SecurityError(f"Filter {label} uses a URL/protocol, which is not allowed: {value}")
+    try:
+        validate_filepath(Path(value), allowed_dirs, must_exist=False)
+    except SecurityError as exc:
+        raise SecurityError(f"Filter {label} is not confined to allowed directories: {exc}") from exc
+
+
+def _validate_filter_file_access(filter_graph: str, allowed_dirs: Optional[List[Path]]) -> None:
+    for name, args in _parse_filter_graph(filter_graph):
+        lowered = name.lower()
+        if lowered in FFMPEG_UNCONFINABLE_FILTERS:
+            raise SecurityError(f"Filter '{name}' is not allowed: its file, code or command access cannot be confined")
+        path_options, path_slots = FFMPEG_FILTER_PATH_OPTIONS.get(lowered, (frozenset(), ()))
+        for index, (key, value) in enumerate(_parse_filter_options(args)):
+            if key is not None and key.startswith("/"):
+                # FFmpeg >= 7: "/option=path" loads the option value from a file.
+                _validate_filter_path(name, key, value, allowed_dirs)
+            elif key is not None:
+                if key in path_options:
+                    _validate_filter_path(name, key, value, allowed_dirs)
+            elif path_options:
+                if index in path_slots:
+                    _validate_filter_path(name, f"#{index}", value, allowed_dirs)
+                elif not path_slots or index > min(path_slots):
+                    raise SecurityError(
+                        f"Filter '{name}' takes file paths; use named options instead of positional argument {index}"
+                    )
+
+
 def build_ffmpeg_command(
     input_file: Path,
     output_file: Path,
@@ -286,23 +512,30 @@ def build_ffmpeg_command(
     Build safe FFmpeg command with injection protection.
 
     Constructs FFmpeg command as argument list (no shell required),
-    validates filter strings for shell metacharacters, and optionally
-    validates file paths.
+    validates filter strings with :func:`validate_filter_graph` (including
+    confinement of file-path filter options to ``allowed_dirs``), and
+    optionally validates file paths.
 
     Args:
         input_file: Input file path
         output_file: Output file path
         filters: Optional list of video filter strings
         codec: Video codec (default 'libx264')
-        additional_args: Optional additional FFmpeg arguments
+        additional_args: Optional additional FFmpeg arguments. Input and
+            filter-graph options (``-i``, ``-vf``, ``-af``, ``-filter*``,
+            ``-lavfi``, ``-/opt``) are rejected: pass them via ``input_file``
+            and ``filters`` so they are validated.
         validate_paths: Whether to validate paths are safe (default True)
-        allowed_dirs: Required if validate_paths=True
+        allowed_dirs: Allowed directories (default: cwd when validate_paths=True).
+            With validate_paths=False and no allowed_dirs, filters that
+            reference files are rejected.
 
     Returns:
         List of command arguments safe for subprocess.run without shell=True
 
     Raises:
-        SecurityError: If filters contain dangerous characters or paths invalid
+        SecurityError: If filters contain dangerous characters or unconfined
+            file paths, additional_args smuggle inputs/filters, or paths invalid
 
     Example:
         >>> cmd = build_ffmpeg_command(
@@ -322,12 +555,22 @@ def build_ffmpeg_command(
         validate_filepath(input_file, allowed_dirs, must_exist=True)
         validate_filepath(output_file, allowed_dirs, must_exist=False)
 
-    # Validate filter strings don't contain shell metacharacters
+    # Validate filter strings: rejected characters, then file-path confinement
     if filters:
         for filter_str in filters:
-            if any(char in filter_str for char in DANGEROUS_SHELL_CHARS):
+            if any(char in filter_str for char in FILTER_GRAPH_REJECTED_CHARS):
                 raise SecurityError(
-                    f"Filter contains dangerous characters: {filter_str}\n" f"Dangerous characters: {DANGEROUS_SHELL_CHARS}"
+                    f"Filter contains dangerous characters: {filter_str}\n"
+                    f"Dangerous characters: {set(FILTER_GRAPH_REJECTED_CHARS)}"
+                )
+        validate_filter_graph(",".join(filters), allowed_dirs=allowed_dirs)
+
+    if additional_args:
+        for arg in additional_args:
+            if _FFMPEG_GRAPH_OR_INPUT_ARG.match(str(arg)):
+                raise SecurityError(
+                    f"additional_args may not contain input or filter-graph option {arg!r}; "
+                    "use input_file / filters so they are validated"
                 )
 
     # Build command list
@@ -350,15 +593,23 @@ def build_ffmpeg_command(
     return cmd
 
 
-def validate_filter_graph(filter_graph: str) -> str:
+def validate_filter_graph(filter_graph: str, allowed_dirs: Optional[List[Path]] = None) -> str:
     """
     Validate FFmpeg filter graph string for safety.
 
-    Checks that filter graph doesn't contain shell metacharacters
-    or other dangerous patterns that could enable command injection.
+    Rejects the characters in ``FILTER_GRAPH_REJECTED_CHARS`` (parentheses are
+    allowed, FFmpeg expressions need them), filters whose file/code/command
+    access cannot be confined (``FFMPEG_UNCONFINABLE_FILTERS``), and path-valued
+    options of file-accessing filters (``FFMPEG_FILTER_PATH_OPTIONS`` plus the
+    FFmpeg >= 7 ``/option=file`` syntax) that resolve outside ``allowed_dirs``
+    or name a URL/protocol. Without ``allowed_dirs`` any such path is rejected.
+
+    Filters outside both tables are not inspected further: this is a
+    denylist of documented file-accessing options, not a filter allowlist.
 
     Args:
         filter_graph: FFmpeg filter graph string
+        allowed_dirs: Directories file-path filter options must stay within
 
     Returns:
         Validated filter graph string
@@ -367,16 +618,19 @@ def validate_filter_graph(filter_graph: str) -> str:
         SecurityError: If filter graph contains dangerous patterns
 
     Example:
-        >>> safe_graph = validate_filter_graph("scale=1920:1080,fps=30")
+        >>> safe_graph = validate_filter_graph("scale='min(1920,iw)':-2,fps=30")
         >>> dangerous = validate_filter_graph("scale=1920; rm -rf /")
         Traceback (most recent call last):
         SecurityError: Filter graph contains dangerous characters
     """
-    if any(char in filter_graph for char in DANGEROUS_SHELL_CHARS):
+    if any(char in filter_graph for char in FILTER_GRAPH_REJECTED_CHARS):
         raise SecurityError(
             f"Filter graph contains dangerous characters: {filter_graph}\n"
-            f"Dangerous characters found: {[c for c in DANGEROUS_SHELL_CHARS if c in filter_graph]}"
+            f"Dangerous characters found: {sorted(c for c in FILTER_GRAPH_REJECTED_CHARS if c in filter_graph)}"
         )
+
+    if filter_graph.strip(_FILTER_WHITESPACE):
+        _validate_filter_file_access(filter_graph, allowed_dirs)
 
     return filter_graph
 
@@ -421,19 +675,57 @@ def timeout(seconds: int):
             "Use multiprocessing or threading-based timeout on Windows."
         )
 
-    def timeout_handler(signum, frame):
-        raise TimeoutError(f"Operation exceeded {seconds}s timeout")
+    started = time.monotonic()
+    own_deadline = started + seconds if seconds > 0 else None
+    # outer_state: "none" (no enclosing alarm), "pending" (still to fire),
+    # "delivered" (fired, enclosing handler ran) or "undelivered" (fired while
+    # the enclosing disposition was SIG_DFL/SIG_IGN; re-raised on exit).
+    outer_state = ["none"]
 
-    # Set signal handler
+    def _arm_next() -> None:
+        deadlines = [d for d in (own_deadline, outer_deadline if outer_state[0] == "pending" else None) if d is not None]
+        if deadlines:
+            signal.setitimer(signal.ITIMER_REAL, max(min(deadlines) - time.monotonic(), 1e-3))
+
+    def timeout_handler(signum, frame):
+        now = time.monotonic()
+        if own_deadline is not None and now >= own_deadline:
+            raise TimeoutError(f"Operation exceeded {seconds}s timeout")
+        if outer_state[0] == "pending" and now >= outer_deadline:
+            # The alarm belongs to an enclosing timeout()/alarm whose deadline is
+            # earlier than ours: let its handler decide (it normally raises).
+            if callable(old_handler):
+                outer_state[0] = "delivered"
+                old_handler(signum, frame)
+            else:
+                outer_state[0] = "undelivered"
+        # Early wake-up, an enclosing handler that returned, or a stray
+        # SIGALRM: our own deadline must stay armed (fail closed).
+        _arm_next()
+
+    # setitimer shares the ITIMER_REAL timer with signal.alarm and returns the
+    # remaining time of an enclosing alarm, which must not be cancelled by a
+    # nested timeout(). Pause it before installing our handler so it cannot
+    # fire in between, then arm the earlier of the two deadlines.
+    outer_remaining, _ = signal.setitimer(signal.ITIMER_REAL, 0)
+    outer_deadline = started + outer_remaining
+    if outer_remaining > 0:
+        outer_state[0] = "pending"
     old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(seconds)
+    _arm_next()
 
     try:
         yield
     finally:
-        # Restore old handler and cancel alarm
-        signal.alarm(0)
+        # Cancel our alarm, restore the old handler, then re-arm the enclosing
+        # alarm with its remaining time (fire it promptly if already overdue or
+        # if it fired while only its default disposition could handle it).
+        signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, old_handler)
+        if outer_state[0] == "pending":
+            signal.setitimer(signal.ITIMER_REAL, max(outer_deadline - time.monotonic(), 1e-3))
+        elif outer_state[0] == "undelivered":
+            signal.setitimer(signal.ITIMER_REAL, 1e-3)
 
 
 # Deprecated alias for backwards compatibility

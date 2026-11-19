@@ -235,6 +235,27 @@ def test_statistics_computes_percentiles(tmp_path: Path) -> None:
     assert stats["mean_sec"] == pytest.approx(2.5)
 
 
+def test_statistics_median_averages_middle_pair_for_even_count(tmp_path: Path) -> None:
+    # Regression (M-31): the median used the upper-middle element for even counts.
+    led = PerformanceLedger(tmp_path / "perf.db")
+    for idx, total in enumerate([1.0, 2.0, 3.0, 10.0]):
+        led.log_capsule(
+            _make_capsule(f"img-{idx}", total_sec=total, captured_at=(_BASE_TS + timedelta(minutes=idx)).isoformat())
+        )
+
+    stats = led.get_statistics()
+    assert stats["median_sec"] == pytest.approx(2.5)
+    assert stats["p50_sec"] == pytest.approx(2.5)
+
+
+def test_detect_regression_reports_true_historical_median() -> None:
+    bucket = _bucket(p50=100.0, p95=200.0)
+    history = [_make_capsule(f"historical-{i}", total_sec=float(i + 1)) for i in range(20)]
+    result = detect_regression(_make_capsule("cur", total_sec=5.0), history, bucket=bucket)
+    assert result["status"] == "pass"
+    assert result["historical_p50_sec"] == pytest.approx(10.5)
+
+
 def test_statistics_single_capsule_uses_p95_fallback(tmp_path: Path) -> None:
     led = PerformanceLedger(tmp_path / "perf.db")
     led.log_capsule(_make_capsule("only", total_sec=3.0))
@@ -333,6 +354,20 @@ def test_report_handles_empty_ledger(tmp_path: Path) -> None:
     out = tmp_path / "report.md"
     generate_performance_report(led, out)
     assert "No data available" in out.read_text()
+
+
+def test_report_tolerates_zero_duration_capsule(tmp_path: Path) -> None:
+    # Regression (M-31): a 0.0 s total (allowed by PerformanceCapsule) crashed the Max/Min ratio.
+    led = PerformanceLedger(tmp_path / "perf.db")
+    for idx, total in enumerate([0.0, 1.0, 2.0, 3.0]):
+        led.log_capsule(
+            _make_capsule(f"img-{idx}", total_sec=total, captured_at=(_BASE_TS + timedelta(minutes=idx)).isoformat())
+        )
+    out = tmp_path / "report.md"
+    generate_performance_report(led, out)
+    text = out.read_text()
+    assert "- Max/Min ratio: n/a (zero-duration minimum)" in text
+    assert "- Median: 1.50s" in text
 
 
 def test_report_summarizes_scenes_and_buckets(tmp_path: Path) -> None:

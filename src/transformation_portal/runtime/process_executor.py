@@ -36,12 +36,18 @@ from __future__ import annotations
 import logging
 import multiprocessing as mp
 import os
+import time
 import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Type
 
 logger = logging.getLogger(__name__)
+
+# How long one wait slice lasts while polling the result queue and the child.
+_POLL_INTERVAL_SECONDS = 0.05
+# How long to wait for the child to exit after its result has been read.
+_RESULT_JOIN_GRACE_SECONDS = 5.0
 
 
 @dataclass
@@ -239,8 +245,29 @@ class ProcessExecutor:
         proc.start()
 
         try:
-            # Wait for process with timeout
-            proc.join(timeout=effective_timeout)
+            # Drain the result queue WHILE waiting for the child. The child's
+            # queue feeder thread only finishes (and the child only exits) once
+            # the parent has read a result larger than the pipe buffer, so
+            # joining first deadlocks (or kills a successful node on timeout).
+            deadline = None if effective_timeout is None else time.monotonic() + effective_timeout
+            while True:
+                if not result_queue.empty():
+                    return self._receive_result(result_queue, proc)
+
+                if not proc.is_alive():
+                    # The child exited; its feeder thread flushed before exit.
+                    if not result_queue.empty():
+                        return self._receive_result(result_queue, proc)
+                    break
+
+                if deadline is None:
+                    wait = _POLL_INTERVAL_SECONDS
+                else:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    wait = min(_POLL_INTERVAL_SECONDS, remaining)
+                proc.join(timeout=wait)
 
             if proc.is_alive():
                 # Timeout - terminate process
@@ -259,10 +286,6 @@ class ProcessExecutor:
                     error=f"Process timeout after {effective_timeout}s",
                 )
 
-            # Get result from queue
-            if not result_queue.empty():
-                return result_queue.get_nowait()
-
             # Process exited but no result
             if proc.exitcode != 0:
                 return ProcessResult(
@@ -276,6 +299,20 @@ class ProcessExecutor:
             if proc.is_alive():
                 proc.terminate()
                 proc.join(timeout=1)
+
+    @staticmethod
+    def _receive_result(result_queue: Any, proc: Any) -> ProcessResult:
+        """Read the child's result (blocking until the whole message arrives), then reap it."""
+        try:
+            result = result_queue.get_nowait()
+        except Exception as exc:  # unpicklable / truncated result: fail closed
+            result = ProcessResult(
+                error=f"Failed to receive process result: {type(exc).__name__}: {exc}",
+                traceback=traceback.format_exc(),
+            )
+        # The child exits once its feeder thread has flushed; give it a bounded grace.
+        proc.join(timeout=_RESULT_JOIN_GRACE_SECONDS)
+        return result
 
     def run_batch(
         self,

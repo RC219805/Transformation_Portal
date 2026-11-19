@@ -98,8 +98,8 @@ def set_pipelines_dir(path: Path) -> None:
     """Set the pipelines storage directory.
 
     Creates the directory if it doesn't exist and initializes the FSContext.
-    This is the single point where the pipelines directory is created;
-    endpoint handlers rely on this initialization and do not repeat mkdir.
+    Without an explicit call the default directory is created lazily by the
+    first save, never at import or router creation time.
 
     Args:
         path: Directory path for pipeline JSON files
@@ -120,6 +120,9 @@ class PipelineNode(BaseModel):
     label: str
     position: dict[str, float]
     config: dict[str, Any] = Field(default_factory=dict)
+    # Port names the editor UI renders; persisted so a saved pipeline loads back.
+    inputs: list[str] = Field(default_factory=list)
+    outputs: list[str] = Field(default_factory=list)
 
 
 class PipelineEdge(BaseModel):
@@ -191,17 +194,17 @@ def create_dag_editor_router() -> APIRouter:
     """Create the DAG editor router.
 
     Note: The FSGuard instance (`fs`) is created once at router initialization.
-    The pipelines directory is created here at router creation time to ensure
-    the API is robust on fresh installs without requiring an external call to
-    set_pipelines_dir().
+    Creating the router has no filesystem side effect: the pipelines directory
+    is created lazily on the first save (or eagerly by an explicit
+    set_pipelines_dir() call), and listing a directory that does not exist yet
+    returns an empty list. This keeps a fresh install working without leaving
+    a stray ``pipelines/`` in whatever directory the process was started from.
 
     Returns:
         FastAPI APIRouter with pipeline editing endpoints
     """
     router = APIRouter(prefix="/api/editor", tags=["editor"])
     fs = get_fs_guard()
-    # Ensure pipelines directory exists at router creation time
-    fs.mkdir(_pipelines_dir)
 
     @router.get("/pipelines")
     async def list_pipelines() -> JSONResponse:
@@ -209,9 +212,11 @@ def create_dag_editor_router() -> APIRouter:
 
         Note: Uses FSGuard.list_dir for audit logging consistency.
         Pipeline names are derived from validated filenames only.
-        Directory is created at router initialization in create_dag_editor_router().
+        A pipelines directory that does not exist yet holds no pipelines.
         """
-        pipelines = []
+        pipelines: list[dict[str, Any]] = []
+        if not fs.exists(_pipelines_dir):
+            return JSONResponse({"pipelines": pipelines})
         # Use FSGuard for directory listing to maintain audit trail
         for p in fs.list_dir(_pipelines_dir):
             # Skip directories and non-JSON files
@@ -260,6 +265,7 @@ def create_dag_editor_router() -> APIRouter:
         save_data["name"] = name
 
         try:
+            fs.mkdir(_pipelines_dir)
             fs.write_text(filepath, json.dumps(save_data, indent=2))
             logger.info("Saved pipeline: %s", name)
             return JSONResponse({"status": "ok", "name": name})
@@ -519,6 +525,17 @@ def get_dag_editor_html() -> str:
         let dragOffset = { x: 0, y: 0 };
         let connecting = null;
 
+        // Escape a value for HTML text and quoted-attribute contexts. Loaded pipelines
+        // carry client-supplied labels, ids and port names (POST /api/editor/pipelines).
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         // Load node types
         async function loadNodeTypes() {
             const res = await fetch('/api/editor/node-types');
@@ -602,14 +619,14 @@ def get_dag_editor_html() -> str:
             div.style.top = node.position.y + 'px';
 
             div.innerHTML = `
-                <div class="node-header">${node.label}</div>
-                <div class="node-body">ID: ${node.id}</div>
+                <div class="node-header">${escapeHtml(node.label)}</div>
+                <div class="node-body">ID: ${escapeHtml(node.id)}</div>
                 <div class="node-ports">
-                    <div class="ports-in">${node.inputs.map(i =>
-                        `<div class="port input" title="${i}" data-port="${i}" data-dir="in"></div>`
+                    <div class="ports-in">${(node.inputs || []).map(i =>
+                        `<div class="port input" title="${escapeHtml(i)}" data-port="${escapeHtml(i)}" data-dir="in"></div>`
                     ).join('')}</div>
-                    <div class="ports-out">${node.outputs.map(o =>
-                        `<div class="port output" title="${o}" data-port="${o}" data-dir="out"></div>`
+                    <div class="ports-out">${(node.outputs || []).map(o =>
+                        `<div class="port output" title="${escapeHtml(o)}" data-port="${escapeHtml(o)}" data-dir="out"></div>`
                     ).join('')}</div>
                 </div>
             `;

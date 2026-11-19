@@ -7,6 +7,9 @@ enforces policy-based access control for all disk IO.
 from __future__ import annotations
 
 import json
+import os
+import stat
+import threading
 from pathlib import Path
 
 import pytest
@@ -384,3 +387,109 @@ class TestFSGuardAtomicWrite:
         fs.write_text(path, "content", atomic=False)
 
         assert fs.read_text(path) == "content"
+
+    @pytest.mark.parametrize("binary", [False, True], ids=["text", "bytes"])
+    def test_atomic_write_does_not_share_a_staging_file_between_writers(self, tmp_path: Path, binary: bool) -> None:
+        """Another writer's half-written ``<name>.tmp`` is neither reused nor renamed away."""
+        fs = FSGuard()
+        path = tmp_path / "state" / "manifest.json"
+        path.parent.mkdir()
+        other_writers_staging = path.with_suffix(".json.tmp")
+        other_writers_staging.write_text("half-written by another writer")
+
+        if binary:
+            fs.write_bytes(path, b'{"writer": "me"}')
+        else:
+            fs.write_text(path, '{"writer": "me"}')
+
+        assert path.read_text() == '{"writer": "me"}'
+        assert other_writers_staging.read_text() == "half-written by another writer"
+        assert sorted(entry.name for entry in path.parent.iterdir()) == ["manifest.json", "manifest.json.tmp"]
+
+    def test_concurrent_atomic_writers_all_succeed(self, tmp_path: Path) -> None:
+        """Writers of one target never rename each other's staging file."""
+        fs = FSGuard()
+        path = tmp_path / "state" / "manifest.json"
+        payloads = {tag: json.dumps({"writer": tag}) * 200 for tag in "abcd"}
+        errors: list[BaseException] = []
+        start = threading.Barrier(len(payloads))
+
+        def writer(tag: str) -> None:
+            start.wait(timeout=10)
+            for _ in range(200):
+                try:
+                    fs.write_text(path, payloads[tag])
+                except BaseException as exc:  # noqa: BLE001 - reported through the assertion below
+                    errors.append(exc)
+
+        threads = [threading.Thread(target=writer, args=(tag,)) for tag in payloads]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=60)
+
+        assert errors == []
+        assert path.read_text() in payloads.values()
+        assert [entry.name for entry in path.parent.iterdir()] == ["manifest.json"]
+
+    def test_atomic_write_flushes_content_to_disk_before_the_rename(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        events: list[str] = []
+        real_fsync = os.fsync
+        real_replace = os.replace
+
+        def recording_fsync(descriptor: int) -> None:
+            events.append("fsync")
+            real_fsync(descriptor)
+
+        def recording_replace(src, dst) -> None:
+            events.append("replace")
+            real_replace(src, dst)
+
+        monkeypatch.setattr(os, "fsync", recording_fsync)
+        monkeypatch.setattr(os, "replace", recording_replace)
+
+        FSGuard().write_bytes(tmp_path / "artifact.bin", b"payload")
+
+        assert events == ["fsync", "replace"]
+
+    def test_failed_atomic_write_keeps_the_previous_content_and_leaves_no_staging_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fs = FSGuard()
+        path = tmp_path / "manifest.json"
+        fs.write_text(path, "previous")
+
+        def failing_replace(src, dst) -> None:
+            raise OSError("disk full")
+
+        monkeypatch.setattr(os, "replace", failing_replace)
+
+        with pytest.raises(OSError, match="disk full"):
+            fs.write_text(path, "next")
+
+        assert path.read_text() == "previous"
+        assert [entry.name for entry in tmp_path.iterdir()] == ["manifest.json"]
+
+    def test_atomic_text_write_with_default_encoding_matches_non_atomic(self, tmp_path: Path) -> None:
+        """``encoding=None`` selects the locale default for text, as ``Path.write_text`` does."""
+        fs = FSGuard()
+        atomic_path = tmp_path / "atomic.txt"
+        direct_path = tmp_path / "direct.txt"
+
+        fs.write_text(atomic_path, "line\n", encoding=None)  # type: ignore[arg-type]
+        fs.write_text(direct_path, "line\n", encoding=None, atomic=False)  # type: ignore[arg-type]
+
+        assert atomic_path.read_bytes() == direct_path.read_bytes()
+
+    def test_atomic_write_creates_files_with_the_process_default_mode(self, tmp_path: Path) -> None:
+        """Staging through a private file must not turn outputs owner-only."""
+        path = tmp_path / "shared.json"
+        previous_umask = os.umask(0o022)
+        try:
+            FSGuard().write_text(path, "{}")
+        finally:
+            os.umask(previous_umask)
+
+        assert stat.S_IMODE(path.stat().st_mode) == 0o644

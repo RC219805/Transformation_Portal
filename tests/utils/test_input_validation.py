@@ -416,6 +416,28 @@ class TestImageValidatorNumpyArrays:
 
         assert any(w.code == "UNUSUAL_DTYPE" for w in result.warnings)
 
+    @pytest.mark.regression
+    @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.uint8])
+    def test_validate_empty_array_reports_error(self, validator, dtype):
+        """L-13: a zero-size array yields a validation error instead of raising."""
+        arr = np.zeros((0, 100, 3), dtype=dtype)
+
+        result = validator.validate(arr)
+
+        assert result.is_valid is False
+        assert any(e.code == "EMPTY_ARRAY" for e in result.errors)
+
+    @pytest.mark.regression
+    def test_validate_16bit_greyscale_png_default_modes(self, validator, tmp_path):
+        """L-13: the repository's 16-bit *_depth16.png convention passes default validation."""
+        path = tmp_path / "scene_depth16.png"
+        Image.fromarray(np.full((128, 128), 30000, np.uint16)).save(path)
+
+        result = validator.validate(path)
+
+        assert not any(e.code == "UNSUPPORTED_COLOR_MODE" for e in result.errors)
+        assert result.is_valid is True
+
     def test_validate_nan_values(self, validator):
         """Test detection of NaN values."""
         arr = np.ones((100, 100), dtype=np.float32)

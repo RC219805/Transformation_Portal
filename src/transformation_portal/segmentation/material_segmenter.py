@@ -8,6 +8,7 @@ Provides intelligent segmentation that understands:
 Enables context-aware enhancement that processes different materials appropriately.
 """
 
+import inspect
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +22,19 @@ from transformation_portal.segmentation.clip_classifier import CLIPClassifier
 from transformation_portal.segmentation.sam_segmenter import SAMSegmenter
 
 logger = logging.getLogger(__name__)
+
+
+def _accepted_kwargs(component: type, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the subset of ``kwargs`` that ``component``'s constructor accepts by keyword."""
+    parameters = inspect.signature(component).parameters.values()
+    if any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters):
+        return dict(kwargs)
+    names = {
+        parameter.name
+        for parameter in parameters
+        if parameter.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+    }
+    return {key: value for key, value in kwargs.items() if key in names}
 
 
 @dataclass
@@ -130,21 +144,34 @@ class MaterialSegmenter:
         Args:
             sam_segmenter: Existing SAM segmenter (creates new if None)
             clip_classifier: Existing CLIP classifier (creates new if None)
-            **kwargs: Arguments passed to SAM/CLIP if creating new instances
+            **kwargs: Arguments for the SAM/CLIP constructors if creating new
+                instances. Each argument goes to every component whose
+                constructor accepts it (``device`` goes to both, ``model_type``
+                only to SAM, ``model_revision`` only to CLIP).
+
+        Raises:
+            TypeError: if an argument is accepted by neither constructor that
+                is being called.
         """
+        sam_kwargs = _accepted_kwargs(SAMSegmenter, kwargs) if sam_segmenter is None else {}
+        clip_kwargs = _accepted_kwargs(CLIPClassifier, kwargs) if clip_classifier is None else {}
+        unknown = sorted(set(kwargs) - set(sam_kwargs) - set(clip_kwargs))
+        if unknown:
+            raise TypeError(f"MaterialSegmenter got unexpected keyword argument(s) for the components it creates: {unknown}")
+
         # Initialize SAM
         if sam_segmenter is not None:
             self.sam = sam_segmenter
         else:
             logger.info("Creating SAM segmenter...")
-            self.sam = SAMSegmenter(**kwargs)
+            self.sam = SAMSegmenter(**sam_kwargs)
 
         # Initialize CLIP
         if clip_classifier is not None:
             self.clip = clip_classifier
         else:
             logger.info("Creating CLIP classifier...")
-            self.clip = CLIPClassifier(**kwargs)
+            self.clip = CLIPClassifier(**clip_kwargs)
 
         logger.info("MaterialSegmenter initialized")
 

@@ -532,6 +532,62 @@ class TestFileNotFound:
         assert report.issues[0].category == "file_missing"
 
 
+class TestMalformedPresetStructure:
+    """A preset with the wrong YAML shape is reported, not crashed on."""
+
+    @staticmethod
+    def _structure_issues(tmp_path, text):
+        preset = tmp_path / "malformed.yaml"
+        preset.write_text(text)
+        report = validate_preset(preset, available_depth_backend_ids=["da3"])
+        return report, [(i.path, i.message) for i in report.issues if i.category == "preset_structure"]
+
+    @pytest.mark.parametrize(
+        ("text", "found"),
+        [("- a\n- b\n", "list"), ("just a sentence\n", "str"), ("42\n", "int")],
+        ids=["list", "scalar-text", "scalar-number"],
+    )
+    def test_root_that_is_not_a_mapping_is_an_error(self, tmp_path, text, found):
+        report, issues = self._structure_issues(tmp_path, text)
+
+        assert issues == [("", f"Preset root must be a mapping, found {found}")]
+        assert report.healthy is False
+        assert report.preset_name == "malformed"
+        assert [stage.declared for stage in report.stages] == [False] * 6
+        assert report.to_dict()["error_count"] == 1
+
+    @pytest.mark.parametrize(
+        ("text", "found"),
+        [("name: demo\ndepth:\n", "null"), ("name: demo\ndepth: fast\n", "str"), ("name: demo\ndepth: [da3]\n", "list")],
+        ids=["null", "text", "list"],
+    )
+    def test_depth_section_that_is_not_a_mapping_is_an_error(self, tmp_path, text, found):
+        report, issues = self._structure_issues(tmp_path, text)
+
+        assert issues == [("depth", f"Preset depth must be a mapping, found {found}")]
+        assert report.healthy is False
+        assert report.preset_name == "demo"
+        depth_stage = next(stage for stage in report.stages if stage.name == "depth")
+        assert depth_stage.declared is False
+
+    @pytest.mark.parametrize(
+        ("models", "found"),
+        [("", "null"), (" 3", "int"), (" {name: da3}", "dict")],
+        ids=["null", "number", "mapping"],
+    )
+    def test_depth_models_that_is_not_a_list_is_an_error(self, tmp_path, models, found):
+        report, issues = self._structure_issues(tmp_path, f"name: demo\ndepth:\n  backend: da3\n  models:{models}\n")
+
+        assert issues == [("depth.models", f"Preset depth.models must be a list, found {found}")]
+        assert report.healthy is False
+
+    def test_empty_preset_file_is_still_an_empty_mapping(self, tmp_path):
+        report, issues = self._structure_issues(tmp_path, "")
+
+        assert issues == []
+        assert report.preset_name == "malformed"
+
+
 class TestShippedExperimentalPresetsPlaceholderInventory:
     """Regression: only known-flagged experimental files may carry PENDING_VERIFICATION.
 
