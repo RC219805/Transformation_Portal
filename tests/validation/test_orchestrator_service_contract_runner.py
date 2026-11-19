@@ -3,15 +3,32 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import json
+import sys
+from pathlib import Path
+from types import ModuleType
 from unittest.mock import AsyncMock
 
 import pytest
 
-from scripts.validation import run_orchestrator_service_contracts as runner
 from tests.orchestrator.test_dispatch_authority_services import _clear_dispatch_tables
 
 pytestmark = pytest.mark.unit
+
+
+def _load_runner() -> ModuleType:
+    path = Path(__file__).resolve().parents[2] / "scripts" / "validation" / "run_orchestrator_service_contracts.py"
+    spec = importlib.util.spec_from_file_location("orchestrator_service_contract_runner_under_test", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Failed to load orchestrator service contract runner from {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+runner = _load_runner()
 
 
 @pytest.fixture
