@@ -22,7 +22,7 @@ requests==2.34.2  # Governed DA3 baseline
 filelock>=4.2.1,<5  # Security floor for the October 2026 filelock advisories
 certifi>=2026.10.19  # GHSA-6q48-6c7w-9gw2: remove compromised emSign roots
 urllib3>=2.8.0,<3  # Security: CVE-2026-97687/97688/97689
-typer==0.27.2  # Governed DA3 baseline
+typer==0.29.1  # Governed DA3 baseline
 pillow==13.0.0  # Governed DA3 baseline
 omegaconf==2.3.0  # Governed DA3 baseline
 evo==1.37.1  # Governed DA3 baseline
