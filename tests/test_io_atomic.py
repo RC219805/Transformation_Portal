@@ -995,6 +995,101 @@ class TestAtomicWriteWithFD:
 
         assert output_path.exists()
 
+    def test_descriptor_number_reused_after_writer_close_is_not_closed(self, tmp_path):
+        """A writer-closed descriptor whose number now names another file must stay open."""
+        output_path = tmp_path / "reused.bin"
+        unrelated: dict[str, int] = {}
+
+        def writer_func(fd, temp_path):
+            os.close(fd)
+            temp_path.write_bytes(b"payload")
+            # Another thread opening a file now is handed the lowest free number.
+            unrelated["fd"] = os.open(tmp_path / "unrelated.log", os.O_WRONLY | os.O_CREAT, 0o644)
+            unrelated["same_number"] = unrelated["fd"] == fd
+
+        atomic_write_with_fd(output_path, writer_func)
+
+        try:
+            assert unrelated["same_number"]
+            assert os.write(unrelated["fd"], b"still open\n") == len(b"still open\n")
+        finally:
+            os.close(unrelated["fd"])
+        assert output_path.read_bytes() == b"payload"
+
+    def test_keyboard_interrupt_cleans_up_temp_file_and_descriptor(self, tmp_path):
+        """A BaseException from the writer must not leak the temp file or its descriptor."""
+        output_path = tmp_path / "interrupted.bin"
+        seen: dict[str, object] = {}
+
+        def interrupted_writer(fd, temp_path):
+            os.write(fd, b"partial")
+            seen["fd"] = fd
+            seen["identity"] = os.fstat(fd)
+            raise KeyboardInterrupt
+
+        with pytest.raises(KeyboardInterrupt):
+            atomic_write_with_fd(output_path, interrupted_writer)
+
+        assert not output_path.exists()
+        assert list(tmp_path.glob(".tmp_*")) == []
+        try:
+            current = os.fstat(seen["fd"])
+        except OSError:
+            current = None
+        assert current is None or not os.path.samestat(current, seen["identity"])
+
+
+class TestNonByteWritersAreDurable:
+    """Every publishing helper fsyncs the temp file before the rename and the directory after it."""
+
+    @staticmethod
+    def _record_durability(monkeypatch) -> list[str]:
+        events: list[str] = []
+        real_fsync = io_atomic.os.fsync
+        real_replace = io_atomic.os.replace
+
+        def record_fsync(descriptor):
+            events.append("fsync-dir" if stat.S_ISDIR(os.fstat(descriptor).st_mode) else "fsync-file")
+            real_fsync(descriptor)
+
+        def record_replace(source, destination):
+            events.append("replace")
+            real_replace(source, destination)
+
+        monkeypatch.setattr(io_atomic.os, "fsync", record_fsync)
+        monkeypatch.setattr(io_atomic.os, "replace", record_replace)
+        return events
+
+    @pytest.mark.parametrize("create_file", [False, True])
+    def test_atomic_temp_file(self, tmp_path, monkeypatch, create_file):
+        events = self._record_durability(monkeypatch)
+        output_path = tmp_path / "depth.png"
+
+        with atomic_temp_file(output_path, suffix=".png", create_file=create_file) as temp_path:
+            temp_path.write_bytes(b"png-bytes")
+
+        assert events == ["fsync-file", "replace", "fsync-dir"]
+        assert output_path.read_bytes() == b"png-bytes"
+
+    @pytest.mark.skipif(not HAS_PIL, reason="Pillow required")
+    def test_atomic_write_pil_png(self, tmp_path, monkeypatch):
+        events = self._record_durability(monkeypatch)
+        output_path = tmp_path / "pbr.png"
+
+        atomic_write_pil_png(output_path, Image.new("L", (8, 8)))
+
+        assert events == ["fsync-file", "replace", "fsync-dir"]
+        assert Image.open(output_path).size == (8, 8)
+
+    def test_atomic_write_with_fd(self, tmp_path, monkeypatch):
+        events = self._record_durability(monkeypatch)
+        output_path = tmp_path / "fd.bin"
+
+        atomic_write_with_fd(output_path, lambda fd, _path: os.write(fd, b"abc"))
+
+        assert events == ["fsync-file", "replace", "fsync-dir"]
+        assert output_path.read_bytes() == b"abc"
+
 
 class TestEdgeCases:
     """Test edge cases and error conditions."""

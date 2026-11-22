@@ -559,6 +559,77 @@ class TestManifestDAGForwardCompatibility:
         assert enhanced_img.parent_artifact_hash == depth_hash  # Points to depth
 
 
+class TestManifestLoadValidation:
+    """Inconsistent or invalid manifest values are rejected on load (finding I-5)."""
+
+    @staticmethod
+    def _manifest(**overrides) -> dict:
+        image = {
+            "file_path": "a.tiff",
+            "content_hash": "0" * 64,
+            "input_format": "TIFF",
+            "color_space": "linear_sRGB",
+            "dimensions": [4, 6, 3],
+            "value_range": [0.0, 1.5],
+        }
+        image.update(overrides.pop("image", {}))
+        dataset = {
+            "name": "d",
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+            "total_images": 1,
+            "gamma": 1.0,
+        }
+        dataset.update(overrides.pop("dataset", {}))
+        return {"schema_version": "1.0.0", "dataset": dataset, "images": [image]}
+
+    @staticmethod
+    def _write(tmp_path: Path, data: dict) -> Path:
+        manifest_path = tmp_path / "manifest.json"
+        manifest_path.write_text(json.dumps(data), encoding="utf-8")
+        return manifest_path
+
+    def test_consistent_manifest_loads(self, tmp_path: Path):
+        manifest = ManifestSchema.from_file(self._write(tmp_path, self._manifest()))
+
+        assert manifest.total_images == 1
+        assert manifest.get_images()[0].value_range == (0.0, 1.5)
+
+    @pytest.mark.parametrize(
+        "overrides, message",
+        [
+            ({"dataset": {"total_images": 1000}}, "total_images is 1000 but the manifest lists 1 images"),
+            ({"dataset": {"total_images": 0}}, "total_images is 0 but the manifest lists 1 images"),
+            ({"dataset": {"gamma": float("nan")}}, "gamma=1.0"),
+            ({"image": {"dimensions": [-4, 0, 3]}}, "Height and width must be positive"),
+            ({"image": {"dimensions": [4, 0, 3]}}, "Height and width must be positive"),
+            ({"image": {"value_range": [5.0, -1.0]}}, "min must not exceed max"),
+            ({"image": {"value_range": [0.0, float("nan")]}}, "value_range must be finite"),
+            ({"image": {"value_range": [0.0, float("inf")]}}, "value_range must be finite"),
+        ],
+    )
+    def test_invalid_manifest_is_rejected(self, tmp_path: Path, overrides: dict, message: str):
+        manifest_path = self._write(tmp_path, self._manifest(**overrides))
+
+        with pytest.raises(ManifestError, match=message):
+            ManifestSchema.from_file(manifest_path)
+
+    def test_builder_rejects_invalid_value_range(self):
+        builder = DatasetManifestBuilder(name="d").add_image(
+            ImageManifestEntry(
+                file_path="a.tiff",
+                content_hash="0" * 64,
+                input_format="TIFF",
+                color_space="linear_sRGB",
+                dimensions=(4, 6, 3),
+                value_range=(2.0, 1.0),
+            )
+        )
+
+        with pytest.raises(ManifestError, match="min must not exceed max"):
+            builder.build()
+
+
 # Pytest markers
 pytestmark = [
     pytest.mark.unit,  # Fast unit tests

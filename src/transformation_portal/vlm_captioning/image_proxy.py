@@ -60,6 +60,23 @@ def _proxy_suffix(format_value: ProxyFormat) -> str:
     return ".jpg" if format_value == "jpeg" else ".png"
 
 
+def _to_rgb(image: Image.Image) -> Image.Image:
+    """Convert a decoded image to 8-bit RGB without clipping 16-bit integer data.
+
+    Pillow's ``convert("RGB")`` clips ``I;16`` samples at 255, so any 16-bit
+    grayscale master (TIFF or PNG) became a white proxy. ``I;16`` modes are
+    unsigned with a 65535 full scale, which maps exactly onto 0..255.
+    """
+    if image.mode.startswith("I;16"):
+        # Lazy: readiness and metadata paths import this module and must stay free of numerical runtimes.
+        import numpy as np
+
+        samples = np.asarray(image).astype(np.uint32)
+        scaled = ((samples * 255 + 32767) // 65535).astype(np.uint8)
+        return Image.fromarray(scaled).convert("RGB")
+    return image.convert("RGB")
+
+
 def build_vlm_image_proxy(
     source_path: Path,
     output_dir: Path,
@@ -111,7 +128,7 @@ def build_vlm_image_proxy(
 
     try:
         with Image.open(source) as image:
-            rgb = ImageOps.exif_transpose(image).convert("RGB")
+            rgb = _to_rgb(ImageOps.exif_transpose(image))
             if max(rgb.size) > max_side_px:
                 rgb.thumbnail((max_side_px, max_side_px), Image.Resampling.LANCZOS)
             save_kwargs: dict[str, object] = {}

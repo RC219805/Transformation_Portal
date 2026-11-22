@@ -149,6 +149,22 @@ class TestFindDepthMap:
         assert "scene_a/test_image_depth.png" in message
         assert "scene_b/test_image_depth.png" in message
 
+    @pytest.mark.regression
+    def test_find_depth_map_treats_glob_metacharacters_in_stem_literally(self, tmp_path):
+        """LC-14: '[', ']' in an image stem must not act as glob syntax in the nested search."""
+        depth_dir = tmp_path / "depth"
+        nested = depth_dir / "batch"
+        nested.mkdir(parents=True)
+        own_depth = nested / "IMG[1]_depth.png"
+        own_depth.touch()
+        (nested / "IMG1_depth.png").touch()
+
+        assert find_depth_map(depth_dir, "IMG[1]") == own_depth
+
+        (nested / "IMG1_depth.png").unlink()
+        assert find_depth_map(depth_dir, "IMG[1]") == own_depth
+        assert find_depth_map(depth_dir, "IMG?") is None
+
     def test_find_depth_map_no_directory(self):
         """Test behavior when depth_dir is None or doesn't exist."""
         assert find_depth_map(None, "test") is None
@@ -1457,3 +1473,74 @@ class TestEnhanceImage:
         assert loaded.dtype == np.float32
         assert loaded.max() == 0.0
         assert loaded.min() == 0.0
+
+
+def _write_png16(path: Path, samples: np.ndarray) -> None:
+    """Encode a 16-bit gray (H, W) or RGB (H, W, 3) PNG without optional codecs."""
+    import struct
+    import zlib
+
+    color_type = 0 if samples.ndim == 2 else 2
+    rows = samples.astype(">u2").reshape(samples.shape[0], -1)
+    raw = b"".join(b"\x00" + row.tobytes() for row in rows)
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+
+    ihdr = struct.pack(">IIBBBBB", samples.shape[1], samples.shape[0], 16, color_type, 0, 0, 0)
+    path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+class TestSixteenBitPngBitDepth:
+    """Regression for LC-04: 16-bit PNG precision must be detected and reported."""
+
+    @staticmethod
+    def _samples(rgb: bool) -> np.ndarray:
+        ramp = np.linspace(8000, 56000, 12 * 12).round().astype(np.uint16).reshape(12, 12)
+        return np.stack([ramp, ramp[::-1], ramp.T], axis=-1) if rgb else ramp
+
+    def test_detects_16bit_rgb_png_from_ihdr(self, tmp_path):
+        from transformation_portal.lux_depth_v3.v2_enhance import detect_input_bit_depth, infer_v2_output_bit_depth
+
+        path = tmp_path / "rgb16.png"
+        _write_png16(path, self._samples(rgb=True))
+        eight_bit = tmp_path / "rgb8.png"
+        Image.fromarray(np.full((12, 12, 3), 128, dtype=np.uint8)).save(eight_bit)
+
+        with Image.open(path) as opened:
+            assert opened.mode == "RGB"  # Pillow's 8-bit proxy of a 16-bit PNG
+            assert detect_input_bit_depth(opened) == 16
+        assert infer_v2_output_bit_depth(path) == 16
+        with Image.open(eight_bit) as opened:
+            assert detect_input_bit_depth(opened) == 8
+        assert infer_v2_output_bit_depth(eight_bit) == 8
+
+    @pytest.mark.parametrize("rgb", [True, False], ids=["rgb16", "gray16"])
+    def test_implicit_output_preserves_16bit_png(self, tmp_path, rgb):
+        input_path = tmp_path / "input16.png"
+        _write_png16(input_path, self._samples(rgb=rgb))
+
+        report = enhance_image(input_path, tmp_path / "out.png", input_color="auto_assume_srgb")
+
+        bit_depth = report["bit_depth"]
+        assert bit_depth["input_bits_per_sample"] == 16
+        assert bit_depth["output_bits_per_sample"] == 16
+        assert bit_depth["input_dtype"] == "uint16"
+        assert bit_depth["output_dtype"] == "uint16"
+        assert bit_depth["quality_firewall_active"] is True
+        assert Path(report["output"]).suffix == ".tif"
+        assert report["io"]["save_degraded"] is False
+
+    def test_explicit_8bit_output_records_downgrade(self, tmp_path):
+        input_path = tmp_path / "input16.png"
+        _write_png16(input_path, self._samples(rgb=True))
+
+        report = enhance_image(input_path, tmp_path / "out.png", output_bit_depth=8, input_color="auto_assume_srgb")
+
+        bit_depth = report["bit_depth"]
+        assert bit_depth["input_bits_per_sample"] == 16
+        assert bit_depth["output_bits_per_sample"] == 8
+        assert bit_depth["bit_depth_preserved"] is False
+        assert bit_depth["downgrade_allowed"] is True
+        assert report["io"]["save_degraded"] is True
+        assert report["io"]["save_degradation_reason"] == "explicit_output_bit_depth"

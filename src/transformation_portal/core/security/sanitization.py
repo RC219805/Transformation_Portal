@@ -30,6 +30,10 @@ def sanitize_filename(filename: str, replacement: str = "_") -> str:
     Make a string safe for use as a filename.
 
     Removes dangerous characters like / \\ : * ? " < > |
+
+    Raises:
+        ValidationError: If nothing is left of the name, as for ".." or "/".
+            An empty name joined to a directory is the directory itself.
     """
     # 1. Strip path components (we only want the name)
     name = Path(filename).name
@@ -42,6 +46,9 @@ def sanitize_filename(filename: str, replacement: str = "_") -> str:
     # 3. Prevent hidden files
     while clean_name.startswith("."):
         clean_name = clean_name[1:]
+
+    if not clean_name:
+        raise ValidationError(f"Filename is empty after sanitization: {filename!r}")
 
     # 4. Truncate length
     return clean_name[:255]

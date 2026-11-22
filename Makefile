@@ -29,6 +29,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
+.PHONY: test-upload-recovery-services
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-artifact-s3-contract test-orchestrator-postgres-contract test-orchestrator-postgres-app-contract test-worker-redis-contract test-frontdoor-redis-contract test-paid-pilot-services-contract run-managed-paid-pilot-gate run-orchestrator-worker test-portal-contract test-frontdoor-contract test-accessibility-browser test-archive-gate-contract db-upgrade db-revision seed-frontdoor-user run-frontdoor-local run-backend-local run-backend-local-noreload dev-write-env dev-start dev-stop check-vercel-env validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness benchmark-unified-luxury-batch-io coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality check-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-python-headers check-yaml-governance check-stale-docs check-doc-heading-links lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml install-fastvlm-runtime check-fastvlm-runtime docs docs-clean \
@@ -388,6 +389,16 @@ test-orchestrator-postgres-app-contract:
 		exit 1; \
 	fi
 	@TP_TEST_POSTGRES_URL="$(TP_TEST_POSTGRES_URL)" "$(PY)" -m pytest -q tests/orchestrator/test_postgres_app_authority.py -m unit
+
+# Request-bound upload receipts require a dedicated database migrated through
+# 0010_upload_receipts; the service fixture refuses non-*_test databases.
+test-upload-recovery-services:
+	@if [ -z "$(TP_UPLOAD_RECEIPT_TEST_DATABASE_URL)" ]; then \
+		echo "ERROR: set TP_UPLOAD_RECEIPT_TEST_DATABASE_URL to a dedicated migrated *_test database."; \
+		exit 1; \
+	fi
+	@PYTHONPATH=.:src TP_UPLOAD_RECEIPT_TEST_DATABASE_URL="$(TP_UPLOAD_RECEIPT_TEST_DATABASE_URL)" "$(PY)" -m pytest -q tests/orchestrator/test_upload_receipt_services.py
+
 
 # Phase 2.B - durable queue broker. Requires TP_TEST_REDIS_URL pointing at an
 # empty Redis database (typically the docker-compose `redis` service). The

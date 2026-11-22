@@ -122,8 +122,11 @@ def _apply_enable_seam_blending(node: dict, params: dict) -> dict[str, Any]:
     config = node.setdefault("config", {})
     changes = {}
 
+    # Read the previous value before overwriting it; the patch record is the
+    # only place it survives.
+    old_enabled = config.get("seam_blending")
     config["seam_blending"] = True
-    changes["seam_blending"] = {"old": config.get("seam_blending"), "new": True}
+    changes["seam_blending"] = {"old": old_enabled, "new": True}
 
     if "blend_radius" in params:
         old = config.get("blend_radius")
@@ -138,8 +141,9 @@ def _apply_apply_denoising(node: dict, params: dict) -> dict[str, Any]:
     config = node.setdefault("config", {})
     changes = {}
 
+    old_enabled = config.get("denoising")
     config["denoising"] = True
-    changes["denoising"] = {"old": config.get("denoising"), "new": True}
+    changes["denoising"] = {"old": old_enabled, "new": True}
 
     if "strength" in params:
         old = config.get("denoise_strength")
@@ -221,10 +225,12 @@ def _apply_flag_for_review(node: dict, params: dict) -> dict[str, Any]:
     config = node.setdefault("config", {})
     changes = {}
 
+    old_flag = config.get("needs_review", False)
+    old_reason = config.get("review_reason")
     config["needs_review"] = True
     config["review_reason"] = params.get("reason", "Flagged by self-healing")
-    changes["needs_review"] = {"old": False, "new": True}
-    changes["review_reason"] = {"old": None, "new": config["review_reason"]}
+    changes["needs_review"] = {"old": old_flag, "new": True}
+    changes["review_reason"] = {"old": old_reason, "new": config["review_reason"]}
 
     return changes
 

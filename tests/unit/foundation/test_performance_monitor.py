@@ -113,6 +113,30 @@ class TestMetricsCollector:
             col.record_metric(f"m{i}", MetricType.LATENCY, float(i), "ms")
         assert len(col.metrics) <= 5
 
+    def test_record_metric_at_cap_keeps_newest_and_get_metrics_limit(self):
+        """M-21: at the cap the oldest metric is evicted (ring buffer) and queries still slice."""
+        from transformation_portal.foundation.performance_monitor import MetricsCollector, MetricType
+
+        col = MetricsCollector(max_metrics=3)
+        for i in range(7):
+            col.record_metric(f"m{i}", MetricType.LATENCY, float(i), "ms")
+        assert [m.name for m in col.metrics] == ["m4", "m5", "m6"]
+        assert [m.name for m in col.get_metrics(limit=2)] == ["m5", "m6"]
+        assert [m.value for m in col.get_metrics(name_filter="m5")] == [5.0]
+
+    def test_record_metric_at_cap_does_not_rebuild_storage(self):
+        """M-21: reaching the cap must not re-slice (copy) the whole metric list per record."""
+        from transformation_portal.foundation.performance_monitor import MetricsCollector, MetricType
+
+        col = MetricsCollector(max_metrics=4)
+        for i in range(4):
+            col.record_metric("m", MetricType.LATENCY, float(i), "ms")
+        storage = col.metrics
+        for i in range(10):
+            col.record_metric("m", MetricType.LATENCY, float(i), "ms")
+        assert col.metrics is storage
+        assert len(col.metrics) == 4
+
     def test_record_operation_creates_profile(self):
         from transformation_portal.foundation.performance_monitor import MetricsCollector
 
@@ -302,6 +326,40 @@ class TestPerformanceMonitor:
             pass
 
         assert monitor.collector.get_operation_profile("disabled_ctx") is None
+
+    def test_profile_context_enabled_inside_disabled_block_records_nothing(self):
+        """M-21: enabling inside a block entered while disabled must not record epoch-sized elapsed time."""
+        from transformation_portal.foundation.performance_monitor import PerformanceMonitor
+
+        monitor = PerformanceMonitor(device=CPU_DEVICE)
+        monitor.disable()
+        with monitor.profile_context("toggled_ctx"):
+            monitor.enable()
+
+        assert monitor.collector.get_operation_profile("toggled_ctx") is None
+
+    def test_profile_context_disabled_inside_block_records_nothing(self):
+        from transformation_portal.foundation.performance_monitor import PerformanceMonitor
+
+        monitor = PerformanceMonitor(device=CPU_DEVICE)
+        with monitor.profile_context("disabled_mid_ctx"):
+            monitor.disable()
+
+        assert monitor.collector.get_operation_profile("disabled_mid_ctx") is None
+
+    def test_profile_context_elapsed_uses_monotonic_clock(self, monkeypatch):
+        """M-21: a wall-clock jump inside the block must not distort the measured duration."""
+        from transformation_portal.foundation import performance_monitor as pm
+
+        wall = iter([1_000_000.0, 0.0, 0.0, 0.0])
+        monkeypatch.setattr(pm.time, "time", lambda: next(wall, 0.0))
+        monitor = pm.PerformanceMonitor(device=CPU_DEVICE)
+        with monitor.profile_context("clock_ctx"):
+            pass
+
+        profile = monitor.collector.get_operation_profile("clock_ctx")
+        assert profile is not None
+        assert 0.0 <= profile.total_time_seconds < 60.0
 
     def test_reset_clears_collector(self):
         from transformation_portal.foundation.performance_monitor import PerformanceMonitor

@@ -55,7 +55,7 @@ def write_sidecar(
 
     try:
         # Write to temp file
-        with open(temp_path, "w") as f:
+        with open(temp_path, "w", encoding="utf-8") as f:
             f.write(sidecar.to_json_deterministic())
 
             # Fsync if requested
@@ -97,7 +97,7 @@ def load_sidecar(
     if not sidecar_path.exists():
         raise FileNotFoundError(f"Sidecar not found: {sidecar_path}")
 
-    with open(sidecar_path, "r") as f:
+    with open(sidecar_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     if schema_type == "provenance":

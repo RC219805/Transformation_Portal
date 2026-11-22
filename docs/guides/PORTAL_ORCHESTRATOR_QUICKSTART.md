@@ -124,6 +124,10 @@ it does not change the existing response bodies for `/healthz`, `/ready`, or
 - `POST /v1/jobs/{id}/cancel` request cancellation.
 - `GET /v1/jobs/{id}/events` SSE events: `state`, `log`, `progress`, `artifact`, `done`.
 - `GET /v1/jobs/{id}/artifacts/{path}` retrieves an authorized indexed artifact.
+- `DELETE /v1/jobs/{id}/artifacts` removes the authorized job's artifacts. Legacy
+  deletion returns `409 CONFLICT` with reason `ambiguous_artifact_ownership`
+  when retained jobs have overlapping run windows and output roots. Retention
+  preserves those files as well.
 
 Quiet SSE streams also emit an ephemeral `heartbeat` event every 15 seconds
 alongside the heartbeat comment. Heartbeats do not persist or advance replay
@@ -148,6 +152,9 @@ Shutdown cancellation publishes `canceled` after child cleanup. Runner failures
 also clean up the child before publishing terminal artifacts and events. If
 another path already published a terminal outcome, cleanup preserves its state,
 exit code, and error and emits no second `done` event.
+Legacy lease reclaim uses durable completion markers. A subprocess may report
+success before artifact indexing, mirroring, and the `done` event finish. If
+the worker is lost in that interval, reconciliation records `worker_lost`.
 
 S3 fingerprinting checks both object metadata and streamed bytes against its
 per-object byte budget. Oversized content reports `skipped_size`; other size
@@ -157,6 +164,7 @@ disagreements between HEAD metadata and GET content report `unavailable`.
 
 - `GET /ready` and `GET /healthz` are liveness probes. They tell you the service answered, not that a given pipeline is dispatchable.
 - `GET /v1/readiness` is the execution-readiness contract. It reports per-pipeline `ready`, `degraded`, or `blocked` state plus `missing_prerequisites`, canonical command mapping, runner details, and safe operator notes.
+- `GET /v1/readiness` needs no API key, but when `TP_API_KEY` is configured a caller without a valid key gets the matrix with host paths removed: `runner_details.python_executable`, `runner_details.script_path` and `runner_details.command` are omitted, and the DA3 canary runtime note does not name the runtime path. Send the key to see them.
 - `lux-depth-v3` reports `base` readiness and a separate `canary_status`; canary unavailability does not block the safe local execution lane.
 - `archive-gate-a` is normally `degraded` until an archive index is supplied.
 - `archive-gate-b` and `archive-gate-c` are blocked by default until a rights-manifest JSONL is available.

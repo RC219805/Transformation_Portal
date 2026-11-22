@@ -125,7 +125,9 @@ SAM2_AUTO_TILING_MAX_AREA_PX = 8_000_000
 SAM2_AUTO_TILING_MAX_DIM_PX = 4096
 # Reject legacy SAM2 entries that could promote geometric IoU into material
 # confidence when the semantic classifier had supplied no confidence at all.
-SEGMENTATION_CACHE_SCHEMA_VERSION = "materials-segmentation-cache.v2"
+# v3: reject entries written before degraded heuristic-fallback results were
+# excluded from the cache (they were stored under the healthy-run key).
+SEGMENTATION_CACHE_SCHEMA_VERSION = "materials-segmentation-cache.v3"
 _CACHE_MASK_CHECKSUM_CHUNK_SIZE = 1024 * 1024
 
 

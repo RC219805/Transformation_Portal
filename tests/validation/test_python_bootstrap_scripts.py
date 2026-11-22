@@ -18,6 +18,7 @@ MAKEFILE_PATH = PROJECT_ROOT / "Makefile"
 RESOLVER_PATH = PROJECT_ROOT / "scripts" / "setup" / "resolve_python_311.sh"
 DA3_RUNTIME_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "setup" / "install_da3_runtime.sh"
 DA3_RUNTIME_LOCK_PATH = PROJECT_ROOT / "requirements" / "da3-runtime-darwin-arm64.txt"
+DEPTH_PRO_RUNTIME_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "setup" / "install_depth_pro_runtime.sh"
 RAW_RUNTIME_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "setup" / "install_raw_runtime.sh"
 VALIDATION_SUITE_PATH = PROJECT_ROOT / "scripts" / "validation" / "run_full_validation_suite.sh"
 ML_STACK_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "bootstrap" / "install_ml_stack.sh"
@@ -1028,6 +1029,148 @@ def test_install_da3_runtime_can_checkout_remote_only_fetch_ref(tmp_path: Path) 
     assert "Using fetched remote ref for checkout: refs/pull/110/head -> refs/remotes/da3-runtime/fetch-ref" in result.stdout
     assert "checkout refs/remotes/da3-runtime/fetch-ref" in result.stdout
     assert "reset --hard refs/remotes/da3-runtime/fetch-ref" in result.stdout
+
+
+def _run_depth_pro_installer(
+    tmp_path: Path,
+    *args: str,
+    invoke_root: Path | None = None,
+    fake_commands: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run a copy of the installer; ``invoke_root`` is the path the checkout is reached through."""
+    repo_root = tmp_path / "repo"
+    _copy_repo_file(DEPTH_PRO_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_depth_pro_runtime.sh")
+    _write_executable(
+        repo_root / "scripts" / "setup" / "resolve_python_311.sh",
+        f"#!/bin/sh\nprintf '%s\\n' {shlex.quote(sys.executable)}\n",
+    )
+    fakebin = tmp_path / "fakebin"
+    _write_executable(fakebin / "git", "#!/bin/sh\nexit 0\n")
+    for name, body in (fake_commands or {}).items():
+        _write_executable(fakebin / name, body)
+    invoke_root = repo_root if invoke_root is None else invoke_root
+    return subprocess.run(
+        ["bash", str(invoke_root / "scripts" / "setup" / "install_depth_pro_runtime.sh"), "--skip-verify", *args],
+        cwd=invoke_root,
+        # PIP_NO_INDEX: a regressed guard must not start downloading the pinned runtime from a test.
+        env={**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin", "PIP_NO_INDEX": "1"},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_install_depth_pro_runtime_refuses_to_clear_non_venv_directory(tmp_path: Path, dry_run: bool) -> None:
+    """--venv-dir pointing at a project directory must not be wiped by ``venv --clear`` (T-09)."""
+    project = tmp_path / "my_project"
+    (project / "data").mkdir(parents=True)
+    sentinel = project / "data" / "notes.txt"
+    sentinel.write_text("irreplaceable", encoding="utf-8")
+
+    result = _run_depth_pro_installer(tmp_path, "--venv-dir", str(project), *(["--dry-run"] if dry_run else []))
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "not an existing virtualenv (no pyvenv.cfg)" in result.stderr
+    assert "-m venv --clear" not in result.stdout
+    assert sentinel.read_text(encoding="utf-8") == "irreplaceable"
+
+
+def test_install_depth_pro_runtime_force_clear_allows_non_venv_directory(tmp_path: Path) -> None:
+    project = tmp_path / "my_project"
+    (project / "data").mkdir(parents=True)
+    (project / "data" / "notes.txt").write_text("disposable", encoding="utf-8")
+
+    result = _run_depth_pro_installer(tmp_path, "--venv-dir", str(project), "--force-clear", "--dry-run")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "--force-clear: clearing non-virtualenv directory" in result.stdout
+    assert f"-m venv --clear {project}" in result.stdout
+
+
+@pytest.mark.parametrize("layout", ["absent", "empty", "venv"])
+def test_install_depth_pro_runtime_accepts_absent_empty_or_existing_venv(tmp_path: Path, layout: str) -> None:
+    venv_dir = tmp_path / "venv-depth-pro"
+    if layout != "absent":
+        venv_dir.mkdir()
+    if layout == "venv":
+        (venv_dir / "pyvenv.cfg").write_text("home = /usr/bin\n", encoding="utf-8")
+        (venv_dir / "bin").mkdir()
+
+    result = _run_depth_pro_installer(tmp_path, "--venv-dir", str(venv_dir), "--dry-run")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"-m venv --clear {venv_dir}" in result.stdout
+
+
+def test_install_depth_pro_runtime_refuses_symlinked_venv_even_with_force(tmp_path: Path) -> None:
+    target = tmp_path / "external-venv"
+    target.mkdir()
+    (target / "pyvenv.cfg").write_text("home = /usr/bin\n", encoding="utf-8")
+    sentinel = target / "must-survive"
+    sentinel.write_text("safe", encoding="utf-8")
+    link = tmp_path / "linked-venv"
+    link.symlink_to(target, target_is_directory=True)
+    ancestor_link = tmp_path / "linked-parent"
+    ancestor_link.symlink_to(tmp_path, target_is_directory=True)
+
+    direct = _run_depth_pro_installer(tmp_path, "--venv-dir", str(link), "--force-clear")
+    through_ancestor = _run_depth_pro_installer(tmp_path, "--venv-dir", str(ancestor_link / "external-venv"), "--force-clear")
+
+    assert direct.returncode == 1, direct.stdout + direct.stderr
+    assert "symlink or not a directory" in direct.stderr
+    assert through_ancestor.returncode == 1, through_ancestor.stdout + through_ancestor.stderr
+    assert "symlinked ancestor" in through_ancestor.stderr
+    assert sentinel.read_text(encoding="utf-8") == "safe"
+
+
+def test_install_depth_pro_runtime_refreshes_default_venv_in_symlinked_checkout(tmp_path: Path) -> None:
+    """A checkout reached through a symlink (e.g. /tmp on macOS) keeps its default venv refreshable (T-09)."""
+    repo_root = tmp_path / "repo"
+    default_venv = repo_root / ".venv-depth-pro"
+    (default_venv / "bin").mkdir(parents=True)
+    (default_venv / "pyvenv.cfg").write_text("home = /usr/bin\n", encoding="utf-8")
+    checkout_link = tmp_path / "checkout-link"
+    checkout_link.symlink_to(repo_root, target_is_directory=True)
+
+    refreshed = _run_depth_pro_installer(tmp_path, "--dry-run", invoke_root=checkout_link)
+
+    assert refreshed.returncode == 0, refreshed.stdout + refreshed.stderr
+    assert f"-m venv --clear {checkout_link / '.venv-depth-pro'}" in refreshed.stdout
+
+    # Only the checkout's own location is trusted: a symlinked directory inside it is still refused.
+    external = tmp_path / "external"
+    (external / "venv").mkdir(parents=True)
+    (external / "venv" / "pyvenv.cfg").write_text("home = /usr/bin\n", encoding="utf-8")
+    (repo_root / "linked-dir").symlink_to(external, target_is_directory=True)
+
+    inner = _run_depth_pro_installer(
+        tmp_path, "--dry-run", "--venv-dir", str(checkout_link / "linked-dir" / "venv"), invoke_root=checkout_link
+    )
+
+    assert inner.returncode == 1, inner.stdout + inner.stderr
+    assert "symlinked ancestor" in inner.stderr
+    assert "-m venv --clear" not in inner.stdout
+
+
+def test_install_depth_pro_runtime_fails_closed_when_venv_dir_cannot_be_listed(tmp_path: Path) -> None:
+    """A failed directory listing must not be read as an empty, clearable directory (T-09)."""
+    project = tmp_path / "my_project"
+    (project / "data").mkdir(parents=True)
+    (project / "data" / "notes.txt").write_text("irreplaceable", encoding="utf-8")
+
+    result = _run_depth_pro_installer(
+        tmp_path,
+        "--venv-dir",
+        str(project),
+        "--dry-run",
+        fake_commands={"ls": "#!/bin/sh\necho 'ls: Permission denied' >&2\nexit 2\n"},
+    )
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "cannot be listed" in result.stderr
+    assert "-m venv --clear" not in result.stdout
 
 
 def test_install_raw_runtime_uses_resolved_python_for_venv_creation(tmp_path: Path) -> None:

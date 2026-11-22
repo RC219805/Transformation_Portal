@@ -8,9 +8,12 @@ Performance benefit: 10-20x speedup for iterative workflows
 Memory usage: ~4MB per 4K depth map (FP16)
 """
 
+import copy
 import hashlib
 import logging
+import os
 import pickle
+import tempfile
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
@@ -187,11 +190,12 @@ class DepthCache:
         # Generate cache key from image content
         cache_key = self._generate_key(image)
 
-        # Try memory cache first
+        # Try memory cache first. Every caller gets its own copy so that one
+        # caller's in-place post-processing cannot corrupt the cached entry.
         result = self.memory_cache.get(cache_key)
         if result is not None:
             logger.debug(f"Memory cache hit: {cache_key[:8]}")
-            return result
+            return copy.deepcopy(result)
 
         # Try disk cache
         if use_disk or (use_disk is None and self.enable_disk_cache):
@@ -200,7 +204,7 @@ class DepthCache:
                 logger.debug(f"Disk cache hit: {cache_key[:8]}")
                 # Store in memory for faster access next time
                 self.memory_cache.put(cache_key, result)
-                return result
+                return copy.deepcopy(result)
 
         # Cache miss - compute depth
         logger.debug(f"Cache miss: {cache_key[:8]}, computing...")
@@ -232,7 +236,10 @@ class DepthCache:
         """
         Generate cache key from image content.
 
-        Uses MD5 hash of image data for fast key generation.
+        Uses MD5 hash of image data for fast key generation. Namespaced keys
+        hash the shape, the dtype and the raw pixel bytes, so images that only
+        differ in shape (40x60 vs 60x40), dtype or sub-quantum float values get
+        distinct keys. ``namespace=None`` keeps the legacy image-only key.
 
         Args:
             image: Input image
@@ -240,7 +247,16 @@ class DepthCache:
         Returns:
             Cache key (hex string)
         """
-        # Convert to bytes
+        if self.namespace is not None:
+            image = np.ascontiguousarray(image)
+            hash_obj = hashlib.md5(b"tp.depth.cache.key.v2\x00", usedforsecurity=False)
+            hash_obj.update(image.dtype.str.encode("ascii") + b"\x00")
+            hash_obj.update(repr(tuple(int(dim) for dim in image.shape)).encode("ascii") + b"\x00")
+            hash_obj.update(image.tobytes())
+            hash_obj.update(b"\x00depth-recipe\x00" + self.namespace.encode("utf-8"))
+            return hash_obj.hexdigest()
+
+        # Legacy key: image bytes only (non-uint8 images min-max normalised to 8 bit)
         if image.dtype != np.uint8:
             # Normalize to 0-255 for consistent hashing
             image_norm = (image - image.min()) / (image.max() - image.min() + 1e-8) * 255
@@ -249,12 +265,7 @@ class DepthCache:
             image_bytes = image.tobytes()
 
         # Compute hash (MD5 is used only for cache keying, not security)
-        hash_obj = hashlib.md5(image_bytes, usedforsecurity=False)
-        if self.namespace is not None:
-            hash_obj.update(b"\x00depth-recipe\x00" + self.namespace.encode("utf-8"))
-        cache_key = hash_obj.hexdigest()
-
-        return cache_key
+        return hashlib.md5(image_bytes, usedforsecurity=False).hexdigest()
 
     def _store(
         self,
@@ -263,36 +274,68 @@ class DepthCache:
         use_disk: bool = None,
     ):
         """Store depth result in cache."""
-        # Store in memory
-        self.memory_cache.put(key, result)
+        # Store a private copy in memory: the caller keeps (and may mutate) its own result
+        self.memory_cache.put(key, copy.deepcopy(result))
 
         # Store on disk if enabled
         if use_disk or (use_disk is None and self.enable_disk_cache):
             self._save_to_disk(key, result)
 
+    @staticmethod
+    def _to_disk_array(array: np.ndarray) -> np.ndarray:
+        """FP16 for space efficiency, unless the finite values do not fit in FP16 (they would become inf)."""
+        finite = array[np.isfinite(array)] if np.issubdtype(array.dtype, np.floating) else array
+        if finite.size and float(np.max(np.abs(finite))) > float(np.finfo(np.float16).max):
+            return array
+        return array.astype(np.float16)
+
     def _save_to_disk(self, key: str, result: dict):
-        """Save depth result to disk."""
+        """Save depth result to disk (temp file + atomic rename, never a partially written entry)."""
+        tmp_path: Optional[Path] = None
         try:
             cache_file = self.cache_dir / f"{key}.pkl"
 
             # Convert to FP16 for space efficiency
             result_fp16 = result.copy()
             if "depth" in result_fp16:
-                result_fp16["depth"] = result_fp16["depth"].astype(np.float16)
+                result_fp16["depth"] = self._to_disk_array(result_fp16["depth"])
             if "depth_raw" in result_fp16:
-                result_fp16["depth_raw"] = result_fp16["depth_raw"].astype(np.float16)
+                result_fp16["depth_raw"] = self._to_disk_array(result_fp16["depth_raw"])
 
-            with open(cache_file, "wb") as f:
+            fd, tmp_name = tempfile.mkstemp(prefix=f".{key}.", suffix=".tmp", dir=self.cache_dir)
+            tmp_path = Path(tmp_name)
+            with os.fdopen(fd, "wb") as f:
                 pickle.dump(result_fp16, f, protocol=pickle.HIGHEST_PROTOCOL)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, cache_file)
+            tmp_path = None
 
             logger.debug(f"Saved to disk cache: {key[:8]}")
 
         except Exception as e:
             logger.warning(f"Failed to save disk cache: {e}")
+        finally:
+            if tmp_path is not None:
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass  # Temp file already gone - not critical
 
     def _validate_disk_entry(self, cache_file: Path, expected_type: str = "depth") -> bool:
         """
         Validate disk-cached depth entry.
+
+        See :meth:`_read_disk_entry` for the checks.
+
+        Returns:
+            True if valid, False otherwise
+        """
+        return self._read_disk_entry(cache_file, expected_type) is not None
+
+    def _read_disk_entry(self, cache_file: Path, expected_type: str = "depth") -> Optional[dict]:
+        """
+        Load and validate a disk-cached depth entry (unpickled once).
 
         Checks:
         - File exists and is readable
@@ -305,30 +348,30 @@ class DepthCache:
             expected_type: Expected type of cache entry (for validation)
 
         Returns:
-            True if valid, False otherwise
+            The validated entry, or None if it is missing or invalid
         """
         try:
             # Check file exists
             if not cache_file.exists():
                 logger.debug(f"Validation failed: file not found {cache_file}")
-                return False
+                return None
 
             # Check file is readable
             if not cache_file.is_file():
                 logger.debug(f"Validation failed: not a file {cache_file}")
-                return False
+                return None
 
             # Check file size is reasonable
             file_size = cache_file.stat().st_size
             if file_size < 100:
                 logger.warning(f"Validation failed: file too small {cache_file} ({file_size} bytes)")
-                return False
+                return None
             if file_size > self.MAX_DISK_CACHE_SIZE:
                 logger.warning(
                     f"Validation failed: file too large {cache_file} "
                     f"({file_size / (1024*1024):.1f} MB > {self.MAX_DISK_CACHE_SIZE / (1024*1024):.0f} MB)"
                 )
-                return False
+                return None
 
             # Try to load pickle and validate structure
             try:
@@ -336,12 +379,12 @@ class DepthCache:
                     result = safe_pickle_load(f)
             except Exception as e:
                 logger.warning(f"Validation failed: cannot unpickle {cache_file}: {e}")
-                return False
+                return None
 
             # Validate structure
             if not isinstance(result, dict):
                 logger.warning(f"Validation failed: result is not a dict in {cache_file}")
-                return False
+                return None
 
             # Check for expected keys based on type
             if expected_type == "depth":
@@ -351,20 +394,20 @@ class DepthCache:
                         f"Validation failed: missing required keys in {cache_file}. "
                         f"Expected one of {required_keys}, got {list(result.keys())}"
                     )
-                    return False
+                    return None
                 if "depth" in result and not self._is_valid_cache_value(result["depth"]):
                     logger.warning(f"Validation failed: 'depth' has invalid type in {cache_file}")
-                    return False
+                    return None
                 if "depth_raw" in result and not self._is_valid_cache_value(result["depth_raw"]):
                     logger.warning(f"Validation failed: 'depth_raw' has invalid type in {cache_file}")
-                    return False
+                    return None
 
             logger.debug(f"Validation passed for {cache_file}")
-            return True
+            return result
 
         except Exception as e:
             logger.warning(f"Validation error for {cache_file}: {e}")
-            return False
+            return None
 
     def _load_from_disk(self, key: str) -> Optional[dict]:
         """Load depth result from disk with validation."""
@@ -374,8 +417,9 @@ class DepthCache:
             if not cache_file.exists():
                 return None
 
-            # Validate entry before loading
-            if not self._validate_disk_entry(cache_file):
+            # Load and validate the entry (a single unpickle)
+            result = self._read_disk_entry(cache_file)
+            if result is None:
                 logger.warning(f"Corrupted disk cache entry, removing: {key[:8]}")
                 # Delete corrupted file
                 try:
@@ -383,10 +427,6 @@ class DepthCache:
                 except Exception as e:
                     logger.warning(f"Failed to delete corrupted cache file {cache_file}: {e}")
                 return None
-
-            # Load validated cache entry
-            with open(cache_file, "rb") as f:
-                result = safe_pickle_load(f)
 
             # Convert back to FP32
             if "depth" in result:

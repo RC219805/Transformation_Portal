@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import struct
+import zlib
 
 import numpy as np
 import pytest
@@ -23,6 +25,7 @@ from transformation_portal.lux_depth_v4.photography import (
     restore_depth_with_validity,
     restore_mask,
     srgb_to_linear,
+    validate_input_color_metadata,
     write_delivery,
 )
 
@@ -112,6 +115,42 @@ def test_png_color_key_transparency_survives_ingest_and_delivery(mode, key, tmp_
     np.testing.assert_allclose(master.pixels, srgb_to_linear(expected[..., :3].astype(np.float32) / 255))
     report = write_delivery(master, tmp_path / "delivery.tif")
     np.testing.assert_array_equal(tifffile.imread(report["path"])[..., 3], expected[..., 3].astype(np.uint16) * 257)
+
+
+def _png_chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+
+def _split_idat_png(pixels, *, idat_payload, empty_idat=0):
+    """Build a gray 8-bit PNG whose IDAT stream is split like libpng-family writers do."""
+    height, width = pixels.shape
+    raw = b"".join(b"\x00" + pixels[row].tobytes() for row in range(height))
+    stream = zlib.compress(raw, 0)
+    chunks = [_png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0))]
+    chunks += [_png_chunk(b"IDAT", stream[i : i + idat_payload]) for i in range(0, len(stream), idat_payload)]
+    chunks += [_png_chunk(b"IDAT", b"")] * empty_idat
+    return b"\x89PNG\r\n\x1a\n" + b"".join(chunks) + _png_chunk(b"IEND", b"")
+
+
+def test_png_with_more_than_8192_small_idat_chunks_is_admitted():
+    # LN-1: large libpng-written PNGs carry one 8 KiB IDAT chunk per 8 KiB of
+    # compressed data, so a flat 8192-chunk walk refused valid photographs.
+    pixels = np.random.default_rng(3).integers(0, 256, (9000, 1024), dtype=np.uint8)
+    data = _split_idat_png(pixels, idat_payload=1100)
+    assert data.count(b"IDAT") > 8192
+    metadata = validate_input_color_metadata(io.BytesIO(data), source_name="large.png", input_color="srgb")
+    assert metadata
+    master = decode_master(data, source_name="large.png", input_color="srgb")
+    assert master.pixels.shape[:2] == pixels.shape
+    np.testing.assert_allclose(master.pixels[..., 0], srgb_to_linear(pixels.astype(np.float32) / 255), atol=1e-6)
+
+
+def test_png_chunk_bomb_still_fails_closed():
+    data = _split_idat_png(np.zeros((4, 4), np.uint8), idat_payload=1 << 20, empty_idat=20_000)
+    with pytest.raises(ValueError, match="preflight chunk budget"):
+        validate_input_color_metadata(io.BytesIO(data), source_name="bomb.png", input_color="srgb")
+    with pytest.raises(ValueError, match="preflight chunk budget"):
+        decode_master(data, source_name="bomb.png", input_color="srgb")
 
 
 def test_float_master_retains_out_of_range_until_delivery(tmp_path):
@@ -291,6 +330,19 @@ def test_jpeg_limit_is_checked_before_pixel_decode(monkeypatch):
     monkeypatch.setattr(JpegImagePlugin.JpegImageFile, "load", forbidden_decode)
     with pytest.raises(ValueError, match="max_pixels"):
         decode_master(stream.getvalue(), source_name="large.jpg", max_pixels=100)
+
+
+def test_pixel_limit_error_carries_geometry_and_survives_pickling():
+    import pickle
+
+    from transformation_portal.lux_depth_v4.photography import DecodedPixelLimitError
+
+    with pytest.raises(DecodedPixelLimitError) as excinfo:
+        decode_master(_tiff(np.ones((28, 42, 3), np.uint16)), source_name="large.tif", max_pixels=100)
+    assert (excinfo.value.height, excinfo.value.width) == (28, 42)
+    restored = pickle.loads(pickle.dumps(excinfo.value))
+    assert type(restored) is DecodedPixelLimitError
+    assert (restored.height, restored.width, str(restored)) == (28, 42, "Decoded image dimensions exceed max_pixels")
 
 
 def test_materials_default_and_uncertain_evidence_abstain():

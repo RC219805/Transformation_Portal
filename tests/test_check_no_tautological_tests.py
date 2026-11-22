@@ -194,3 +194,30 @@ def test_main_handles_syntax_error_without_crashing(tmp_path):
     _write(tmp_path, "test_broken.py", "def test_x(:\n    invalid syntax\n")
     # Syntax errors are not the lint's job; should pass clean here.
     assert main(["check_no_tautological_tests.py", str(tmp_path)]) == 0
+
+
+def test_main_fails_on_nonexistent_root(tmp_path, capsys):
+    """A mistyped root must not scan nothing and pass silently."""
+    _write(tmp_path, "test_dirty.py", "def test_x():\n    assert True\n")
+    code = main(["check_no_tautological_tests.py", str(tmp_path / "testz")])
+    assert code == 2
+    assert "does not exist" in capsys.readouterr().err
+
+
+def test_main_fails_when_any_root_is_missing(tmp_path):
+    _write(tmp_path, "test_clean.py", "def test_x():\n    assert 1 + 1 == 2\n")
+    assert main(["check_no_tautological_tests.py", str(tmp_path), str(tmp_path / "missing")]) == 2
+
+
+def test_main_inspects_conftest(tmp_path, capsys):
+    nested = tmp_path / "pkg"
+    nested.mkdir()
+    _write(nested, "conftest.py", "import pytest\n\n@pytest.fixture\ndef thing():\n    assert True\n    return 1\n")
+    code = main(["check_no_tautological_tests.py", str(tmp_path)])
+    assert code == 1
+    assert "conftest.py" in capsys.readouterr().err
+
+
+def test_main_inspects_conftest_passed_as_file(tmp_path):
+    path = _write(tmp_path, "conftest.py", "def helper():\n    assert 1\n")
+    assert main(["check_no_tautological_tests.py", str(path)]) == 1

@@ -158,7 +158,9 @@ class PostgresJobRepository(JobRepository):
         async with factory() as session:
             yield session
 
-    async def create(self, record: JobRecord) -> None:
+    async def create(
+        self, record: JobRecord, *, upload_read_paths: tuple[str, ...] = (), upload_read_base: Path | None = None
+    ) -> None:
         record_snapshot = record.copy()
         async with self._session() as session:
             session.add(
@@ -190,7 +192,16 @@ class PostgresJobRepository(JobRepository):
                         absolute_path=str(absolute),
                     )
                 )
+            from transformation_portal.orchestrator.upload_receipts import bind_upload_references
+
             try:
+                await bind_upload_references(
+                    session,
+                    record_snapshot,
+                    str(record_snapshot.effective_request.get("tenant_id") or ""),
+                    read_paths=upload_read_paths,
+                    upload_read_base=upload_read_base,
+                )
                 await session.commit()
             except IntegrityError as exc:
                 await session.rollback()
@@ -571,6 +582,15 @@ class PostgresJobEventStore(JobEventStore):
                     payload=deepcopy(row.payload or {}),
                     created_at=row.created_at,
                 )
+
+    async def purge(self, job_id: str) -> None:
+        async with self._session() as session:
+            async with session.begin():
+                # Counter before event rows, matching repository delete and
+                # terminal publication. ``PostgresJobRepository.delete`` has
+                # normally removed both already; this stays idempotent.
+                await session.execute(delete(JobEventSequenceModel).where(JobEventSequenceModel.job_id == job_id))
+                await session.execute(delete(JobEventModel).where(JobEventModel.job_id == job_id))
 
     async def reset(self) -> None:
         async with self._session() as session:

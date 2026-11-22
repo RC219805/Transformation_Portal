@@ -24,6 +24,7 @@ from typing import Optional
 
 import numpy as np
 
+from ._atomic_io import atomic_open
 from .contracts import Scene3D
 
 logger = logging.getLogger(__name__)
@@ -116,7 +117,7 @@ class MeshExporter:
         header = "\n".join(header_lines) + "\n"
 
         # Write file
-        with open(output_path, "wb" if binary else "w") as f:
+        with atomic_open(output_path, "wb" if binary else "w") as f:
             if binary:
                 f.write(header.encode("ascii"))
                 # Write binary vertex data
@@ -204,7 +205,7 @@ class MeshExporter:
         logger.info(f"Exporting {N} vertices to OBJ: {output_path}")
 
         # Write OBJ file
-        with open(output_path, "w") as f:
+        with atomic_open(output_path, "w") as f:
             f.write(f"# 3D Gaussian Splatting Export\n")
             f.write(f"# RMSE: {scene.rmse:.6f}\n")
             f.write(f"# Quality Score: {scene.quality_score:.1f}/100\n")
@@ -229,7 +230,7 @@ class MeshExporter:
         # Write MTL file with vertex colors
         if vertex_colors:
             mtl_path = output_path.with_suffix(".mtl")
-            with open(mtl_path, "w") as f:
+            with atomic_open(mtl_path, "w") as f:
                 f.write("# Vertex color materials\n\n")
                 for i in range(N):
                     f.write(f"newmtl color_{i}\n")
@@ -269,7 +270,7 @@ class MeshExporter:
             cameras_data.append(cam_dict)
 
         # Write JSON
-        with open(output_path, "w") as f:
+        with atomic_open(output_path, "w") as f:
             json.dump(
                 {
                     "num_cameras": len(cameras_data),

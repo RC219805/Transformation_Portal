@@ -10,9 +10,12 @@ A Stage represents a discrete, cacheable unit of work with:
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
+import os
+import secrets
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -105,8 +108,12 @@ class StageResult:
     timestamp: float = field(default_factory=time.time)
 
     def is_success(self) -> bool:
-        """Check if execution was successful."""
-        return self.status in (StageStatus.COMPLETED, StageStatus.CACHED)
+        """Check if execution was successful.
+
+        A skipped stage had nothing to do and passes its artifacts on, so it
+        does not fail the pipeline it is part of.
+        """
+        return self.status in (StageStatus.COMPLETED, StageStatus.CACHED, StageStatus.SKIPPED)
 
     def get_artifact(self, name: str, default: Any = None) -> Any:
         """Get output artifact."""
@@ -222,8 +229,9 @@ class Stage(ABC):
             if result.status == StageStatus.PENDING:
                 result.status = StageStatus.COMPLETED
 
-            # Save to cache if successful
-            if use_legacy_cache and context.cache_enabled and context.cache_dir and result.is_success():
+            # Save to cache if successful (a skipped stage did no work worth caching)
+            cacheable = result.is_success() and result.status != StageStatus.SKIPPED
+            if use_legacy_cache and context.cache_enabled and context.cache_dir and cacheable:
                 self._save_to_cache(result, cache_key, context.cache_dir)
 
             return result
@@ -330,8 +338,19 @@ class Stage(ABC):
                 "timestamp": result.timestamp,
             }
 
-            with open(cache_path, "w") as f:
-                json.dump(data, f, indent=2)
+            # Serialize into a private file and rename it into place. A result
+            # that turns out not to be JSON-serializable must not leave half an
+            # entry under the cache key for every later run to trip over.
+            staging_path = cache_dir / f".stage-cache-{secrets.token_hex(8)}.tmp"
+            fd = os.open(staging_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+            try:
+                with os.fdopen(fd, "w") as f:
+                    json.dump(data, f, indent=2)
+                os.replace(staging_path, cache_path)
+            except BaseException:
+                with contextlib.suppress(OSError):
+                    staging_path.unlink()
+                raise
 
         except Exception as e:
             self.logger.warning(f"Failed to save cache: {e}")

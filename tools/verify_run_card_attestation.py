@@ -127,6 +127,9 @@ def main() -> int:
     native_requested = args.native_attestation is not None
     dsse_requested = args.dsse_attestation is not None
     sigstore_bundle_requested = args.sigstore_bundle is not None or args.require_sigstore_bundle
+    signature_note = "GPG signature verified" if args.gpg else "signature NOT verified (--gpg not set)"
+    # One line per attestation that was actually examined; empty means nothing was verified.
+    verified: list[str] = []
 
     try:
         if (args.require_native or native_requested) and not native_path.exists():
@@ -158,6 +161,7 @@ def main() -> int:
                     ),
                     key_id=str(native_attestation["signature"]["key_id"]),
                 )
+            verified.append(f"native attestation: run-card binding verified; {signature_note}")
 
         if sigstore_bundle_requested and not dsse_path.exists():
             raise ValueError("cannot verify a Sigstore bundle when the DSSE attestation is missing")
@@ -176,19 +180,28 @@ def main() -> int:
                 gpg_verify_detached_signature_bytes(
                     decode_dsse_signature_bytes(dsse_envelope),
                     pre_auth_encode(DSSE_IN_TOTO_JSON_PAYLOAD_TYPE, decode_dsse_payload(dsse_envelope)),
+                    key_id=str(dsse_envelope["signatures"][0]["keyid"]),
                 )
             if args.require_sigstore_bundle and not bundle_path.exists():
                 raise ValueError(f"required Sigstore bundle not found: {bundle_path}")
             if sigstore_bundle_requested and not bundle_path.exists():
                 raise ValueError(f"Sigstore bundle not found: {bundle_path}")
+            sigstore_note = "Sigstore bundle not checked"
             if sigstore_bundle_requested and bundle_path.exists():
                 cosign_verify_blob(
                     blob_path=dsse_path,
                     bundle_path=bundle_path,
                     key_path=(Path(args.sigstore_key) if args.sigstore_key else None),
                 )
+                sigstore_note = "Sigstore bundle verified"
+            verified.append(f"DSSE attestation: run-card statement binding verified; {signature_note}; {sigstore_note}")
         elif args.require_sigstore_bundle:
             raise ValueError("cannot require a Sigstore bundle when the DSSE attestation is missing")
+        if not verified:
+            raise ValueError(
+                "no native or DSSE attestation was found for the run card, so nothing was verified "
+                f"(looked for {native_path.name} and {dsse_path.name})"
+            )
     except (TypeError, ValueError) as exc:
         print(f"Attestation verification failed: {exc}", file=sys.stderr)
         return EXIT_VERIFY_FAILED
@@ -197,6 +210,8 @@ def main() -> int:
         print(traceback.format_exc(), file=sys.stderr)
         return EXIT_VERIFY_FAILED
 
+    for line in verified:
+        print(line)
     return EXIT_SUCCESS
 
 

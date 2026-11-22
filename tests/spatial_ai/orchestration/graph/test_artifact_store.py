@@ -11,6 +11,7 @@ Test Coverage:
 
 from __future__ import annotations
 
+import enum
 import hashlib
 import json
 from pathlib import Path
@@ -35,6 +36,12 @@ def _make_cache_key(seed: str) -> str:
         64-character lowercase hex string (SHA256 format).
     """
     return hashlib.sha256(seed.encode()).hexdigest()
+
+
+class _Shade(enum.IntEnum):
+    """Scalar subclass that NumPy conversion flattens to a plain int."""
+
+    DARK = 1
 
 
 class TestArtifactStore:
@@ -332,6 +339,77 @@ class TestArtifactStore:
         monkeypatch.setattr(store, "artifacts_dir", FakeArtifactsDir())
 
         assert store.get_cache_size_mb() == 0.0
+
+    @staticmethod
+    def _size_provenance(cache_key: str) -> ProvenanceMetadata:
+        return ProvenanceMetadata(
+            cache_key=cache_key,
+            stage_id="test",
+            stage_version="1.0.0",
+            input_fingerprints={},
+            config_snapshot={},
+            timestamp="2026-02-12T10:00:00Z",
+            hostname="testhost",
+            python_version="3.11",
+            numpy_version="1.26.0",
+            device="cpu",
+        )
+
+    def test_store_does_not_walk_whole_cache_on_every_store(self, monkeypatch: pytest.MonkeyPatch, store: ArtifactStore):
+        """The advisory size check must not make every store O(cache entries) (G-4)."""
+        walks = []
+        original_rglob = Path.rglob
+
+        def counting_rglob(self: Path, pattern: str, *args: Any, **kwargs: Any) -> Any:
+            if self == store.artifacts_dir:
+                walks.append(pattern)
+            return original_rglob(self, pattern, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "rglob", counting_rglob)
+
+        for i in range(64):
+            key = _make_cache_key(f"walk_count_{i}")
+            store.store(key, {"a": np.full(8, i, dtype=np.int64)}, self._size_provenance(key))
+
+        assert len(walks) <= 8, f"{len(walks)} full cache walks for 64 stores"
+
+    def test_size_warning_matches_full_walk_across_stores_and_evictions(
+        self, caplog: pytest.LogCaptureFixture, cache_dir: Path, tmp_path: Path
+    ):
+        """Amortized size accounting warns on exactly the stores a full walk would (G-4)."""
+
+        def payload(i: int) -> Dict[str, Any]:
+            return {"a": np.random.default_rng(i).random(256 * (1 + i % 3))}
+
+        reference = ArtifactStore(cache_dir=tmp_path / "reference", max_size_gb=1.0)
+        sizes = []
+        for i in range(10):
+            key = _make_cache_key(f"size_warn_{i}")
+            reference.store(key, payload(i), self._size_provenance(key))
+            sizes.append(reference.get_cache_size_mb())
+        limit_mb = sizes[5]
+
+        store = ArtifactStore(cache_dir=cache_dir, max_size_gb=limit_mb / 1024)
+        logger_name = artifact_store_module.logger.name
+        expected, actual = [], []
+
+        def store_one(i: int) -> None:
+            key = _make_cache_key(f"size_warn_{i}")
+            caplog.clear()
+            with caplog.at_level("WARNING", logger=logger_name):
+                store.store(key, payload(i), self._size_provenance(key))
+            actual.append(any("exceeds limit" in record.getMessage() for record in caplog.records))
+            expected.append(store.get_cache_size_mb() > limit_mb)
+
+        for i in range(10):
+            store_one(i)
+        for i in (9, 8, 7, 6):
+            store.evict(_make_cache_key(f"size_warn_{i}"))
+        for i in (10, 11, 6, 12, 13):
+            store_one(i)
+
+        assert actual == expected
+        assert any(expected) and not all(expected)
 
     def test_two_level_directory_hierarchy(self, store: ArtifactStore, cache_dir: Path):
         """Test artifacts are stored in two-level directory hierarchy."""
@@ -880,6 +958,94 @@ class TestCommitMarker:
 
         # exists() should return False for corrupted entries
         assert not store.exists(cache_key)
+
+    def test_load_survives_unreadable_stats_file(self, store: ArtifactStore):
+        """A stats.json problem on a hit is bookkeeping, not artifact corruption (G-3)."""
+        cache_key = _make_cache_key("stats_unreadable_on_hit")
+        store.store(cache_key, {"data": np.arange(4)}, self._make_provenance(cache_key))
+        store.stats_path.write_text("{ not json", encoding="utf-8")
+
+        loaded = store.load(cache_key)
+
+        np.testing.assert_array_equal(loaded["data"], np.arange(4))
+
+    def test_load_restores_python_value_types(self, store: ArtifactStore):
+        """Tuples, lists and 0-d arrays come back as the types that were stored (G-3)."""
+        cache_key = _make_cache_key("value_kinds_roundtrip")
+        artifact = {
+            "size": (480, 640),
+            "names": ["a", "b"],
+            "zero_d": np.array(5, dtype=np.int16),
+            "count": 3,
+            "label": "wood",
+        }
+        store.store(cache_key, artifact, self._make_provenance(cache_key))
+
+        loaded = store.load(cache_key)
+
+        assert loaded["size"] == (480, 640) and type(loaded["size"]) is tuple
+        assert loaded["names"] == ["a", "b"] and type(loaded["names"]) is list
+        assert type(loaded["zero_d"]) is np.ndarray and loaded["zero_d"].dtype == np.int16 and loaded["zero_d"] == 5
+        assert loaded["count"] == 3 and type(loaded["count"]) is int
+        assert loaded["label"] == "wood"
+        assert set(loaded) == set(artifact)
+
+    @pytest.mark.parametrize("value", [[1, "x"], [1, 2.5], [True, 2], ((1, 2), (3, 4))], ids=str)
+    def test_store_rejects_sequences_numpy_would_alter(self, store: ArtifactStore, value: Any):
+        """A sequence whose values or element types change in array conversion is not cached (G-3)."""
+        cache_key = _make_cache_key(f"lossy_{value!r}")
+        with pytest.raises(ValueError, match="cannot be cached"):
+            store.store(cache_key, {"v": value}, self._make_provenance(cache_key))
+        assert not store.exists(cache_key)
+
+    @pytest.mark.parametrize(
+        "value",
+        ["ab\x00", b"ab\x00", _Shade.DARK, range(3), bytearray(b"abc")],
+        ids=["str_trailing_nul", "bytes_trailing_nul", "int_enum", "range", "bytearray"],
+    )
+    def test_store_rejects_scalars_numpy_would_alter(self, store: ArtifactStore, value: Any):
+        """A non-sequence value that would load as another type or value is not cached (G-3).
+
+        NumPy strips trailing NULs from strings, turns an enum member into a plain int,
+        and turns other array-likes into arrays that cannot be rebuilt as what they were.
+        """
+        cache_key = _make_cache_key(f"lossy_scalar_{value!r}")
+        with pytest.raises(ValueError, match="cannot be cached"):
+            store.store(cache_key, {"v": value}, self._make_provenance(cache_key))
+        assert not store.exists(cache_key)
+
+    @pytest.mark.parametrize(
+        "value",
+        [float("nan"), complex("nan"), np.float32("nan"), np.datetime64("NaT"), np.str_("oak"), "", 2**63],
+        ids=["float_nan", "complex_nan", "float32_nan", "nat", "numpy_str", "empty_str", "uint64_range_int"],
+    )
+    def test_scalars_that_survive_conversion_stay_cacheable(self, store: ArtifactStore, value: Any):
+        """NaN/NaT and other exactly representable scalars are still cached with their type."""
+        cache_key = _make_cache_key(f"exact_scalar_{value!r}")
+        store.store(cache_key, {"v": value}, self._make_provenance(cache_key))
+
+        loaded = store.load(cache_key)["v"]
+
+        assert type(loaded) is type(value)
+        assert repr(loaded) == repr(value)
+
+    def test_store_rejects_reserved_value_kinds_key(self, store: ArtifactStore):
+        """The payload key recording value kinds cannot be overwritten by a stage output."""
+        cache_key = _make_cache_key("reserved_kinds_key")
+        with pytest.raises(ValueError, match="reserved"):
+            store.store(cache_key, {"__tp_value_kinds__": "x"}, self._make_provenance(cache_key))
+
+    def test_legacy_entry_without_value_kinds_still_loads(self, store: ArtifactStore):
+        """Entries written before the kinds record keep the legacy conversion."""
+        cache_key = _make_cache_key("legacy_no_kinds")
+        store.store(cache_key, {"size": (2, 3), "n": 4}, self._make_provenance(cache_key))
+        artifact_path = store._artifact_path(cache_key)
+        np.savez_compressed(artifact_path, size=np.array([2, 3]), n=np.array(4))
+
+        loaded = store.load(cache_key)
+
+        np.testing.assert_array_equal(loaded["size"], np.array([2, 3]))
+        assert loaded["n"] == 4
 
 
 class TestScavenger:

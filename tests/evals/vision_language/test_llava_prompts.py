@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from transformation_portal.evals.apex_llava_integration import build_material_quality_prompt
 from transformation_portal.evals.vision_language.llava_prompts import (
     LlavaPromptSpec,
     build_architectural_quality_prompt,
@@ -89,3 +90,20 @@ class TestDepthQualityPrompt:
         context = {"backend": "depth_anything_v2"}
         prompt = build_depth_quality_prompt(context=context)
         assert "Additional context" in prompt.user_text
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize(
+    "builder",
+    [
+        build_segmentation_quality_prompt,
+        build_architectural_quality_prompt,
+        build_depth_quality_prompt,
+        build_material_quality_prompt,
+    ],
+)
+def test_every_prompt_states_the_summary_score_scale(builder) -> None:
+    """The parser clamps to [0, 1], so each prompt must ask for a 0.0-1.0 score (M-01)."""
+    prompt = builder()
+
+    assert '"summary_score": number from 0.0 (worst) to 1.0 (best)' in prompt.user_text

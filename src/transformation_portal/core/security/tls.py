@@ -167,6 +167,10 @@ class TLSTCPServer(socketserver.TCPServer):
 
     allow_reuse_address = True
 
+    # Seconds a peer gets to complete the TLS handshake (None waits forever).
+    # Matches the default client-side timeout of ``create_tls_connection``.
+    handshake_timeout: Optional[float] = 30.0
+
     def __init__(
         self,
         server_address: Tuple[str, int],
@@ -184,18 +188,40 @@ class TLSTCPServer(socketserver.TCPServer):
         super().__init__(server_address, handler_class)
 
     def get_request(self) -> Tuple[socket.socket, Tuple[str, int]]:
-        """Accept connection and wrap with TLS."""
+        """Accept connection and wrap with TLS.
+
+        The handshake is deferred to ``finish_request``. It must not run in
+        the accept loop, where a peer that connects and then stays silent
+        would keep every other client from being accepted.
+        """
         newsocket, fromaddr = super().get_request()
         try:
             connstream = self.ssl_context.wrap_socket(
                 newsocket,
                 server_side=True,
+                do_handshake_on_connect=False,
             )
             return connstream, fromaddr
-        except ssl.SSLError as e:
-            logger.warning("TLS handshake failed from %s: %s", fromaddr, e)
+        except OSError as e:
+            logger.warning("TLS setup failed from %s: %s", fromaddr, e)
             newsocket.close()
             raise
+
+    def finish_request(self, request, client_address) -> None:
+        """Complete the TLS handshake under a timeout, then run the handler.
+
+        With ``ThreadingMixIn`` this runs in the per-connection thread. A peer
+        that fails the handshake is dropped without reaching the handler.
+        """
+        handler_timeout = request.gettimeout()
+        request.settimeout(self.handshake_timeout)
+        try:
+            request.do_handshake()
+        except OSError as e:
+            logger.warning("TLS handshake failed from %s: %s", client_address, e)
+            return
+        request.settimeout(handler_timeout)
+        super().finish_request(request, client_address)
 
 
 class ThreadedTLSServer(socketserver.ThreadingMixIn, TLSTCPServer):

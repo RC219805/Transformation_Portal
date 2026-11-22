@@ -187,6 +187,24 @@ class TestPBRProcessorFromCachedDepth:
         assert output_dir.exists()
         assert paths["normal"].parent == output_dir
 
+    @pytest.mark.regression
+    def test_from_cached_depth_partial_write_failure_raises(self, sample_depth_file, temp_workspace, standard_config):
+        """LC-13: one unwritable map must fail the call, not return a path to a missing file."""
+        output_dir = temp_workspace["output_dir"]
+        # A non-empty directory at the roughness target makes exactly one write fail.
+        blocker = output_dir / "test_roughness.png"
+        blocker.mkdir()
+        (blocker / "occupied").write_text("x")
+
+        with pytest.raises(OSError, match="roughness"):
+            PBRProcessor.from_cached_depth(
+                depth_path=sample_depth_file, config=standard_config, output_dir=output_dir, base_name="test"
+            )
+
+        processor = PBRProcessor(config=standard_config, output_dir=output_dir)
+        with pytest.raises(OSError, match="roughness"):
+            processor.from_depth(np.load(sample_depth_file), save=True, base_name="test")
+
 
 class TestPBRProcessorFromDepth:
     """Test PBRProcessor.from_depth() instance method."""

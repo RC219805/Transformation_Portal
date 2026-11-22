@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 pytestmark = pytest.mark.unit
@@ -282,3 +284,284 @@ class TestMessageBus:
 
         messages = bus.read_all()
         assert len(messages) == 0
+
+    def test_encoded_intents_use_real_action_types(self):
+        """R16: every encoded intent slot is an action type agents actually publish."""
+        from transformation_portal.rl.ma_action_space import NODE_ACTIONS
+        from transformation_portal.rl.ma_comm import CoordinationProtocol, MessageBus
+
+        action_types = sorted({name for templates in NODE_ACTIONS.values() for name, _ in templates})
+        hits = []
+        for action_type in action_types:
+            bus = MessageBus()
+            bus.publish("node", {"intent": action_type})
+            encoded = bus.encode_messages()
+            assert len(encoded) == 6
+            if sum(encoded):
+                hits.append(action_type)
+
+        assert hits == sorted(
+            [
+                "adjust_metalness_prior",
+                "adjust_roughness_prior",
+                "apply_denoising",
+                "enable_seam_blending",
+                "increase_iterations",
+                "increase_mask_coverage",
+            ]
+        )
+        for pair in CoordinationProtocol.COMPATIBILITY:
+            assert set(pair) <= set(action_types)
+        assert CoordinationProtocol.get_compatibility("increase_iterations", "increase_mask_coverage") == 1.0
+
+
+@pytest.mark.ml
+class TestWorldModelInferenceAndCheckpoints:
+    """R10: deterministic inference and lossless save()/load() of the RL models."""
+
+    def test_predict_is_deterministic_and_restores_training_mode(self):
+        torch = pytest.importorskip("torch")
+        from transformation_portal.rl.world_model import WorldModel
+
+        torch.manual_seed(0)
+        model = WorldModel(state_dim=12, action_dim=5, hidden_dim=16, dropout=0.5)
+        state = torch.randn(12)
+
+        scores = {model.predict(state, 3).score for _ in range(5)}
+
+        assert len(scores) == 1
+        assert model.training is True
+        assert all(m.training for m in model.encoder if isinstance(m, torch.nn.Dropout))
+        assert model.eval().training is False
+        assert not any(m.training for m in model.encoder if isinstance(m, torch.nn.Dropout))
+
+    def test_ensemble_uncertainty_is_deterministic_and_finite(self):
+        torch = pytest.importorskip("torch")
+        from transformation_portal.rl.world_model import EnsembleWorldModel
+
+        torch.manual_seed(0)
+        ensemble = EnsembleWorldModel(n_models=3, state_dim=12, action_dim=5, hidden_dim=16, dropout=0.5)
+        state = torch.randn(12)
+
+        first = ensemble.predict_with_uncertainty(state, 2)
+        second = ensemble.predict_with_uncertainty(state, 2)
+
+        assert first == second
+        assert math.isfinite(first[1]) and first[1] >= 0.0
+        assert all(model.training for model in ensemble.models)
+
+    @pytest.mark.parametrize("n_models", [0, 1])
+    def test_ensemble_rejects_fewer_than_two_models(self, n_models):
+        pytest.importorskip("torch")
+        from transformation_portal.rl.world_model import EnsembleWorldModel
+
+        with pytest.raises(ValueError, match="n_models >= 2"):
+            EnsembleWorldModel(n_models=n_models, state_dim=4, action_dim=2, hidden_dim=8)
+
+    def test_world_model_round_trips_non_default_architecture(self, tmp_path):
+        torch = pytest.importorskip("torch")
+        from transformation_portal.rl.world_model import WorldModel
+
+        model = WorldModel(state_dim=10, action_dim=4, hidden_dim=32, action_embed_dim=16, dropout=0.25)
+        path = tmp_path / "wm.pt"
+        model.save(path)
+
+        loaded = WorldModel.load(path)
+
+        assert (loaded.action_embed_dim, loaded.dropout) == (16, 0.25)
+        state = torch.randn(10)
+        assert loaded.predict(state, 1).score == pytest.approx(model.predict(state, 1).score, abs=1e-6)
+
+    @pytest.mark.parametrize("kwargs", [{"hidden_dim": 64}, {"num_layers": 3}])
+    def test_policy_value_net_round_trips_non_default_architecture(self, tmp_path, kwargs):
+        torch = pytest.importorskip("torch")
+        from transformation_portal.rl.model import PolicyValueNet, create_model
+
+        model = create_model(10, 4, **kwargs)
+        path = tmp_path / "pv.pt"
+        model.save(str(path))
+
+        loaded = PolicyValueNet.load(str(path))
+
+        state = torch.randn(1, 10)
+        with torch.no_grad():
+            expected_logits, expected_value = model.forward(state)
+            logits, value = loaded.forward(state)
+        assert torch.allclose(logits, expected_logits)
+        assert torch.allclose(value, expected_value)
+
+    def test_policy_value_net_loads_legacy_checkpoint_without_architecture_fields(self, tmp_path):
+        torch = pytest.importorskip("torch")
+        from transformation_portal.rl.model import PolicyValueNet
+
+        model = PolicyValueNet(state_dim=6, action_dim=3)
+        path = tmp_path / "legacy.pt"
+        torch.save({"state_dict": model.state_dict(), "state_dim": 6, "action_dim": 3}, path)
+
+        loaded = PolicyValueNet.load(str(path))
+
+        assert (loaded.hidden_dim, loaded.num_layers) == (256, 2)
+
+
+@pytest.mark.ml
+class TestZeroIterationRuns:
+    """R3: a run with no iterations returns an empty result instead of crashing."""
+
+    def test_train_rl_with_zero_iterations_returns_initial_state(self):
+        pytest.importorskip("torch")
+        from transformation_portal.rl.action_space import enumerate_actions
+        from transformation_portal.rl.env import MockPipelineEnv
+        from transformation_portal.rl.model import create_model
+        from transformation_portal.rl.optimize_rl import RLOptimizationConfig, train_rl
+        from transformation_portal.rl.state_encoder import get_state_dim
+        from transformation_portal.rl.trainer import RLTrainer
+
+        actions = enumerate_actions()
+        pipeline = {"nodes": [{"id": "sam2", "config": {}}]}
+        env = MockPipelineEnv(actions)
+        trainer = RLTrainer(create_model(get_state_dim(), len(actions)), actions)
+
+        result = train_rl(env, trainer, pipeline, RLOptimizationConfig(max_iterations=0, save_model=False))
+
+        assert result.iterations == 0
+        assert result.best_pipeline == pipeline
+        assert result.score_history == [result.best_score]
+        assert result.loss_history == []
+        assert result.total_reward == 0.0
+
+    @pytest.mark.parametrize("entry_point", ["optimize_multi_agent", "optimize_with_central_critic"])
+    def test_multi_agent_runs_with_zero_iterations_return_initial_state(self, entry_point):
+        pytest.importorskip("torch")
+        from transformation_portal.rl import ma_optimize
+        from transformation_portal.rl.ma_action_space import DEFAULT_AGENT_NODES
+        from transformation_portal.rl.ma_env import MockMultiAgentEnv
+
+        pipeline = {"nodes": [{"id": n, "config": {}} for n in DEFAULT_AGENT_NODES]}
+        env = MockMultiAgentEnv(DEFAULT_AGENT_NODES)
+        if entry_point == "optimize_multi_agent":
+            result = ma_optimize.optimize_multi_agent(env, ma_optimize.create_agents(), pipeline, iterations=0)
+        else:
+            result = ma_optimize.optimize_with_central_critic(env, pipeline, iterations=0)
+
+        assert result.iterations == 0
+        assert result.best_pipeline == pipeline
+        assert result.score_history == [result.best_score]
+        assert result.loss_history == []
+
+
+@pytest.mark.ml
+class TestSmallTrainerDefects:
+    """R16: replay entries without graphs, finite MuZero loss, empty datasets."""
+
+    def test_rl_trainer_stores_detached_log_prob_and_value(self):
+        pytest.importorskip("torch")
+        from transformation_portal.rl.action_space import enumerate_actions
+        from transformation_portal.rl.model import create_model
+        from transformation_portal.rl.state_encoder import get_state_dim
+        from transformation_portal.rl.trainer import RLTrainer
+
+        actions = enumerate_actions()
+        trainer = RLTrainer(create_model(get_state_dim(), len(actions)), actions)
+        state = [0.0] * get_state_dim()
+        action_idx, log_prob, value = trainer.select_action(state)
+        assert log_prob.requires_grad
+
+        trainer.store_transition(state, action_idx, 0.5, state, False, log_prob, value)
+
+        stored = trainer.buffer.buffer[0]
+        assert stored.log_prob.grad_fn is None and not stored.log_prob.requires_grad
+        assert stored.value.grad_fn is None and not stored.value.requires_grad
+        assert float(stored.log_prob) == pytest.approx(float(log_prob))
+
+    def test_muzero_policy_loss_stays_finite_when_a_probability_underflows(self):
+        torch = pytest.importorskip("torch")
+        from transformation_portal.rl.muzero_model import MuZeroModel
+        from transformation_portal.rl.muzero_trainer import MuZeroTrainer
+
+        torch.manual_seed(0)
+        model = MuZeroModel(obs_dim=4, action_dim=3, latent_dim=8)
+        with torch.no_grad():
+            model.pred.policy_head.weight.zero_()
+            model.pred.policy_head.bias.copy_(torch.tensor([200.0, 0.0, 0.0]))
+        batch = {
+            "obs": torch.randn(2, 4),
+            "actions": torch.zeros(2, 1, dtype=torch.long),
+            "values": torch.zeros(2, 2),
+            "rewards": torch.zeros(2, 1),
+            "policies": torch.tensor([1.0, 0.0, 0.0]).expand(2, 2, 3).contiguous(),
+        }
+        assert model.initial_inference(batch["obs"])[1][0, 1].item() == 0.0
+
+        losses = MuZeroTrainer(model).train_step(batch)
+
+        assert all(math.isfinite(v) for v in losses.values())
+        assert losses["policy"] == pytest.approx(0.0, abs=1e-6)
+        assert not any(torch.isnan(p).any().item() for p in model.parameters())
+
+    def test_train_muzero_on_an_empty_dataset_returns_empty_history(self):
+        pytest.importorskip("torch")
+        from transformation_portal.rl.muzero_model import MuZeroModel
+        from transformation_portal.rl.muzero_trainer import train_muzero
+
+        class _EmptyDataset:
+            def batches(self, batch_size):
+                return iter(())
+
+        assert train_muzero(MuZeroModel(4, 3, 8), _EmptyDataset()) == []
+
+
+@pytest.mark.ml
+class TestMuZeroTransformerPaddingMask:
+    """MuZeroTransformer.forward(mask=[B, T]) applies a causal + key-padding mask."""
+
+    @staticmethod
+    def _model():
+        torch = pytest.importorskip("torch")
+        from transformation_portal.rl.muzero_transformer import MuZeroTransformer
+
+        torch.manual_seed(0)
+        model = MuZeroTransformer(obs_dim=4, action_dim=3, d_model=8, n_heads=2, n_layers=2, dropout=0.0).eval()
+        obs = torch.randn(2, 5, 4)
+        act = torch.randint(0, 3, (2, 5))
+        return torch, model, obs, act
+
+    def test_all_valid_mask_matches_default_causal(self):
+        torch, model, obs, act = self._model()
+        with torch.no_grad():
+            ref = model(obs, act)
+            out = model(obs, act, mask=torch.zeros(2, 5, dtype=torch.bool))
+        for key in ("policy", "value", "reward", "next_state"):
+            assert torch.allclose(out[key], ref[key], atol=1e-6)
+
+    def test_right_padding_predicts_from_last_real_step(self):
+        torch, model, obs, act = self._model()
+        mask = torch.tensor([[False] * 5, [False, False, False, True, True]])
+        with torch.no_grad():
+            out = model(obs, act, mask=mask)
+            truncated = model(obs[1:, :3], act[1:, :3])
+            full = model(obs[:1], act[:1])
+        assert torch.allclose(out["value"][1], truncated["value"][0], atol=1e-5)
+        assert torch.allclose(out["policy"][1], truncated["policy"][0], atol=1e-5)
+        assert torch.allclose(out["value"][0], full["value"][0], atol=1e-5)
+
+    def test_left_padding_is_finite_and_ignores_padded_inputs(self):
+        torch, model, obs, act = self._model()
+        mask = torch.tensor([[True, True, False, False, False], [False] * 5])
+        changed = obs.clone()
+        changed[0, :2] = 100.0
+        with torch.no_grad():
+            out = model(obs, act, mask=mask)
+            out_changed = model(changed, act, mask=mask)
+        assert torch.isfinite(out["hidden"]).all()
+        assert torch.isfinite(out["value"]).all()
+        assert torch.allclose(out["value"], out_changed["value"], atol=1e-5)
+        assert torch.allclose(out["policy"], out_changed["policy"], atol=1e-5)
+
+    def test_rejects_wrong_shape_dtype_or_fully_padded_row(self):
+        torch, model, obs, act = self._model()
+        with pytest.raises(ValueError, match="padding mask"):
+            model(obs, act, mask=torch.zeros(5, 5, dtype=torch.bool))
+        with pytest.raises(ValueError, match="padding mask"):
+            model(obs, act, mask=torch.zeros(2, 5))
+        with pytest.raises(ValueError, match="every position"):
+            model(obs, act, mask=torch.tensor([[True] * 5, [False] * 5]))

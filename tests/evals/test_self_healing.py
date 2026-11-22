@@ -11,6 +11,8 @@ All tests use mocks - no ML model downloads or GPU requirements.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from transformation_portal.evals.self_healing import (
@@ -513,3 +515,159 @@ class TestSuggestFixes:
         review_fixes = [s for s in result.suggestions if s.action == "flag_for_review"]
         if review_fixes:
             assert review_fixes[0].priority >= 8
+
+
+class _FakeDiffBackend:
+    """Minimal VLM stand-in returning a fixed semantic-diff JSON answer."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    def generate(self, messages):  # noqa: ARG002 - signature mirrors the real backend
+        return self.text
+
+
+_MISSING_REGION_DIFF = (
+    '{"summary": "hole in pool mask", "changes": '
+    '[{"type": "missing", "severity": "high", "description": "pool region missing"}]}'
+)
+
+
+class TestSelfHealRunnerUnappliedFixes:
+    """M-11: a fix the patcher could not apply must never be validated or selected."""
+
+    def _images(self, tmp_path):
+        image_a, image_b = tmp_path / "a.png", tmp_path / "b.png"
+        image_a.write_bytes(b"a")
+        image_b.write_bytes(b"b")
+        return image_a, image_b
+
+    def test_fix_for_missing_node_is_not_validated_or_run(self, tmp_path):
+        from transformation_portal.evals.self_heal_runner import self_heal
+
+        image_a, image_b = self._images(tmp_path)
+        pipeline = {"nodes": [{"id": "depth_backend", "config": {}}]}  # no "sam2" node
+        scores = iter([0.70, 0.75, 0.80])
+        runs = []
+
+        def run_fn(p):
+            runs.append(p)
+            return {"score": next(scores)}  # run-to-run noise that looks like a gain
+
+        result = self_heal(
+            pipeline=pipeline,
+            llava=_FakeDiffBackend(_MISSING_REGION_DIFF),
+            image_a=image_a,
+            image_b=image_b,
+            metrics={},
+            run_fn=run_fn,
+        )
+
+        assert [p.error for p in result.patch_set.failed] == ["Node not found: sam2"]
+        assert result.candidates, "the suggested fix should still be recorded"
+        assert all(not c.validated for c in result.candidates)
+        assert result.best_candidate is None
+        assert result.improved is False
+        assert len(runs) == 1  # only the baseline run; the unpatched pipeline is not re-run
+
+    def test_no_op_fix_is_not_validated_or_run(self, tmp_path):
+        """M-11 follow-up: a patch that leaves the pipeline unchanged measures only noise."""
+        from transformation_portal.evals.self_heal_runner import self_heal
+        from transformation_portal.evals.self_healing import suggest_fixes
+
+        image_a, image_b = self._images(tmp_path)
+        # Give the sam2 node exactly the values the suggested fix would set.
+        fixes = [s for s in suggest_fixes(json.loads(_MISSING_REGION_DIFF), {}).suggestions if s.target_node == "sam2"]
+        assert fixes and fixes[0].params, "the missing-region diff must suggest a parameterised sam2 fix"
+        fix = fixes[0]
+        pipeline = {"nodes": [{"id": "sam2", "config": dict(fix.params)}]}
+        scores = iter([0.70, 0.80])
+        runs = []
+
+        def run_fn(p):
+            runs.append(p)
+            return {"score": next(scores)}
+
+        result = self_heal(
+            pipeline=pipeline,
+            llava=_FakeDiffBackend(_MISSING_REGION_DIFF),
+            image_a=image_a,
+            image_b=image_b,
+            metrics={},
+            run_fn=run_fn,
+            max_candidates=1,
+        )
+
+        assert result.candidates and not result.candidates[0].validated
+        assert result.best_candidate is None
+        assert len(runs) == 1
+
+    def test_applied_fix_is_still_validated_and_selected(self, tmp_path):
+        from transformation_portal.evals.self_heal_runner import self_heal
+
+        image_a, image_b = self._images(tmp_path)
+        pipeline = {"nodes": [{"id": "sam2", "config": {}}]}
+        scores = iter([0.70, 0.80])
+
+        result = self_heal(
+            pipeline=pipeline,
+            llava=_FakeDiffBackend(_MISSING_REGION_DIFF),
+            image_a=image_a,
+            image_b=image_b,
+            metrics={},
+            run_fn=lambda p: {"score": next(scores)},
+            max_candidates=1,
+        )
+
+        assert result.best_candidate is not None
+        assert result.best_candidate.validated is True
+        assert result.best_candidate.patched_pipeline != pipeline
+        assert result.best_candidate.improvement == pytest.approx(0.10)
+
+
+@pytest.mark.regression
+class TestSuggestFixesToleratesModelFieldTypes:
+    """M-12 follow-up: semantic_diff accepts null/non-string fields, so self_heal must not crash on them."""
+
+    def test_null_and_non_string_fields_do_not_crash(self):
+        diff = {
+            "summary": "x",
+            "changes": [
+                {"type": None, "severity": None, "description": None},
+                {"type": "missing", "severity": None, "description": None},
+                {"type": "artifact", "severity": "HIGH", "description": 42},
+                "texture is off",
+            ],
+        }
+        result = suggest_fixes(diff)
+
+        missing = [s for s in result.suggestions if s.action == "increase_mask_coverage"]
+        assert len(missing) == 1  # null severity falls back to "medium"
+        assert missing[0].rationale == "Missing region detected"
+        assert all(isinstance(s.rationale, str) for s in result.suggestions)
+
+    def test_self_heal_with_null_type_answer_completes(self, tmp_path):
+        from transformation_portal.evals.self_heal_runner import self_heal
+
+        image_a, image_b = tmp_path / "a.png", tmp_path / "b.png"
+        image_a.write_bytes(b"a")
+        image_b.write_bytes(b"b")
+        answer = '{"summary": "x", "changes": [{"type": null, "severity": "high", "description": "d"}]}'
+        runs = []
+
+        def run_fn(p):
+            runs.append(p)
+            return {"score": 0.5}
+
+        result = self_heal(
+            pipeline={"nodes": []},
+            llava=_FakeDiffBackend(answer),
+            image_a=image_a,
+            image_b=image_b,
+            metrics={},
+            run_fn=run_fn,
+            max_candidates=1,
+        )
+
+        assert result.best_candidate is None
+        assert len(runs) == 1  # only the baseline run; no fix was applicable

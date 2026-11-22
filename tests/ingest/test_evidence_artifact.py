@@ -234,6 +234,14 @@ def test_canonical_evidence_bytes_are_deterministic() -> None:
         (lambda payload: payload.update({"success": "yes"}), "machine payload success must be a boolean"),
         (lambda payload: payload.update({"exit_code": 999}), r"machine payload exit_code must be an integer in \[0,255\]"),
         (
+            lambda payload: payload.update({"success": False, "exit_code": True}),
+            r"machine payload exit_code must be an integer in \[0,255\]",
+        ),
+        (lambda payload: payload.update({"exit_code": False}), r"machine payload exit_code must be an integer in \[0,255\]"),
+        (lambda payload: payload.pop("error"), "machine payload is missing required keys: error"),
+        (lambda payload: payload.pop("data"), "machine payload is missing required keys: data"),
+        (lambda payload: payload.pop("success"), "machine payload is missing required keys: success"),
+        (
             lambda payload: payload.update({"success": False, "exit_code": 0}),
             "machine payload exit_code must be non-zero when success is false",
         ),

@@ -118,6 +118,9 @@ The current PBR helper command is:
 
 Batch mode uses `--depth-dir` and optional `--pattern`, `--recursive`,
 `--max-files`, `--dry-run`, and `--fail-fast`.
+Batch mode processes only `.npy` and `.png` matches and keeps one file per
+scene: when `<key>_depth.npy` and `<key>_depth.png` both exist, the `.npy` is
+used and sidecars such as `<key>_depth.json` are ignored.
 
 Current presets:
 

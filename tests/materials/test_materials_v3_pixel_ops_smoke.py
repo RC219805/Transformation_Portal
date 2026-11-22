@@ -429,3 +429,89 @@ def test_foliage_ops_in_registry():
     assert foliage_op.implemented is True
     assert foliage_op.op == foliage_vibrance_boost
     assert "vibrance" in foliage_op.description.lower() or "foliage" in foliage_op.description.lower()
+
+
+def _glass_and_water_plan(mask):
+    entry = {"coverage_px": int(mask.sum()), "mean_conf": 0.6, "material_confidence": 0.9, "edge_conf": 0.4}
+    return {"per_class": {"glass": dict(entry), "water": dict(entry)}}
+
+
+@pytest.mark.parametrize(
+    "bad_mask_shape",
+    [(64, 64, 3), (32, 32), (64,)],
+    ids=["multi_channel", "dimension_mismatch", "one_dimensional"],
+)
+def test_apply_pixel_ops_blocks_only_the_material_with_an_invalid_mask(bad_mask_shape):
+    """LC-17: one malformed mask must block its own material, not abort every material."""
+    config = DummyConfig()
+    image = np.full((64, 64, 3), 128, dtype=np.uint8)
+    good = np.zeros((64, 64), dtype=np.float32)
+    good[10:50, 10:50] = 1.0
+    bad = np.ones(bad_mask_shape, dtype=np.float32)
+
+    output, telemetry = apply_pixel_ops(
+        image,
+        {"materials": {"water": good, "glass": bad}},
+        _glass_and_water_plan(good),
+        config,
+        registry=OP_REGISTRY,
+    )
+
+    blocked = {entry["material"]: entry for entry in telemetry["blocked"]}
+    assert blocked["glass"]["reason"] == "invalid_mask_shape"
+    assert [entry["material"] for entry in telemetry["applied"]] == ["water"]
+    assert not np.array_equal(output[20:40, 20:40], image[20:40, 20:40])
+
+
+def test_apply_pixel_ops_valid_masks_unchanged_by_per_material_validation():
+    """LC-17: validating masks up front must not alter output for valid (H, W) / (H, W, 1) masks."""
+    config = DummyConfig()
+    rng = np.random.default_rng(7)
+    image = rng.integers(0, 256, size=(64, 64, 3), dtype=np.uint8)
+    mask = np.zeros((64, 64), dtype=np.float32)
+    mask[10:50, 10:50] = 1.0
+    plan = _glass_and_water_plan(mask)
+
+    out_2d, tel_2d = apply_pixel_ops(image, {"materials": {"glass": mask}}, plan, config, registry=OP_REGISTRY)
+    out_3d, tel_3d = apply_pixel_ops(image, {"materials": {"glass": mask[..., None]}}, plan, config, registry=OP_REGISTRY)
+
+    assert np.array_equal(out_2d, out_3d)
+    assert tel_2d["blocked"] == tel_3d["blocked"] == []
+    assert [entry["material"] for entry in tel_2d["applied"]] == ["glass"]
+
+
+def _registered_op(op_name):
+    return (OP_REGISTRY["glass"].get(op_name) or OP_REGISTRY["sky"][op_name]).op
+
+
+@pytest.mark.parametrize("shape", [(40, 56), (48, 48)], ids=["rectangular", "square"])
+@pytest.mark.parametrize("op_name", ["brightness_boost", "edge_contrast", "dehaze", "gradient_smooth"])
+def test_pixel_ops_support_grayscale_images(shape, op_name):
+    """LC-17: 2-D grayscale input keeps its shape (no (N, N, N) broadcast, no ValueError)."""
+    gray = np.full(shape, 0.5, dtype=np.float32)
+    gray[::2] = 0.3
+    mask = np.zeros(shape, dtype=np.float32)
+    mask[: shape[0] // 2] = 1.0
+
+    result = _registered_op(op_name)(gray, mask, {"normalized": gray, "scale": 1.0})
+
+    assert result.shape == shape
+    assert np.array_equal(result[shape[0] // 2 :], gray[shape[0] // 2 :])
+    assert not np.array_equal(result[: shape[0] // 2], gray[: shape[0] // 2])
+
+
+@pytest.mark.parametrize("op_name", ["brightness_boost", "dehaze", "gradient_smooth", "temperature_shift"])
+def test_pixel_ops_leave_alpha_channel_untouched(op_name):
+    """LC-17: on RGBA input only the colour channels are edited; alpha passes through."""
+    rng = np.random.default_rng(3)
+    rgb = rng.random((32, 32, 3), dtype=np.float32)
+    rgba = np.dstack([rgb, np.full((32, 32), 0.6, dtype=np.float32)])
+    mask = np.zeros((32, 32), dtype=np.float32)
+    mask[4:28, 4:28] = 1.0
+    op = _registered_op(op_name)
+
+    result = op(rgba, mask, {"normalized": rgba, "scale": 1.0})
+    rgb_only = op(rgb, mask, {"normalized": rgb, "scale": 1.0})
+
+    assert np.array_equal(result[..., 3], rgba[..., 3])
+    assert np.array_equal(result[..., :3], rgb_only)

@@ -15,7 +15,16 @@ pytestmark = [
 ]
 
 import transformation_portal.depth.models as depth_models
-from transformation_portal.streaming.stages import DepthEstimationStage, ImageData, ImageLoadStage, ImageSaveStage
+from transformation_portal.streaming.stages import (
+    ColorGradingStage,
+    DenoiseStage,
+    DepthEstimationStage,
+    ImageData,
+    ImageLoadStage,
+    ImageSaveStage,
+    MaterialResponseStage,
+    ResizeStage,
+)
 
 
 def test_image_load_stage_loads_rgb_image_and_metadata(tmp_path: Path) -> None:
@@ -76,6 +85,33 @@ def test_image_save_stage_writes_expected_output_suffix(tmp_path: Path) -> None:
         with Image.open(output_path) as saved:
             assert saved.mode == "RGB"
             assert saved.size == (2, 2)
+
+    asyncio.run(runner())
+
+
+def test_image_save_stage_same_stem_inputs_do_not_overwrite_each_other(tmp_path: Path) -> None:
+    """M-02: kitchen.png and kitchen.tif in one stream keep separate saved files."""
+    output_dir = tmp_path / "output"
+    bright = ImageData(array=np.full((2, 2, 3), 250, dtype=np.uint8), path=tmp_path / "kitchen.png")
+    dark = ImageData(array=np.full((2, 2, 3), 10, dtype=np.uint8), path=tmp_path / "kitchen.tif")
+
+    async def runner() -> None:
+        stage = ImageSaveStage(output_dir=output_dir, output_format="PNG", suffix="_out")
+        await stage.startup()
+        try:
+            first = await stage(bright)
+            second = await stage(dark)
+        finally:
+            await stage.shutdown()
+
+        assert first.success and second.success
+        first_path = Path(first.data.metadata["output_path"])
+        second_path = Path(second.data.metadata["output_path"])
+        assert first_path == output_dir / "kitchen_out.png"
+        assert second_path == output_dir / "kitchen_tif_out.png"
+        assert sorted(p.name for p in output_dir.iterdir()) == ["kitchen_out.png", "kitchen_tif_out.png"]
+        assert np.asarray(Image.open(first_path)).mean() == 250
+        assert np.asarray(Image.open(second_path)).mean() == 10
 
     asyncio.run(runner())
 
@@ -180,3 +216,185 @@ def test_depth_stage_uses_estimate_depth_contract_when_real_model_present(
         assert result.data.metadata["depth_capability"]["model_repo_id"] == "depth-anything/Depth-Anything-V2-Small-hf"
 
     asyncio.run(runner())
+
+
+# ---------------------------------------------------------------------------
+# ColorGradingStage .cube LUT application (H-03: channel order + trilinear lookup)
+# ---------------------------------------------------------------------------
+
+
+def _write_cube(path: Path, size: int, transfer) -> None:
+    """Write a spec-conformant .cube file: red index fastest, then green, then blue."""
+    lines = ['TITLE "test"', f"LUT_3D_SIZE {size}"]
+    for b in range(size):
+        for g in range(size):
+            for r in range(size):
+                out = transfer(r / (size - 1), g / (size - 1), b / (size - 1))
+                lines.append(" ".join(f"{v:.6f}" for v in out))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _grade(stage: ColorGradingStage, array: np.ndarray, tmp_path: Path) -> np.ndarray:
+    return stage._apply_lut_sync(ImageData(array=array.copy(), path=tmp_path / "frame.png")).array
+
+
+_LUT_PIXELS = np.array([[[1.0, 0.25, 0.0], [0.0, 0.5, 1.0], [0.2, 0.4, 0.6]]], dtype=np.float32)
+
+
+def test_color_grading_identity_lut_returns_input_without_posterising(tmp_path: Path) -> None:
+    cube = tmp_path / "identity.cube"
+    _write_cube(cube, 17, lambda r, g, b: (r, g, b))
+    stage = ColorGradingStage(lut_path=cube, intensity=1.0)
+    stage._load_lut()
+
+    np.testing.assert_allclose(_grade(stage, _LUT_PIXELS, tmp_path), _LUT_PIXELS, atol=1e-5)
+
+    ramp = np.repeat(np.linspace(0.0, 1.0, 1000, dtype=np.float32)[None, :, None], 3, axis=2)
+    graded_ramp = _grade(stage, ramp, tmp_path)
+    np.testing.assert_allclose(graded_ramp, ramp, atol=1e-5)
+    assert len(np.unique(graded_ramp[..., 1])) == 1000
+
+
+def test_color_grading_red_blue_swap_lut_swaps_red_and_blue(tmp_path: Path) -> None:
+    cube = tmp_path / "swap_rb.cube"
+    _write_cube(cube, 5, lambda r, g, b: (b, g, r))
+    stage = ColorGradingStage(lut_path=cube, intensity=1.0)
+    stage._load_lut()
+
+    image = np.random.default_rng(3).random((8, 8, 3), dtype=np.float32)
+    np.testing.assert_allclose(_grade(stage, image, tmp_path), image[..., ::-1], atol=1e-5)
+
+    half = ColorGradingStage(lut_path=cube, intensity=0.25)
+    half._load_lut()
+    np.testing.assert_allclose(
+        _grade(half, _LUT_PIXELS, tmp_path), 0.75 * _LUT_PIXELS + 0.25 * _LUT_PIXELS[..., ::-1], atol=1e-5
+    )
+
+
+def test_color_grading_stage_matches_4k_pipeline_lut_lookup(tmp_path: Path) -> None:
+    from transformation_portal.pipelines.rendering_4k.stages import _apply_lut
+
+    cube = tmp_path / "multilinear.cube"
+    _write_cube(cube, 3, lambda r, g, b: (r * g, g * (1.0 - b), 0.25 + 0.5 * b * r))
+
+    async def runner() -> np.ndarray:
+        stage = ColorGradingStage(lut_path=cube, intensity=1.0)
+        await stage.startup()
+        try:
+            result = await stage(ImageData(array=(_LUT_PIXELS * 255).astype(np.uint8), path=tmp_path / "frame.png"))
+        finally:
+            await stage.shutdown()
+        assert result.success
+        assert result.data.metadata["color_graded"] is True
+        return result.data.array
+
+    graded = asyncio.run(runner())
+    expected = _apply_lut((_LUT_PIXELS * 255).astype(np.uint8).astype(np.float32) / 255.0, cube, strength=1.0)
+    np.testing.assert_allclose(graded, expected, atol=1e-5)
+
+
+@pytest.mark.parametrize("shape", [(48, 64), (64, 64)])
+def test_material_response_stage_handles_2d_greyscale(shape: tuple, tmp_path: Path) -> None:
+    """M-13: (H, W) greyscale input must not broadcast masks against the image width."""
+    grey = np.random.default_rng(0).random(shape).astype(np.float32)
+    depth = np.tile(np.linspace(0.0, 1.0, shape[1], dtype=np.float32), (shape[0], 1))
+
+    stage = MaterialResponseStage()
+    flat = stage._enhance_sync(ImageData(array=grey.copy(), path=tmp_path / "g.png", depth_map=depth))
+    channel = stage._enhance_sync(ImageData(array=grey[..., None].copy(), path=tmp_path / "g.png", depth_map=depth))
+
+    assert flat.array.shape == shape
+    assert flat.metadata["material_enhanced"] is True
+    assert np.isfinite(flat.array).all()
+    assert flat.array.min() >= 0.0 and flat.array.max() <= 1.0
+    # Same result as the equivalent single-channel (H, W, 1) image.
+    np.testing.assert_allclose(flat.array, channel.array[..., 0], atol=1e-6)
+
+
+def test_resize_stage_keeps_float_precision() -> None:
+    """M-14: float images are resized in float, not quantised to 256 levels."""
+    ramp = np.linspace(0.0, 1.0, 4096, dtype=np.float32)[None, :, None].repeat(8, 0).repeat(3, 2)
+
+    same = ResizeStage(scale_factor=1.0)._resize_sync(ImageData(array=ramp.copy(), path=Path("x.tif")))
+    assert same.array.dtype == np.float32
+    assert len(np.unique(same.array)) == 4096
+    np.testing.assert_allclose(same.array, ramp, atol=1e-6)
+
+    half = ResizeStage(scale_factor=0.5, method="bilinear")._resize_sync(ImageData(array=ramp.copy(), path=Path("x.tif")))
+    assert half.array.shape == (4, 2048, 3)
+    assert len(np.unique(half.array[..., 0])) > 256
+    assert half.array.min() >= 0.0 and half.array.max() <= 1.0
+
+
+def test_resize_stage_handles_16bit_rgb_and_keeps_uint8_path() -> None:
+    """M-14: uint16 RGB keeps its dtype and precision; uint8 output is unchanged."""
+    rng = np.random.default_rng(1)
+    deep = (rng.random((16, 24, 3)) * 65535).astype(np.uint16)
+    result = ResizeStage(scale_factor=0.5)._resize_sync(ImageData(array=deep.copy(), path=Path("x.tif")))
+    assert result.array.dtype == np.uint16
+    assert result.array.shape == (8, 12, 3)
+    assert len(np.unique(result.array)) > 256
+
+    eight = (rng.random((16, 24, 3)) * 255).astype(np.uint8)
+    expected = np.array(Image.fromarray(eight).resize((12, 8), resample=Image.Resampling.LANCZOS))
+    out = ResizeStage(scale_factor=0.5)._resize_sync(ImageData(array=eight.copy(), path=Path("x.png")))
+    np.testing.assert_array_equal(out.array, expected)
+
+
+def test_resize_stage_resizes_depth_map_with_image() -> None:
+    """M-14: the depth map follows the image so depth-aware stages stay aligned."""
+    image = np.random.default_rng(2).random((20, 30, 3)).astype(np.float32)
+    depth = np.tile(np.linspace(0.0, 1.0, 30, dtype=np.float32), (20, 1))
+    result = ResizeStage(target_size=(15, 10))._resize_sync(ImageData(array=image, path=Path("x.png"), depth_map=depth))
+
+    assert result.array.shape == (10, 15, 3)
+    assert result.depth_map.shape == (10, 15)
+    assert result.depth_map.dtype == np.float32
+    assert result.depth_map.min() >= 0.0 and result.depth_map.max() <= 1.0
+    assert np.all(np.diff(result.depth_map[0]) > 0)
+
+
+@pytest.mark.parametrize("strength", [0.5, 1.0])
+def test_depth_adaptive_denoise_covers_far_field(strength: float) -> None:
+    """M-15: every pixel is denoised and the far field is blurred at least as much as the near field."""
+    rng = np.random.default_rng(3)
+    height, width = 32, 256
+    noisy = np.clip(0.5 + rng.normal(0.0, 0.1, (height, width, 3)), 0.0, 1.0).astype(np.float32)
+    depth = np.tile(np.linspace(0.0, 1.0, width, dtype=np.float32), (height, 1))
+
+    result = DenoiseStage(strength=strength, use_depth=True)._denoise_sync(
+        ImageData(array=noisy.copy(), path=Path("x.png"), depth_map=depth)
+    )
+
+    untouched = np.all(result.array == noisy, axis=2)
+    assert not untouched.any()
+    near_std = float(result.array[:, 8 : width // 4].std())
+    far_std = float(result.array[:, -width // 4 : -8].std())
+    assert far_std < 0.5 * float(noisy.std())
+    assert far_std <= near_std
+
+
+def test_material_response_stage_never_blurs_across_colour_channels(tmp_path: Path, monkeypatch) -> None:
+    """Regression for H-04: every Gaussian on an HxWx3 array must leave the channel axis alone."""
+    import scipy.ndimage
+
+    from transformation_portal.streaming.stages import MaterialResponseStage
+
+    real_gaussian = scipy.ndimage.gaussian_filter
+    rgb_sigmas = []
+
+    def spy(input, sigma, *args, **kwargs):  # pylint: disable=redefined-builtin
+        if np.ndim(input) == 3:
+            rgb_sigmas.append(sigma)
+        return real_gaussian(input, sigma, *args, **kwargs)
+
+    monkeypatch.setattr(scipy.ndimage, "gaussian_filter", spy)
+    rng = np.random.default_rng(0)
+    image_data = ImageData(array=rng.random((24, 24, 3), dtype=np.float32), path=tmp_path / "frame.png")
+
+    result = MaterialResponseStage(use_depth=False)._enhance_sync(image_data)
+
+    assert result.metadata["material_enhanced"] is True
+    assert rgb_sigmas, "material response should blur the RGB array at least once"
+    for sigma in rgb_sigmas:
+        assert np.ndim(sigma) == 1 and len(sigma) == 3 and sigma[-1] == 0, sigma

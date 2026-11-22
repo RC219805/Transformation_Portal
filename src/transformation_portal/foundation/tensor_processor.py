@@ -136,13 +136,13 @@ class TensorProcessor:
         else:
             tensor = torch.empty(shape, dtype=dtype, device=self.device)
 
-        # Set gradient requirement
-        if requires_grad:
-            tensor.requires_grad_(True)
-
         # Optimize memory layout for image tensors (N, C, H, W)
         if len(shape) == 4 and self.config.enable_channels_last:
             tensor = tensor.to(memory_format=torch.channels_last)
+
+        # Set gradient requirement after the layout copy so the result is a leaf
+        if requires_grad:
+            tensor.requires_grad_(True)
 
         return tensor
 
@@ -264,6 +264,13 @@ class TensorProcessor:
             mean = (0.485, 0.456, 0.406)
         if std is None:
             std = (0.229, 0.224, 0.225)
+
+        if not (tensor.is_floating_point() or tensor.is_complex()):
+            # Integer statistics would truncate (ImageNet std -> 0, giving inf)
+            # and unsigned subtraction would wrap, so compute in floating point.
+            if inplace:
+                raise TypeError(f"normalize(inplace=True) requires a floating-point tensor, got {tensor.dtype}")
+            tensor = tensor.to(self._get_dtype())
 
         mean_tensor = torch.tensor(mean, device=self.device, dtype=tensor.dtype)
         std_tensor = torch.tensor(std, device=self.device, dtype=tensor.dtype)

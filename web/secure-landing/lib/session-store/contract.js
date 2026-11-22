@@ -46,9 +46,22 @@
  *     absolute expiration; preserve current identity and CSRF fields.
  * @property {(sessionId: string) => void} deleteSession
  *     Idempotent. ``sessionId`` falsy is a no-op.
+ * @property {(nowMs: number) => void} pruneExpiredSessions
+ *     Drop every session whose idle or absolute expiry is at or before
+ *     ``nowMs``. Stores whose records expire natively (Redis TTL) may treat
+ *     this as a no-op.
  * @property {(throttleKey: string, sinceMs: number) => number} countLoginFailures
  *     How many failed login attempts for this throttle key since ``sinceMs``.
  * @property {(attempt: LoginAttempt) => void} recordLoginAttempt
+ * @property {(throttleKeys: string[], options: {attemptedAt: number, sinceMs: number, limit: number, remoteAddr?: string|null}) => boolean} reserveLoginAttempt
+ *     Atomic check-and-record for the login throttle. When every key has
+ *     fewer than ``limit`` failures since ``sinceMs``, record one failed
+ *     attempt (``attemptedAt``) against every key and return ``true``;
+ *     otherwise record nothing and return ``false``. The check and the
+ *     insert MUST be a single atomic operation so concurrent credential
+ *     POSTs cannot all pass the check before any failure is recorded. The
+ *     caller clears the keys with ``resetLoginAttempts`` when the attempt
+ *     turns out to be a success.
  * @property {(throttleKey: string) => void} resetLoginAttempts
  *     Called after a successful login to clear the throttle.
  * @property {(cutoffMs: number) => void} pruneLoginAttempts

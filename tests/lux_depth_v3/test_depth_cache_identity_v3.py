@@ -771,6 +771,78 @@ def test_normal_shared_object_store_fully_validates_cas_at_most_once(tmp_path, m
     assert cache.stats()["entry_count"] == 2
 
 
+def _fill_cache_to_capacity(tmp_path, monkeypatch, *, entries: int) -> tuple[DepthCache, list]:
+    # Keep the periodic full audit out of the measured window: this contract is
+    # about quota-pressure scans, which a full cache runs on every store.
+    monkeypatch.setattr(depth_cache_module, "_SIZE_CHECK_INTERVAL", 10_000)
+    probe = DepthCache(tmp_path / "probe")
+    probe_identity = _identity(input_label="probe")
+    assert probe.store(probe_identity, np.zeros((16, 16), dtype=np.float32))
+    probe_pointer, probe_object, _ = _entry_paths(probe, probe_identity)
+    entry_bytes = probe_pointer.stat().st_size + probe_object.stat().st_size
+    cache = DepthCache(tmp_path / "cache", max_size_gb=(entries * entry_bytes + entry_bytes // 2) / (1024**3))
+    identities = []
+    for index in range(entries):
+        identity = _identity(input_label=f"capacity-{index}")
+        assert cache.store(identity, np.full((16, 16), index + 1, dtype=np.float32))
+        identities.append(identity)
+    return cache, identities
+
+
+def test_pressure_scan_at_capacity_does_not_reverify_every_unchanged_object(tmp_path, monkeypatch) -> None:
+    entries = 8
+    cache, identities = _fill_cache_to_capacity(tmp_path, monkeypatch, entries=entries)
+
+    validation_counts: list[int] = []
+    real_inspect_verified_object = cache._inspect_verified_object
+    calls = 0
+
+    def counting_inspect_verified_object(path):
+        nonlocal calls
+        calls += 1
+        return real_inspect_verified_object(path)
+
+    monkeypatch.setattr(cache, "_inspect_verified_object", counting_inspect_verified_object)
+    for index in range(entries, entries + 6):
+        calls = 0
+        identity = _identity(input_label=f"capacity-{index}")
+        assert cache.store(identity, np.full((16, 16), index + 1, dtype=np.float32))
+        identities.append(identity)
+        validation_counts.append(calls)
+
+    # Only the object published by the previous store is new to this instance;
+    # every other unchanged object keeps its earlier full verification.
+    assert max(validation_counts[1:]) <= 1
+    assert cache.get(identities[-1]) is not None
+    stats = cache.stats()
+    assert 0 < stats["entry_count"] <= entries
+
+
+def test_pressure_scan_reverifies_an_object_rewritten_since_its_verification(tmp_path, monkeypatch) -> None:
+    entries = 6
+    cache, identities = _fill_cache_to_capacity(tmp_path, monkeypatch, entries=entries)
+    # One more store at capacity runs a pressure scan that fully verifies the
+    # newest survivor, which is never the eviction victim of the next store.
+    assert cache.store(_identity(input_label="capacity-warm"), np.full((16, 16), 98, dtype=np.float32))
+    victim = identities[-1]
+    pointer_path, object_path, _ = _entry_paths(cache, victim)
+    verified_stat = object_path.stat()
+    with object_path.open("r+b") as handle:
+        handle.seek(-1, os.SEEK_END)
+        handle.write(b"X")
+    # A rewrite moves the timestamps; pin a distinct mtime so the test does not
+    # depend on the filesystem clock granularity.
+    os.utime(object_path, ns=(verified_stat.st_atime_ns, verified_stat.st_mtime_ns + 1_000_000))
+
+    assert cache.store(_identity(input_label="capacity-next"), np.full((16, 16), 99, dtype=np.float32))
+
+    # The in-place rewrite changed the inode state, so the pressure scan ran the
+    # full verification, found the checksum mismatch and reclaimed the pair.
+    assert not pointer_path.exists()
+    assert not object_path.exists()
+    assert cache.get(victim) is None
+
+
 @pytest.mark.parametrize("operation", ["get", "stats"])
 def test_deeply_nested_pointer_is_a_cleanable_miss(tmp_path, operation) -> None:
     cache = DepthCache(tmp_path)

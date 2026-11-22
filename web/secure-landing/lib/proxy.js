@@ -6,8 +6,17 @@ const STRIP_REQUEST_HEADERS = new Set([
   "connection",
   "content-length",
   "cookie",
+  "expect",
   "forwarded",
   "host",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "proxy-connection",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
   "x-forwarded-for",
   "x-forwarded-host",
   "x-forwarded-proto",
@@ -45,10 +54,22 @@ export function buildUpstreamHeaders(
 ) {
   const headers = new Headers();
   const tenantHeader = getConfig().pilotTenantHeader;
+  // Headers named in the client's Connection header are hop-by-hop for the
+  // client connection only (RFC 9110 section 7.6.1) and are not forwarded.
+  const connectionScoped = new Set(
+    String(sourceHeaders.get("connection") || "")
+      .split(",")
+      .map((token) => token.trim().toLowerCase())
+      .filter(Boolean)
+  );
 
   for (const [key, value] of sourceHeaders.entries()) {
     const normalizedKey = key.toLowerCase();
-    if (STRIP_REQUEST_HEADERS.has(normalizedKey) || normalizedKey === tenantHeader) continue;
+    if (
+      STRIP_REQUEST_HEADERS.has(normalizedKey)
+      || connectionScoped.has(normalizedKey)
+      || normalizedKey === tenantHeader
+    ) continue;
     headers.set(key, value);
   }
 

@@ -644,3 +644,110 @@ class TestRuntimeLicensingManifest:
 
         assert restored.start_time == "2026-05-30T00:00:00Z"
         assert restored.licensing is None
+
+
+class TestProvenanceSidecarGitRevision:
+    """The provenance sidecar and the manifest must name the same pipeline revision."""
+
+    def test_sidecar_git_sha_ignores_the_callers_working_directory(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Running from inside an unrelated repository must not record that repository's HEAD.
+
+        The sidecar used to ask git for the HEAD of ``Path.cwd()``, so a CLI or
+        service started from a customer's own checkout stamped every
+        ``*_combined_provenance.json`` with the customer's commit while the
+        manifest beside it carried the pipeline revision.
+        """
+        import subprocess
+
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+        pipeline_sha = "a" * 40
+        unrelated_sha = "f" * 40
+        unrelated_repo = tmp_path / "customer-project"
+        unrelated_repo.mkdir()
+        real_run = subprocess.run
+        git_head_lookups: list[Path] = []
+
+        def fake_run(command: Any, *args: Any, **kwargs: Any) -> Any:
+            """Answer ``git rev-parse HEAD`` per directory; run everything else for real."""
+            if isinstance(command, (list, tuple)) and list(command[:3]) == ["git", "rev-parse", "HEAD"]:
+                lookup_dir = Path(kwargs["cwd"]).resolve()
+                git_head_lookups.append(lookup_dir)
+                sha = unrelated_sha if lookup_dir == unrelated_repo.resolve() else pipeline_sha
+                return subprocess.CompletedProcess(command, 0, stdout=f"{sha}\n", stderr="")
+            return real_run(command, *args, **kwargs)
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        image = _make_test_image(inputs, "villa.png")
+        orchestrator = _create_orchestrator(tmp_path / "output")
+        monkeypatch.chdir(unrelated_repo)
+
+        result = orchestrator.enhance_image(ImageInput(path=image), input_root=inputs)
+
+        manifest_path = Path(result["manifest"])
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        sidecar_path = manifest_path.with_name(f"{manifest_path.stem}_provenance.json")
+        ingest_context = json.loads(sidecar_path.read_text(encoding="utf-8"))["ingest_context"]
+        # The run really did start inside the unrelated repository ...
+        assert Path(ingest_context["working_directory"]).resolve() == unrelated_repo.resolve()
+        # ... yet both records name the pipeline checkout, and agree.
+        assert manifest["repro"]["v3_git_revision"] == pipeline_sha
+        assert ingest_context["git_commit_sha"] == pipeline_sha
+        assert unrelated_repo.resolve() not in git_head_lookups
+
+
+class TestRunCardSurvivesUnreadableInput:
+    """F12: an input that already failed must not abort run-card assembly for the batch."""
+
+    @staticmethod
+    def _failing_hash_for(unreadable: Path):
+        from transformation_portal.lux_depth_v3 import orchestrator as orch_mod
+
+        real_hash = orch_mod.compute_file_sha256
+
+        def fake_hash(path: Any, *args: Any, **kwargs: Any) -> str:
+            if Path(path).resolve() == unreadable.resolve():
+                raise PermissionError(13, "Permission denied", str(path))
+            return real_hash(path, *args, **kwargs)
+
+        return fake_hash
+
+    def test_batch_with_one_unreadable_input_still_writes_run_card(self, tmp_path: Path) -> None:
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        images = [_make_test_image(inputs, f"img_{index}.png") for index in range(3)]
+        orchestrator = _create_orchestrator(tmp_path / "output", emit_run_card=True, enable_parallel_processing=False)
+
+        with patch(
+            "transformation_portal.lux_depth_v3.orchestrator.compute_file_sha256",
+            side_effect=self._failing_hash_for(images[1]),
+        ):
+            results = orchestrator.enhance_batch(inputs)
+
+        statuses = {Path(result["image"]).name: result["status"] for result in results}
+        assert statuses == {"img_0.png": "ok", "img_1.png": "error", "img_2.png": "ok"}
+        run_cards = [path for path in (tmp_path / "output").glob("run_card_*.json") if not path.name.endswith(".self.json")]
+        assert len(run_cards) == 1
+        run_card = json.loads(run_cards[0].read_text(encoding="utf-8"))
+        assert [record["path"] for record in run_card["inputs"]] == ["img_0.png", "img_2.png"]
+        assert run_card["error_count"] == 1
+        assert run_card["success_count"] == 2
+
+    def test_successful_input_that_cannot_be_hashed_still_fails_closed(self, tmp_path: Path) -> None:
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        image = _make_test_image(inputs, "img_0.png")
+        orchestrator = _create_orchestrator(tmp_path / "output")
+
+        with patch(
+            "transformation_portal.lux_depth_v3.orchestrator.compute_file_sha256",
+            side_effect=self._failing_hash_for(image),
+        ):
+            with pytest.raises(OSError, match="Hash computation failed"):
+                orchestrator._build_run_card_inputs([{"image": str(image), "status": "ok"}])

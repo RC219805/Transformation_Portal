@@ -15,10 +15,32 @@ from typing import Any
 
 import numpy as np
 
-from transformation_portal.core.execution_plan import decode_bounded_json_object
+from transformation_portal.core.execution_plan import MAX_PLAN_STRING_LENGTH, decode_bounded_json_object
 from transformation_portal.core.execution_plan_v3 import PhotographyPlan, parse_photography_plan
 from transformation_portal.ingest.canonical_json import canonicalize_json, dumps_json
 from transformation_portal.lux_depth_v4.lifecycle import authorize_model
+
+# The parent decodes replies with the bounded plan decoder, whose string cap
+# (MAX_PLAN_STRING_LENGTH) counts the escaped JSON text: a non-ASCII character
+# costs up to 12 characters as \uXXXX escapes. The error budget is therefore
+# measured in escaped characters, so a longer error is never replaced by a
+# decoder error on the parent side.
+MAX_WORKER_ERROR_CHARS = MAX_PLAN_STRING_LENGTH // 2
+
+
+def error_reply(exc: BaseException) -> str:
+    """Serialize a worker failure that the parent's bounded decoder can read."""
+    message = str(exc)
+    if len(dumps_json(message)) - 2 > MAX_WORKER_ERROR_CHARS:
+        budget, kept = MAX_WORKER_ERROR_CHARS, []
+        for character in message:
+            width = len(dumps_json(character)) - 2
+            if width > budget:
+                break
+            budget -= width
+            kept.append(character)
+        message = "".join(kept) + " [truncated]"
+    return dumps_json({"ok": False, "error": message})
 
 
 def device_probe(requested: str) -> str:
@@ -161,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
                     raise ValueError("Unsupported worker command or lifecycle transition")
             print(dumps_json({"ok": True, "result": result}, allow_nan=False), flush=True)
         except Exception as exc:
-            print(dumps_json({"ok": False, "error": str(exc)}), flush=True)
+            print(error_reply(exc), flush=True)
             return 1
     return 0
 

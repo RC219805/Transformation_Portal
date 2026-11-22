@@ -889,3 +889,69 @@ class TestBaseNameDerivation:
         # (removesuffix only removes from end)
         assert (output_dir / "scene_depth_map_normal.png").exists()
         assert not (output_dir / "scene__map_normal.png").exists()
+
+
+class TestBatchDepthFileSelection:
+    """Batch mode processes each scene once (LC-11)."""
+
+    @staticmethod
+    def _write_orchestrator_depth_outputs(depth_dir, key):
+        depth = np.random.default_rng(0).random((64, 64)).astype(np.float32)
+        np.save(depth_dir / f"{key}_depth.npy", depth)
+        Image.fromarray((depth * 65535).astype(np.uint16)).save(depth_dir / f"{key}_depth.png")
+        (depth_dir / f"{key}_depth.json").write_text("{}")
+
+    def test_npy_png_and_sidecar_count_as_one_scene(self, cli_runner, tmp_path):
+        import json
+
+        depth_dir = tmp_path / "depth"
+        depth_dir.mkdir()
+        self._write_orchestrator_depth_outputs(depth_dir, "scene1")
+
+        result = cli_runner.invoke(
+            app, ["generate", "--depth-dir", str(depth_dir), "--output", str(tmp_path / "pbr"), "--json"]
+        )
+
+        payload = json.loads(result.stdout)
+        assert result.exit_code == 0, result.stdout
+        assert payload["total_files"] == 1
+        assert payload["success_count"] == 1
+        assert payload["error_count"] == 0
+
+        single = cli_runner.invoke(
+            app, ["generate", "--depth", str(depth_dir / "scene1_depth.npy"), "--output", str(tmp_path / "single")]
+        )
+        assert single.exit_code == 0, single.stdout
+        for map_name in ("normal", "roughness", "ao"):
+            batch_map = np.asarray(Image.open(tmp_path / "pbr" / f"scene1_{map_name}.png"))
+            single_map = np.asarray(Image.open(tmp_path / "single" / f"scene1_{map_name}.png"))
+            assert np.array_equal(batch_map, single_map)
+
+    def test_no_overwrite_on_empty_output_does_not_fail_duplicates(self, cli_runner, tmp_path):
+        import json
+
+        depth_dir = tmp_path / "depth"
+        depth_dir.mkdir()
+        self._write_orchestrator_depth_outputs(depth_dir, "scene1")
+
+        result = cli_runner.invoke(
+            app,
+            ["generate", "--depth-dir", str(depth_dir), "--output", str(tmp_path / "pbr"), "--json", "--no-overwrite"],
+        )
+
+        payload = json.loads(result.stdout)
+        assert result.exit_code == 0, result.stdout
+        assert payload["status"] == "success"
+        assert payload["failed_files"] == []
+
+    def test_png_only_scene_is_still_processed(self, cli_runner, tmp_path):
+        from transformation_portal.lux_depth_v3.pbr_cli import _select_batch_depth_files
+
+        (tmp_path / "a_depth.png").write_bytes(b"")
+        (tmp_path / "b_depth.npy").write_bytes(b"")
+        (tmp_path / "b_depth.png").write_bytes(b"")
+        (tmp_path / "b_depth.json").write_text("{}")
+
+        selected = _select_batch_depth_files(sorted(tmp_path.glob("*_depth.*")))
+
+        assert [p.name for p in selected] == ["a_depth.png", "b_depth.npy"]

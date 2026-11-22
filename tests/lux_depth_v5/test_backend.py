@@ -380,6 +380,21 @@ def test_worker_protocol_rejects_invalid_lifecycle_and_duplicate_keys(monkeypatc
     assert result["ok"] is False
 
 
+def test_worker_error_reply_is_bounded_for_the_parent_decoder(monkeypatch, capsys):
+    """LN-10: an oversized worker error must not be replaced by a decoder error."""
+    from transformation_portal.core.execution_plan import decode_bounded_json_object
+
+    def failing(_plan_bytes):
+        raise ValueError("runtime failure " + "y" * 20_000)
+
+    monkeypatch.setattr(worker, "parse_plan_v4", failing)
+    monkeypatch.setattr(worker.sys, "stdin", SimpleNamespace(buffer=io.BytesIO(b'{"command":"prepare","plan":{}}\n')))
+    assert worker.main([]) == 1
+    reply = decode_bounded_json_object(capsys.readouterr().out.strip())
+    assert reply["ok"] is False and reply["error"].startswith("runtime failure yyy")
+    assert reply["error"].endswith("[truncated]")
+
+
 def test_native_shape_mismatch_cannot_be_resampled_silently():
     model = _model()
     model._convert_to_prediction = lambda raw_output: SimpleNamespace(depth=np.ones((1, 13, 28), np.float32))

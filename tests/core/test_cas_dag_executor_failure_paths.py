@@ -23,9 +23,14 @@ from __future__ import annotations
 import datetime as _dt
 import hashlib
 import json
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import List
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 
 from transformation_portal.core.cas_dag_executor import (
@@ -33,6 +38,7 @@ from transformation_portal.core.cas_dag_executor import (
     CASDAGExecutor,
 )
 from transformation_portal.core.execution_wrapper import FileLock
+from transformation_portal.determinism.jcs import dumpb as jcs_dumpb
 from transformation_portal.stage_graph.graph import StageGraph
 from transformation_portal.stage_graph.stage import (
     Stage,
@@ -300,6 +306,44 @@ def test_invalidate_with_before_filter_only_removes_old_entries(make_executor, t
     assert all(not p.exists() for p in cache_files)
 
 
+def test_invalidate_accepts_a_naive_local_before_time(make_executor):
+    """``invalidate(before=datetime.now())`` is the obvious call and must work."""
+    executor = make_executor()
+    graph = StageGraph("naive-before")
+    graph.add_stage(_RecordingStage("only"))
+    executor.execute(graph, StageContext())
+    cache_files = list((executor.cache_dir / "dag_cache").rglob("*.json"))
+    assert cache_files
+
+    an_hour_ago = _dt.datetime.now() - _dt.timedelta(hours=1)
+    assert executor.invalidate(before=an_hour_ago) == 0
+    assert all(p.exists() for p in cache_files)
+
+    in_an_hour = _dt.datetime.now() + _dt.timedelta(hours=1)
+    assert executor.invalidate(before=in_an_hour) == len(cache_files)
+    assert all(not p.exists() for p in cache_files)
+
+
+@pytest.mark.parametrize("cached_at", ["not-a-timestamp", "2020-01-01T00:00:00", 12345, None])
+def test_invalidate_skips_entries_with_an_unusable_timestamp(make_executor, cached_at):
+    """One malformed entry must not abort the sweep over the others."""
+    executor = make_executor()
+    graph = StageGraph("bad-timestamp")
+    graph.add_stage(_RecordingStage("good"))
+    graph.add_stage(_RecordingStage("odd"))
+    executor.execute(graph, StageContext())
+    by_stage = {json.loads(p.read_text())["stage_name"]: p for p in (executor.cache_dir / "dag_cache").rglob("*.json")}
+    manifest = json.loads(by_stage["odd"].read_text())
+    manifest["cached_at"] = cached_at
+    by_stage["odd"].write_text(json.dumps(manifest))
+
+    removed = executor.invalidate(before=_dt.datetime(9999, 1, 1, tzinfo=_dt.timezone.utc))
+
+    assert not by_stage["good"].exists()
+    assert removed == (2 if cached_at is None else 1)
+    assert by_stage["odd"].exists() is (cached_at is not None)
+
+
 def test_invalidate_with_unknown_stage_name_is_no_op(make_executor):
     executor = make_executor()
     graph = StageGraph("unknown-pipeline")
@@ -452,3 +496,172 @@ def test_cache_path_is_partitioned_by_id_prefix(tmp_path):
     # non-empty and short.
     assert len(path.parent.name) == 2
     assert path.suffix == ".json"
+
+
+# ---------------------------------------------------------------------------
+# Results the cache cannot hold
+# ---------------------------------------------------------------------------
+
+
+class _FixedResultStage(_RecordingStage):
+    """Stage that returns the given artifacts and result metadata with a fixed status."""
+
+    def __init__(
+        self,
+        name: str,
+        *,
+        artifacts: dict,
+        metadata: dict | None = None,
+        deps: List[str] | None = None,
+        status: StageStatus = StageStatus.COMPLETED,
+    ):
+        super().__init__(name, deps)
+        self._artifacts = artifacts
+        self._metadata = metadata or {}
+        self._status = status
+
+    def compute(self, context: StageContext) -> StageResult:
+        self.calls += 1
+        return StageResult(
+            stage_name=self.name,
+            stage_version=self.version,
+            status=self._status,
+            artifacts=dict(self._artifacts),
+            metadata=dict(self._metadata),
+        )
+
+
+def _manifests(executor: CASDAGExecutor) -> list:
+    return sorted((executor.cache_dir / "dag_cache").rglob("*.json"))
+
+
+@pytest.mark.parametrize(
+    "artifact",
+    [np.float32(0.5), b"raw-bytes", Path("output.png"), {1: "non-string key"}, float("nan")],
+    ids=["numpy-float32", "bytes", "path", "non-string-key", "nan"],
+)
+def test_result_that_cannot_be_cached_does_not_fail_the_stage(make_executor, artifact):
+    """A cache write is an optimisation: the stage succeeded either way."""
+    executor = make_executor()
+    graph = StageGraph("uncacheable")
+    stage = _FixedResultStage("stats", artifacts={"stats.value": artifact})
+    graph.add_stage(stage)
+
+    first = executor.execute(graph, StageContext())
+    second = executor.execute(graph, StageContext())
+
+    assert first.success is True and first.error is None
+    assert first.stage_results["stats"].artifacts["stats.value"] is artifact
+    assert (first.cache_misses, second.cache_misses, second.cache_hits) == (1, 1, 0)
+    assert stage.calls == 2
+    assert _manifests(executor) == []
+
+
+def test_numpy_float_in_result_metadata_reads_back_from_cache(make_executor):
+    """The manifest digest is computed over the number that is written, so the entry verifies."""
+    executor = make_executor()
+    graph = StageGraph("float-metadata")
+    stage = _FixedResultStage(
+        "stats", artifacts={"stats.mean": 1.0}, metadata={"mean": np.float64(0.5), "tiny": np.float64(1e-5)}
+    )
+    graph.add_stage(stage)
+
+    first = executor.execute(graph, StageContext())
+    second = executor.execute(graph, StageContext())
+
+    assert first.success and second.success
+    assert (second.cache_hits, second.cache_misses) == (1, 0)
+    assert stage.calls == 1
+    assert second.stage_results["stats"].metadata == {"mean": 0.5, "tiny": 1e-5}
+
+
+def test_manifest_larger_than_the_read_limit_is_not_published(make_executor, monkeypatch):
+    """Store and read apply one size limit, to the manifest bytes on disk."""
+    from transformation_portal.core import cas_dag_executor
+
+    executor = make_executor()
+    graph = StageGraph("large-manifest")
+    stage = _FixedResultStage("big", artifacts={"big.values": list(range(400))})
+    graph.add_stage(stage)
+
+    assert executor.execute(graph, StageContext()).success
+    (manifest_path,) = _manifests(executor)
+    written_size = manifest_path.stat().st_size
+    canonical_size = len(jcs_dumpb(json.loads(manifest_path.read_text())))
+    assert canonical_size < written_size
+    manifest_path.unlink()
+
+    # A limit the canonical form fits but the file on disk does not.
+    monkeypatch.setattr(cas_dag_executor, "_MAX_CACHE_MANIFEST_BYTES", (canonical_size + written_size) // 2)
+    result = executor.execute(graph, StageContext())
+
+    assert result.success is True
+    assert (result.cache_hits, result.cache_misses) == (0, 1)
+    assert _manifests(executor) == []
+    assert [path.name for path in manifest_path.parent.iterdir()] == []
+
+
+def test_skipped_stage_passes_its_artifacts_on_and_is_not_cached(make_executor):
+    """A stage that had nothing to do is not a failure, and leaves nothing to cache."""
+    executor = make_executor()
+    graph = StageGraph("optional-stage")
+    skipped = _FixedResultStage("optional", artifacts={"optional.image": "pixels"}, status=StageStatus.SKIPPED)
+    downstream = _RecordingStage("report", deps=["optional"])
+    graph.add_stage(skipped)
+    graph.add_stage(downstream)
+
+    first = executor.execute(graph, StageContext())
+    second = executor.execute(graph, StageContext())
+
+    assert first.success is True and first.error is None
+    assert first.execution_order == ["optional", "report"]
+    assert first.stage_results["optional"].status == StageStatus.SKIPPED
+    assert (skipped.calls, downstream.calls) == (2, 1)
+    assert (second.cache_hits, second.cache_misses) == (1, 1)
+    assert [json.loads(path.read_text())["stage_name"] for path in _manifests(executor)] == ["report"]
+
+
+# ---------------------------------------------------------------------------
+# Lock exclusivity under a short lock_timeout
+# ---------------------------------------------------------------------------
+
+
+def test_duplicate_run_does_not_execute_a_stage_that_is_still_running(tmp_path):
+    """A second identical run must not start a stage while the first run still
+    holds its lock, even when the stage outlives 2x ``lock_timeout``."""
+    started = threading.Event()
+    finish = threading.Event()
+    compute_calls: List[str] = []
+
+    class _SlowStage(_RecordingStage):
+        def compute(self, context: StageContext) -> StageResult:
+            compute_calls.append(threading.current_thread().name)
+            if len(compute_calls) == 1:
+                started.set()
+                assert finish.wait(timeout=30)
+            return super().compute(context)
+
+    def run():
+        graph = StageGraph("slow-pipeline")
+        graph.add_stage(_SlowStage("depth"))
+        executor = CASDAGExecutor(
+            ArtifactStore(tmp_path / "cas"),
+            tmp_path / "cache",
+            CASDAGConfig(lock_timeout=0.05, enable_provenance=False),
+        )
+        return executor.execute(graph, StageContext(artifacts={"seed": 1}))
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        first = pool.submit(run)
+        try:
+            assert started.wait(timeout=30)
+            time.sleep(0.15)  # the first run now holds its lock for more than 2x lock_timeout
+            duplicate = run()
+        finally:
+            finish.set()
+        first_result = first.result(timeout=30)
+
+    assert len(compute_calls) == 1
+    assert duplicate.success is False
+    assert duplicate.error is not None and "Could not acquire lock" in duplicate.error
+    assert first_result.success is True

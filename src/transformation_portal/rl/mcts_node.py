@@ -146,30 +146,37 @@ class MCTSNode:
     def get_policy(self, temperature: float = 1.0) -> dict[int, float]:
         """Get policy distribution from visit counts.
 
+        The probability of an action is ``N(a) ** (1 / temperature)``
+        normalised over all actions (AlphaZero visit-count policy).
+
         Args:
-            temperature: Temperature for softmax (0 = greedy, 1 = proportional)
+            temperature: Visit-count temperature (0 = greedy with ties split
+                equally, 1 = proportional to visit counts)
 
         Returns:
-            Dictionary mapping action -> probability
+            Dictionary mapping action -> probability (sums to 1)
         """
         visits = self.get_action_visits()
 
         if not visits:
             return {}
 
-        if temperature == 0:
-            # Greedy
-            best = max(visits.values())
-            return {a: 1.0 if v == best else 0.0 for a, v in visits.items()}
+        best = max(visits.values())
 
-        # Softmax with temperature
-        import math
+        if temperature <= 0:
+            # Greedy; ties share the probability mass equally
+            n_best = sum(1 for v in visits.values() if v == best)
+            return {a: (1.0 / n_best if v == best else 0.0) for a, v in visits.items()}
 
-        max_visits = max(visits.values())
-        exp_visits = {a: math.exp((v - max_visits) / temperature) for a, v in visits.items()}
-        total = sum(exp_visits.values())
+        if best <= 0:
+            # No visits yet: uniform
+            return {a: 1.0 / len(visits) for a in visits}
 
-        return {a: v / total for a, v in exp_visits.items()}
+        # (N / N_max) ** (1 / T) is N ** (1 / T) rescaled, so it cannot overflow
+        weights = {a: (v / best) ** (1.0 / temperature) for a, v in visits.items()}
+        total = sum(weights.values())
+
+        return {a: w / total for a, w in weights.items()}
 
     def depth(self) -> int:
         """Get depth of node in tree."""

@@ -17,6 +17,7 @@ pytestmark = [
     pytest.mark.unit,
 ]
 
+from transformation_portal.depth.backends.protocol import LicenseType
 from transformation_portal.lux_depth_v3.batch_stats import compute_batch_runtime_stats
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
@@ -121,6 +122,11 @@ class TestEnhanceBatch:
                 mock_backend = Mock()
                 mock_backend.ensure_available.return_value = None  # Success
                 mock_backend.name = "da3"
+                # Depth metadata records backend.license_type.value. Left as an
+                # auto-attribute it is a Mock, which canonical JSON chases
+                # through to_dict() until RecursionError: every image fails and
+                # the run burns ~10 GB of mock call records.
+                mock_backend.license_type = LicenseType.COMMERCIAL
 
                 mock_registry = Mock()
                 mock_registry.get_backend.return_value = mock_backend
@@ -173,49 +179,30 @@ class TestEnhanceBatch:
                 mock_write.return_value = (Path("depth.png"), None, mock_stats)
 
                 # Run batch processing
-                try:
-                    results = orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
+                results = orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
 
-                    # Verify results structure
-                    assert isinstance(results, list)
-                    assert len(results) == 3  # We created 3 test images
+            # Every image must actually succeed. A failed image contributes no
+            # runtime, so tolerating failures here would leave the stats path
+            # unexercised and let the original regression (results passed where
+            # List[float] was expected) return unnoticed.
+            assert isinstance(results, list)
+            assert len(results) == 3  # We created 3 test images
+            assert [result.get("status") for result in results] == ["ok", "ok", "ok"], results
+            runtimes = [result["runtime_s"] for result in results]
+            assert all(isinstance(runtime, float) and runtime >= 0.0 for runtime in runtimes)
 
-                    # Each result should have runtime_s
-                    for result in results:
-                        assert isinstance(result, dict)
-                        assert "runtime_s" in result or "error" in result
+            batch_manifests = list((tmpdir_path / "manifests").glob("batch_*.json"))
+            assert len(batch_manifests) == 1
+            with open(batch_manifests[0], encoding="utf-8") as f:
+                manifest = json.load(f)
 
-                    # Check that batch manifest was created
-                    manifests_dir = tmpdir_path / "manifests"
-                    if manifests_dir.exists():
-                        batch_manifests = list(manifests_dir.glob("batch_*.json"))
-                        if batch_manifests:
-                            # Verify batch manifest has runtime stats
-                            with open(batch_manifests[0]) as f:
-                                manifest = json.load(f)
-
-                            # Should have stats dict with runtime statistics
-                            assert "stats" in manifest
-                            stats = manifest["stats"]
-
-                            # Check for runtime statistics fields
-                            # These come from compute_batch_runtime_stats
-                            if any(r.get("status") == "ok" for r in results):
-                                # Only check if we had successful results
-                                assert "count" in stats or "total" in stats
-
-                except Exception as e:
-                    # The test might fail due to missing dependencies or other issues
-                    # but the important part is that if enhance_batch runs,
-                    # it must not fail with a type error when calling compute_batch_runtime_stats
-                    if "takes 1 positional argument but" in str(e) or ("expected" in str(e) and "List[float]" in str(e)):
-                        pytest.fail(
-                            f"enhance_batch failed with signature mismatch error: {e}\n"
-                            "This indicates compute_batch_runtime_stats is still being called "
-                            "with results instead of extracted runtime_s values."
-                        )
-                    # Other errors are acceptable for this focused test
-                    return
+            # compute_batch_runtime_stats must have received the extracted floats.
+            stats = manifest["stats"]
+            assert stats["count"] == 3
+            assert stats["total_images"] == 3
+            assert stats["total"] == pytest.approx(sum(runtimes))
+            assert stats["min"] == pytest.approx(min(runtimes))
+            assert stats["max"] == pytest.approx(max(runtimes))
 
     def test_enhance_batch_handles_partial_failure(self, batch_temp_workspace):
         """Test that batch processing handles partial failures gracefully."""
@@ -1114,6 +1101,67 @@ class TestEnhanceBatch:
                         "shape_context": {},
                     },
                 }
+
+    def test_parallel_preprocess_error_row_names_the_failed_image(self, batch_temp_workspace):
+        """Regression (audit F17): a preprocessing failure in the parallel path must
+        emit the same ``image`` key as the enhancement error rows, so the batch
+        manifest and run card can attribute the failure to its input."""
+        config = EnhanceConfig(
+            model_variant=ModelVariant.METRIC_LARGE,
+            enable_v2=False,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as mock_registry_class:
+                mock_backend = Mock()
+                mock_backend.ensure_available.return_value = None
+                mock_backend.name = "da3"
+
+                mock_registry = Mock()
+                mock_registry.get_backend.return_value = mock_backend
+                mock_registry_class.return_value = mock_registry
+
+                orchestrator = EnhanceOrchestrator(
+                    config=config,
+                    output_root=tmpdir_path,
+                )
+                orchestrator._use_parallel = True
+
+                input_dir = batch_temp_workspace["input_dir"]
+                fake_inputs = [ImageInput(path=input_dir / f"test_{i}.jpg") for i in range(4)]
+                failing = fake_inputs[2].path
+
+                def _preprocess(image_input, input_root):
+                    if image_input.path == failing:
+                        raise OSError("simulated stat failure")
+                    return {
+                        "status": "ok",
+                        "image_input": image_input,
+                        "output_key": Path(image_input.path.stem),
+                        "depth_path": tmpdir_path / "depth" / f"{image_input.path.stem}_depth.png",
+                        "manifest_path": tmpdir_path / "manifests" / f"{image_input.path.stem}_combined.json",
+                        "should_skip": False,
+                    }
+
+                def _enhance(image_input, input_root, _precomputed_paths=None):
+                    return {"status": "ok", "image": str(image_input.path)}
+
+                with (
+                    patch.object(orchestrator, "_preprocess_single", side_effect=_preprocess),
+                    patch.object(orchestrator, "enhance_image", side_effect=_enhance),
+                ):
+                    results = orchestrator.enhance_batch_parallel(fake_inputs, input_root=input_dir)
+
+                assert [row["image"] for row in results] == [str(item.path) for item in fake_inputs]
+                error_row = results[2]
+                assert error_row["status"] == "error"
+                assert error_row["image"] == str(failing)
+                assert error_row["error"] == "simulated stat failure"
+                assert "image_input" not in error_row
+                assert EnhanceOrchestrator._execution_result_input_path(error_row) == failing
+                json.dumps(error_row)
 
     def test_enhance_batch_sequential_enriches_apex_gate_error_payload(self, batch_temp_workspace):
         """Sequential batch path should emit structured ApexStrictGateError fields."""

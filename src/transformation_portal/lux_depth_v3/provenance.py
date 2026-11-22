@@ -29,19 +29,22 @@ Policy Boundaries:
 from __future__ import annotations
 
 import datetime
+import functools
 import hashlib
 import json
 import logging
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from ..ingest.canonical_json import dumps_json
+from .io_atomic import atomic_write_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -65,11 +68,44 @@ class SchemaValidationError(ProvenanceError):
     """Raised when schema validation fails."""
 
 
-def _check_exiftool_available() -> bool:
-    """Check if exiftool is available in PATH.
+class _ToolProbeUnavailable(Exception):
+    """A tool probe could not run the tool or the tool exited non-zero.
 
-    Returns:
-        True if exiftool is available, False otherwise
+    Raised instead of returned so that ``functools.lru_cache`` keeps only
+    successful probes: a tool that is missing now is probed again later.
+    """
+
+
+_ToolIdentity = Optional[Tuple[str, int, int, int, int]]
+
+
+def _resolved_tool_identity(name: str) -> _ToolIdentity:
+    """Return the identity of the executable ``name`` resolves to on PATH.
+
+    The memoised probes are keyed on it. A tool that is installed, upgraded,
+    replaced or removed while the process lives (or a changed PATH) therefore
+    gets a fresh probe, so a long-lived process never records the version, or
+    the availability, it saw for a different executable. ``None`` means PATH
+    resolves nothing; the probe itself still decides availability.
+    """
+    try:
+        resolved = shutil.which(name)
+        if resolved is None:
+            return None
+        file_stat = os.stat(resolved)
+    except (OSError, ValueError):
+        return None
+    return (resolved, file_stat.st_dev, file_stat.st_ino, file_stat.st_size, file_stat.st_mtime_ns)
+
+
+@functools.lru_cache(maxsize=1)
+def _probe_exiftool_version(tool_identity: _ToolIdentity) -> str:
+    """Run ``exiftool -ver`` once per resolved executable and return its stripped output.
+
+    The installed exiftool is invariant for a batch, so a successful probe is
+    memoised instead of spawning a Perl interpreter several times per image.
+    ``tool_identity`` (:func:`_resolved_tool_identity`) is only the memo key.
+    Failures are not cached. Use :func:`clear_tool_probe_caches` to re-probe.
     """
     try:
         result = subprocess.run(
@@ -79,9 +115,52 @@ def _check_exiftool_available() -> bool:
             timeout=5,
             check=False,
         )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise _ToolProbeUnavailable(f"exiftool probe failed: {e}") from e
+    if result.returncode != 0:
+        raise _ToolProbeUnavailable(f"exiftool -ver exited with code {result.returncode}")
+    return result.stdout.strip()
+
+
+@functools.lru_cache(maxsize=1)
+def _probe_imagemagick_version(tool_identity: _ToolIdentity) -> Optional[str]:
+    """Run ``convert -version`` once per resolved executable (successful probes only)."""
+    try:
+        result = subprocess.run(
+            ["convert", "-version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise _ToolProbeUnavailable(f"ImageMagick probe failed: {e}") from e
+    if result.returncode != 0:
+        raise _ToolProbeUnavailable(f"convert -version exited with code {result.returncode}")
+    # Extract version from first line: "Version: ImageMagick 7.1.0-..."
+    first_line = result.stdout.split("\n")[0]
+    if "Version:" in first_line:
+        return first_line.split("Version:")[-1].strip()
+    return None
+
+
+def clear_tool_probe_caches() -> None:
+    """Forget memoised exiftool/ImageMagick probes so the next call re-probes."""
+    _probe_exiftool_version.cache_clear()
+    _probe_imagemagick_version.cache_clear()
+
+
+def _check_exiftool_available() -> bool:
+    """Check if exiftool is available in PATH.
+
+    Returns:
+        True if exiftool is available, False otherwise
+    """
+    try:
+        _probe_exiftool_version(_resolved_tool_identity("exiftool"))
+    except _ToolProbeUnavailable:
         return False
+    return True
 
 
 def get_exiftool_version() -> Optional[str]:
@@ -91,16 +170,8 @@ def get_exiftool_version() -> Optional[str]:
         Version string or None if not available
     """
     try:
-        result = subprocess.run(
-            ["exiftool", "-ver"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        return _probe_exiftool_version(_resolved_tool_identity("exiftool"))
+    except _ToolProbeUnavailable as e:
         logger.debug(f"Failed to get exiftool version: {e}")
     return None
 
@@ -263,23 +334,8 @@ def get_toolchain_versions() -> Dict[str, Optional[str]]:
 
     # Try to get ImageMagick version (optional - used in some pipelines)
     try:
-        result = subprocess.run(
-            ["convert", "-version"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        if result.returncode == 0:
-            # Extract version from first line: "Version: ImageMagick 7.1.0-..."
-            first_line = result.stdout.split("\n")[0]
-            if "Version:" in first_line:
-                versions["imagemagick_version"] = first_line.split("Version:")[-1].strip()
-            else:
-                versions["imagemagick_version"] = None
-        else:
-            versions["imagemagick_version"] = None
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+        versions["imagemagick_version"] = _probe_imagemagick_version(_resolved_tool_identity("convert"))
+    except _ToolProbeUnavailable:
         versions["imagemagick_version"] = None
 
     return versions
@@ -308,7 +364,7 @@ def get_git_commit_sha(repo_root: Optional[Path] = None) -> Optional[str]:
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+    except (OSError, subprocess.TimeoutExpired) as e:
         logger.debug(f"Failed to get git commit SHA: {e}")
 
     return None
@@ -489,23 +545,14 @@ class ProvenanceMetadata:
         # Create parent directory if needed
         sidecar_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Atomic write: write to temp file, then rename
-        temp_path = sidecar_path.with_suffix(".tmp")
+        # Durable atomic write through a unique temp file in the destination
+        # directory. The JSON is UTF-8 (``ensure_ascii=False``) regardless of
+        # the process locale.
         try:
-            with open(temp_path, "w") as f:
-                f.write(self.to_json())
-                f.flush()
-                os.fsync(f.fileno())
-
-            # Atomic rename
-            temp_path.replace(sidecar_path)
+            atomic_write_bytes(sidecar_path, self.to_json().encode("utf-8"))
             logger.info(f"Wrote provenance sidecar: {sidecar_path}")
-
         except Exception as e:
-            # Clean up temp file on error
-            if temp_path.exists():
-                temp_path.unlink()
-            raise ProvenanceError(f"Failed to write sidecar: {e}") from e
+            raise ProvenanceError(f"Failed to write sidecar: {e.__cause__ or e}") from e
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ProvenanceMetadata:
@@ -550,7 +597,7 @@ class ProvenanceMetadata:
             FileNotFoundError: If sidecar doesn't exist
             SchemaValidationError: If schema validation fails
         """
-        with open(sidecar_path, "r") as f:
+        with open(sidecar_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         return cls.from_dict(data)

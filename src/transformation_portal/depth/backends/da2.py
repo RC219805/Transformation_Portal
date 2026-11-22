@@ -20,6 +20,7 @@ from ...core.ml_dependency_health import (
     detect_transformers_torch_version_issue,
     ensure_dependency_importable,
 )
+from ._array_contract import to_rgb_uint8
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
@@ -225,17 +226,7 @@ class DA2Backend:
 
         if isinstance(image, np.ndarray):
             image_np = image
-            if image_np.dtype == np.uint8:
-                image_pil = Image.fromarray(image_np)
-            elif image_np.dtype.kind == "u" and image_np.dtype.itemsize == 2:
-                # Scale the full uint16 range; a direct cast wraps modulo 256.
-                image_pil = Image.fromarray(np.rint(image_np.astype(np.float32) / 257.0).astype(np.uint8))
-            elif image_np.max() <= 1.0:
-                image_pil = Image.fromarray(
-                    (np.clip(image_np, 0, 1) * 255).astype(np.uint8),
-                )
-            else:
-                image_pil = Image.fromarray(image_np.astype(np.uint8))
+            image_pil = Image.fromarray(to_rgb_uint8(image_np))
         else:
             image_pil = image.convert("RGB")
             image_np = np.array(image_pil)

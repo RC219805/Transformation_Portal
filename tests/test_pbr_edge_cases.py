@@ -24,6 +24,7 @@ pytestmark = [
     pytest.mark.unit,
 ]
 
+from tests.conftest import requires_enforced_posix_permissions
 from transformation_portal.lux_depth_v3.pbr import PBRConfig, generate_pbr_maps
 from transformation_portal.lux_depth_v3.pbr_presets import get_preset
 from transformation_portal.lux_depth_v3.pbr_processor import PBRProcessor
@@ -294,6 +295,7 @@ class TestEdgeDimensions:
 class TestSaveErrorHandling:
     """Test error handling during file save operations."""
 
+    @requires_enforced_posix_permissions
     def test_save_to_readonly_directory(self, temp_dir):
         """Test saving to read-only directory raises clear error."""
         depth = np.random.rand(128, 128).astype(np.float32)

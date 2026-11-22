@@ -6,6 +6,7 @@
 
 import { test, expect } from "@playwright/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -162,7 +163,7 @@ async function installHydratedPortalRoutes(page, options = {}) {
     });
   });
 
-  await page.route(/\/(?:portal\/assets|__mock-portal)\/portal-photographic-(?:support|editor|drafts|loader)\.js(?:\?.*)?$/, async (route) => {
+  await page.route(/\/(?:portal\/assets|__mock-portal)\/(?:portal-photographic-(?:support|editor|drafts|loader|workspace|thumbnails)|portal-operate-tools)\.js(?:\?.*)?$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "text/javascript; charset=utf-8",
@@ -188,12 +189,16 @@ async function installHydratedPortalRoutes(page, options = {}) {
       authMode: runtime.authMode,
       csrfToken: runtime.authMode === "managed" ? "hydrated-ux-csrf" : null,
       actor: runtime.actor,
+      recoveryContext: options.recoveryContext || null,
+      recoveryContextStatus: options.recoveryContext ? "ready" : "unavailable",
       features: {
         apiKeyInput: runtime.authMode === "direct_debug",
         directDebug: runtime.authMode === "direct_debug",
         artifactViewerModal: true,
         reviewSurfaceDeferred: true,
         stagedUploads: Boolean(options.stagedUploads),
+        jobSubmissionReceipts: options.jobSubmissionReceipts === true,
+        uploadReceipts: options.uploadReceipts === true,
         rumTelemetry: false,
         fastVlmCaptioning: false,
         photographicRecordedPresentation: options.photographicRecordedPresentation === true,
@@ -364,7 +369,8 @@ async function installHydratedPortalRoutes(page, options = {}) {
       runtime.submittedPayloads.push(request.postDataJSON());
       await fulfillJson(route, {
         success: true,
-        data: { id: "job-dispatched", events_url: "/v1/jobs/job-dispatched/events" },
+        schema: "tp.orchestrator.job.v1",
+        data: { id: "job-dispatched", state: "queued", events_url: "/v1/jobs/job-dispatched/events" },
       });
       return;
     }
@@ -2345,7 +2351,7 @@ for (const width of [390, 1280]) {
   });
 }
 
-test("@portal-browser staged uploads recover from an invalid success receipt without losing draft paths", async ({ page }) => {
+test("@portal-browser invalid upload receipts remain unresolved without losing draft paths or repeating POST", async ({ page }) => {
   const runtime = await installHydratedPortalRoutes(page, { stagedUploads: true });
   let malformedReceipt = true;
   await page.route("**/v1/uploads/staging", async (route) => {
@@ -2365,17 +2371,15 @@ test("@portal-browser staged uploads recover from an invalid success receipt wit
   const originalOutput = await page.locator("#outputDir").inputValue();
   const file = { name: "photo.png", mimeType: "image/png", buffer: Buffer.from("fixture") };
   await page.locator("#stagedUploadFilesInput").setInputFiles(file);
-  await expect(page.locator("#stagedUploadError")).toContainText("invalid response");
-  await expect(page.locator('[data-ui="staged-upload-shell"]')).toHaveAttribute("data-busy", "false");
-  await expect(page.locator('[data-ui="staged-upload-pick-files"]')).toBeEnabled();
+  await expect(page.locator("#stagedUploadError")).toContainText("outcome is unknown");
+  await expect(page.locator('[data-ui="staged-upload-shell"]')).toHaveAttribute("data-outcome", "outcome_unknown");
+  await expect(page.locator('[data-ui="staged-upload-pick-files"]')).toBeDisabled();
   await expect(page.locator("#inputDir")).toHaveValue(originalInput);
   await expect(page.locator("#outputDir")).toHaveValue(originalOutput);
 
-  await page.locator("#stagedUploadFilesInput").setInputFiles(file);
-  await expect(page.locator("#inputDir")).toHaveValue("/tenant/uploads/batch-photography/input");
-  await expect(page.locator("#stagedUploadError")).toBeEmpty();
-  await expect(page.locator("#outputDir")).toHaveValue(originalOutput);
-  expect(runtime.stagedUploadRequests).toHaveLength(1);
+  await page.locator('[data-ui="upload-recovery-check"]').click();
+  await expect(page.locator('[data-ui="upload-recovery-attempt"]')).toContainText("Receipt recovery is unavailable");
+  expect(runtime.stagedUploadRequests).toHaveLength(0);
   expect(pageErrors).toEqual([]);
 });
 
@@ -3759,6 +3763,8 @@ test("@portal-browser native Materials editor previews and saves a separate unap
       regions: [{ id: "region-1", label: "glass", region: [0.25, 0.25, 0.75, 0.75], strength: 0.02 }] },
   } });
   await expectNoHorizontalOverflow(page, "Native Materials editor");
+  await expect(page.locator('[data-ui="photographic-primary-viewport"]')).toHaveAttribute("role", "group");
+  await expect(page.locator('[data-ui="photographic-comparison-viewport"]')).toHaveAttribute("role", "group");
   await expectNoWcagViolations(page, "Native Materials editor");
   await commit.click();
   const revisionPath = "revisions/native-input-0000/master.tif";
@@ -4331,21 +4337,24 @@ test("@portal-browser photographic revoked delivery choice requires explicit exc
   server.readVersion = 3;
   await page.locator('[data-ui="photographic-decision-approved"]').click();
   await expect(decision).toContainText("Approved");
-  await expect(summary).toContainText("2 selected across all pages (2 currently recorded approved)");
+  await expect(summary).toContainText("2 approved sources of 2");
+  await expect(summary).toContainText("2 selected for revalidation");
   server.decisions = server.decisions.map((row) => row.scene_id === "input-0000" ? { ...row, status: "needs_revision" } : row);
   server.committedVersion = 4; server.readVersion = 4;
   await page.locator('[data-ui="photographic-review-refresh"]').click();
-  await expect(summary).toContainText("2 selected across all pages (1 currently recorded approved)");
+  await expect(summary).toContainText("1 approved source of 2");
+  await expect(summary).toContainText("2 selected for revalidation");
   await deliver.click();
   await expect(status).toContainText("A selected delivery source is no longer approved or available. Your selection is retained");
   expect(server.deliveries).toEqual([]);
-  await expect(summary).toContainText("2 selected across all pages");
+  await expect(summary).toContainText("2 selected for revalidation");
   await scene.selectOption("input-0000");
   await expect(decision).toContainText("Needs revision");
   await expect(deliveryChoice).toHaveValue("input-0000/delivery.tif");
   await expect(deliveryChoice.locator('option[value=""]')).toHaveText("Exclude from delivery");
   await deliveryChoice.selectOption("");
-  await expect(summary).toContainText("1 selected across all pages (1 currently recorded approved)");
+  await expect(summary).toContainText("1 approved source of 2");
+  await expect(summary).toContainText("1 selected for revalidation");
   await deliver.click();
   await expect(page.locator('[data-ui="photographic-delivery-download"]')).toHaveAttribute("href", `/v1/jobs/${jobId}/photographic-review/files/remaining/approved.zip`);
   expect(server.deliveries).toHaveLength(1);
@@ -4684,6 +4693,7 @@ test("@portal-browser real photographic API preserves native identity through sa
   await expect.poll(() => native.evaluate((image) => [image.naturalWidth, image.naturalHeight, Number.parseFloat(getComputedStyle(image).width), Number.parseFloat(getComputedStyle(image).height)]))
     .toEqual([Math.min(final.width, 512), Math.min(final.height, 512), Math.min(final.width, 512), Math.min(final.height, 512)]);
   await expect(page.locator('[data-ui="photographic-primary-properties"]')).toContainText(final.sha256);
+  await page.locator('[data-ui="photographic-coherence-details"] summary').click();
   await page.locator('[data-ui="photographic-measure-quality"]').click();
   await expect(page.locator('[data-ui="photographic-quality-results"]')).toContainText("spatial_v2");
   expect((await getState()).decisions).toHaveLength(0);
@@ -4877,6 +4887,182 @@ test("@portal-browser direct-debug photographic thumbnails and clicked downloads
 });
 
 
+test('@portal-browser UX05 Build keeps workflow values and usable fields across the desktop split', async ({ page }) => {
+  await installHydratedPortalRoutes(page);
+  await gotoHydratedPortal(page, '/portal?view=overview');
+  await expect(page.locator('#resumeDraftBtn')).toHaveAccessibleName('Resume Build draft');
+  await page.locator('#resumeDraftBtn').click();
+  await expect(page.locator('body')).toHaveAttribute('data-console-view', 'build');
+  await expect(page.locator('#pipelineSelect optgroup')).toHaveCount(2);
+  await expect(page.locator('#pipelineSelect')).toHaveValue('lux-depth-v3');
+  await expect(page.locator('#pipelineSelect option[value="lux-depth-v3"]')).toHaveText('Photo enhancement · Production V3');
+  await expect(page.locator('#profileSelect')).toHaveAttribute('aria-describedby', 'profileStorageHint');
+  for (const width of [1099, 1100, 1199, 1200]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.locator('#buildStepTab1').click();
+    const geometry = await page.evaluate(() => {
+      const profile = document.querySelector('#profile-shell').getBoundingClientRect();
+      const parameters = document.querySelector('#parameters-shell').getBoundingClientRect();
+      return { profile: { x: profile.x, right: profile.right, bottom: profile.bottom },
+        parameters: { x: parameters.x, y: parameters.y, width: parameters.width } };
+    });
+    expect(geometry.parameters.width).toBeGreaterThan(360);
+    if (width < 1200) expect(geometry.parameters.y).toBeGreaterThanOrEqual(geometry.profile.bottom - 1);
+    else expect(geometry.parameters.x).toBeGreaterThanOrEqual(geometry.profile.right - 1);
+    await expectNoHorizontalOverflow(page, `Build ${width}px split`);
+  }
+});
+
+test('@portal-browser UX05 Review editing text remains 16px throughout mobile widths', async ({ page }) => {
+  const jobId = 'job-ux05-mobile-review';
+  await installPagedPhotographicStateRoutes(page, jobId);
+  await gotoHydratedPortal(page, `/portal?view=review&job=${jobId}`);
+  const note = page.locator('[data-ui="photographic-decision-note"]');
+  await expect(note).toBeVisible();
+  for (const width of [641, 700, 767]) {
+    await page.setViewportSize({ width, height: 850 });
+    const fields = await page.locator('.photo-review-input').evaluateAll(elements => elements.filter(element => element.checkVisibility())
+      .map(element => ({ name: element.dataset.ui || element.getAttribute('aria-label'), fontSize: Number.parseFloat(getComputedStyle(element).fontSize) })));
+    expect(fields.length).toBeGreaterThan(0);
+    expect(fields.filter(field => field.fontSize < 16)).toEqual([]);
+    await note.fill(`Retained note at ${width}px`);
+    await expect(note).toHaveValue(`Retained note at ${width}px`);
+    await expectNoHorizontalOverflow(page, `Review editing ${width}px`);
+  }
+});
+
+test('@portal-browser UX05 legacy recovery actions stay reachable on short screens and resized text', async ({ page }) => {
+  const { createPortalConfigState } = await import('../../portal-src/internal/state.js');
+  await installHydratedPortalRoutes(page, { initialTransientDraft: {
+    schema: 'tp.portal.transient_draft.v1', ownerKey: `managed:${DEFAULT_MANAGED_ACTOR.accessEmail.toLowerCase()}`,
+    pipeline: 'lux-depth-v3', config: createPortalConfigState(), buildStep: 1, savedAt: Date.now(),
+  } });
+  await page.goto('/portal?view=build');
+  const panel = page.locator('#legacyDraftRecoveryPanel');
+  await expect(panel).toBeVisible();
+  for (const size of [{ width: 667, height: 375 }, { width: 844, height: 390 }, { width: 320, height: 568 }]) {
+    await page.setViewportSize(size);
+    await expect(panel).toHaveCSS('overflow-y', 'auto');
+    for (const id of ['claimLegacyDraftBtn', 'discardLegacyDraftBtn']) {
+      const control = page.locator(`#${id}`);
+      await control.focus();
+      await control.scrollIntoViewIfNeeded();
+      const box = await control.boundingBox();
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height).toBeLessThanOrEqual(size.height + 1);
+      await expect(control).toBeFocused();
+    }
+    await expectNoHorizontalOverflow(page, `Recovery ${size.width}x${size.height}`);
+  }
+  await page.locator('#legacyDraftRecoveryPanel p, #legacyDraftRecoveryPanel h2, #legacyDraftRecoveryPanel button').evaluateAll(elements => {
+    for (const element of elements) { element.style.fontSize = `${Number.parseFloat(getComputedStyle(element).fontSize) * 2}px`; element.style.lineHeight = '1.5'; }
+  });
+  await page.locator('#claimLegacyDraftBtn').focus();
+  await page.locator('#claimLegacyDraftBtn').scrollIntoViewIfNeeded();
+  const box = await page.locator('#claimLegacyDraftBtn').boundingBox();
+  expect(box.y + box.height).toBeLessThanOrEqual(569);
+  await expect(page.locator('#legacyDraftRecoveryModal')).toBeVisible();
+});
+
+
+function loadedOperateJobs() {
+  return [
+    { id: 'job-b', pipeline: 'lux-depth-v3', state: 'succeeded', progress: 100, created_at: '2026-11-15T01:00:00Z', finished_at: '2026-11-15T01:01:00Z', logs_tail: ['selected first', 'selected second'], artifacts: { items: [] } },
+    { id: 'job-c', pipeline: 'archive-gate-a', state: 'failed', progress: 20, created_at: '2026-11-15T02:00:00Z', finished_at: '2026-11-15T02:01:00Z', logs_tail: ['failed detail'], artifacts: { items: [] } },
+    { id: 'job-a', pipeline: 'lux-depth-v3', state: 'succeeded', progress: 100, created_at: '2026-11-15T01:00:00Z', finished_at: '2026-11-15T01:01:00Z', logs_tail: ['other detail'], artifacts: { items: [] } },
+  ];
+}
+
+test('@portal-browser UX08 loaded-run discovery preserves an excluded selected inspector', async ({ page }) => {
+  const runtime = await installHydratedPortalRoutes(page, { jobs: loadedOperateJobs() });
+  await gotoHydratedPortal(page, '/portal?view=operate&job=job-b');
+  await expect(page.locator('#selectedJobIdLabel')).toHaveText('job-b');
+  await expect.poll(() => page.locator('[data-ui="queue-row"]').evaluateAll(rows => rows.map(row => row.dataset.jobId))).toEqual(['job-c', 'job-a', 'job-b']);
+  await page.locator('#loadedRunSearch').fill('archive');
+  await expect(page.locator('[data-ui="queue-row"]')).toHaveCount(1);
+  await expect(page.locator('#selectedJobIdLabel')).toHaveText('job-b');
+  await page.locator('#loadedRunSearch').fill('no-such-run');
+  await expect(page.locator('#emptyQueueTitle')).toHaveText('No loaded runs match');
+  await expect(page.locator('#selectedJobIdLabel')).toHaveText('job-b');
+  await page.locator('#loadedRunSearch').fill('');
+  await page.locator('#loadedRunState').selectOption('failed');
+  await expect(page.locator('[data-ui="queue-row"]')).toHaveCount(1);
+  await expect(page.locator('#selectedJobIdLabel')).toHaveText('job-b');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('#loadedRunSearch')).toHaveCSS('font-size', '16px');
+  await expectNoHorizontalOverflow(page, 'Loaded run discovery on phone');
+  expect(runtime.jobSubmissions).toBe(0);
+});
+
+test('@portal-browser UX08 loaded log tools pause follow and export the complete bounded buffer', async ({ page, context }) => {
+  const jobs = loadedOperateJobs();
+  jobs[0].logs_tail = Array.from({ length: 1205 }, (_, index) => `loaded line ${index}`);
+  await installHydratedPortalRoutes(page, { jobs });
+  await gotoHydratedPortal(page, '/portal?view=operate&job=job-b');
+  await page.locator('#inspectorLogsTab').click();
+  const pane = page.locator('#logPane');
+  await expect(pane).toContainText('loaded line 1204');
+  expect((await pane.textContent()).split('\n')[0]).toBe('loaded line 5');
+  await page.locator('#toggleLogFollowBtn').click();
+  await expect(page.locator('#toggleLogFollowBtn')).toHaveAttribute('aria-pressed', 'false');
+  await page.locator('#loadedLogSearch').fill('line 1204');
+  await expect(pane).toHaveText('loaded line 1204\n');
+  await expect(page.locator('#loadedLogSummary')).toContainText('1 matching / 1200 loaded lines');
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.locator('#copyLoadedLogsBtn').click();
+  const expected = jobs[0].logs_tail.slice(-1200).join('\n') + '\n';
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expected);
+  const pending = page.waitForEvent('download');
+  await page.locator('#downloadLoadedLogsBtn').click();
+  const download = await pending;
+  expect(download.suggestedFilename()).toBe('job-b-loaded-logs.txt');
+  expect(await readFile(await download.path(), 'utf8')).toBe(expected);
+  await page.locator('#clearLogsBtn').click();
+  await expect(pane).toBeEmpty();
+  await expect(page.locator('#downloadLoadedLogsBtn')).toBeDisabled();
+});
+
+test('@portal-browser live log search drops evicted matches from the full loaded buffer', async ({ page }) => {
+  const jobs = loadedOperateJobs();
+  Object.assign(jobs[0], { state: 'running', progress: 30, finished_at: undefined,
+    logs_tail: ['warning evicted', ...Array.from({ length: 1199 }, (_, index) => `info loaded ${index}`)] });
+  await installHydratedPortalRoutes(page, { jobs });
+
+  let stream;
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Access-Control-Allow-Origin': '*' });
+    response.flushHeaders();
+    stream = response;
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    await page.route('**/v1/jobs/job-b/events', route => route.continue({ url: `http://127.0.0.1:${server.address().port}/events` }));
+    await gotoHydratedPortal(page, '/portal?view=operate&job=job-b');
+    await page.locator('#inspectorLogsTab').click();
+    await expect.poll(() => Boolean(stream)).toBe(true);
+    await page.locator('#toggleLogFollowBtn').click();
+    await page.locator('#loadedLogSearch').fill('warning');
+    const pane = page.locator('#logPane');
+    const summary = page.locator('#loadedLogSummary');
+    await expect(pane).toHaveText('warning evicted');
+    await expect(summary).toContainText('1 matching / 1200 loaded lines');
+
+    stream.write('event: log\ndata: {"line":"info appended"}\n\n');
+    await expect(summary).toContainText('0 matching / 1200 loaded lines');
+    await expect(pane).toBeEmpty();
+    stream.write('event: log\ndata: {"line":"warning retained"}\n\n');
+    await expect(summary).toContainText('1 matching / 1200 loaded lines');
+    await expect(pane).toHaveText('warning retained');
+    await expect(page.locator('#toggleLogFollowBtn')).toHaveAttribute('aria-pressed', 'false');
+  } finally {
+    stream?.end();
+    await new Promise(resolve => {
+      server.close(resolve);
+      server.closeAllConnections();
+    });
+  }
+});
+
 test('@portal-browser rejected configuration imports preserve the active draft and preview', async ({ page }) => {
   await installHydratedPortalRoutes(page);
   await gotoHydratedPortal(page, '/portal?view=build');
@@ -4948,6 +5134,7 @@ for (const paged of [false, true]) {
     await scene.selectOption('input-0001');
     await page.locator('[data-ui="photographic-discard-navigation"]').click();
     await expect(scene).toHaveValue('input-0001'); await expect(note).toHaveValue('');
+    await page.locator('[data-ui="photographic-coherence-details"] summary').click();
     await page.locator('[data-ui="photographic-lighting-group"]').fill('Unsaved room B lighting');
     await scene.selectOption('input-0000');
     await expect(scene).toHaveValue('input-0001');
@@ -5025,3 +5212,70 @@ for (const paged of [false, true]) {
     expect(submissions).toHaveLength(1);
   });
 }
+
+test('@portal-browser a lost submission response reconciles one accepted run without another POST', async ({ page }) => {
+  const scope = { schema: 'tp.portal.recovery_context.v1', tenantId: 'tenant-fixture', ownerId: 'a'.repeat(64) };
+  await installHydratedPortalRoutes(page, { jobSubmissionReceipts: true, recoveryContext: scope, keepEventStreamOpen: true });
+  let posts = 0, requestId = '', releaseReceipt;
+  const receiptGate = new Promise(resolve => { releaseReceipt = resolve; });
+  const job = { id: 'job-receipt-recovered', state: 'queued', events_url: '/v1/jobs/job-receipt-recovered/events',
+    pipeline: 'lux-depth-v3', created_at: '2026-11-16T00:00:00Z', logs_tail: [], artifacts: { items: [] } };
+  await page.route('**/v1/jobs', async route => {
+    if (route.request().method() === 'POST') {
+      posts += 1; requestId = route.request().headers()['idempotency-key'];
+      expect(requestId).toMatch(/^[a-f0-9-]{36}$/);
+      await route.abort('connectionfailed'); return;
+    }
+    await fulfillJson(route, { success: true, data: { jobs: posts ? [job] : [] } });
+  });
+  await page.route('**/v1/jobs/job-receipt-recovered', route => fulfillJson(route, { success: true, data: job }));
+  await page.route('**/v1/job-submissions/*', async route => {
+    expect(route.request().method()).toBe('GET'); await receiptGate;
+    await fulfillJson(route, { schema: 'tp.orchestrator.job_submission.v1', success: true,
+      data: { request_id: requestId, intent_sha256: 'b'.repeat(64), status: 'accepted', job } });
+  });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#buildStepTab4').click();
+  await page.locator('#runJobBtn').click();
+  await expect(page.locator('#submissionRecoveryPanel')).toContainText('Submission outcome unknown');
+  await expect(page.locator('#runJobBtn')).toBeDisabled();
+  const refs = await page.evaluate(() => JSON.parse(sessionStorage.getItem('tp.portal.recovery_refs.v1')));
+  expect(refs.attempts).toEqual([{ type: 'job', request_id: requestId, scope: scope.ownerId, created_at: expect.any(Number) }]);
+  expect(posts).toBe(1);
+  releaseReceipt();
+  await expect(page.locator('#runJobBtn')).toHaveText('Open Live Job');
+  await expect(page.locator('[data-ui="queue-row"][data-job-id="job-receipt-recovered"]')).toHaveCount(1);
+  expect(posts).toBe(1);
+});
+
+test('@portal-browser canceling transfer reconciles staging and requires explicit path acceptance', async ({ page }) => {
+  const scope = { schema: 'tp.portal.recovery_context.v1', tenantId: 'tenant-fixture', ownerId: 'a'.repeat(64) };
+  await installHydratedPortalRoutes(page, { stagedUploads: true, uploadReceipts: true, recoveryContext: scope });
+  let posts = 0, requestId = '', releasePost;
+  const postGate = new Promise(resolve => { releasePost = resolve; });
+  const receipt = { batch_id: 'upload-canceled-fixture', input_dir: '/tenant/uploads/canceled-fixture/input',
+    metadata_dir: '/tenant/uploads/canceled-fixture/_portal', artifacts: {},
+    summary: { file_count: 1, total_bytes: 4, warnings: [] } };
+  await page.route('**/v1/uploads/staging', async route => {
+    posts += 1; requestId = route.request().headers()['x-tp-upload-request-id'];
+    expect(requestId).toMatch(/^[a-f0-9-]{36}$/);
+    await postGate;
+    try { await fulfillJson(route, { schema: 'tp.orchestrator.upload_staging.v1', success: true, data: receipt }); } catch { /* Canceled client no longer owns the response. */ }
+  });
+  await page.route('**/v1/uploads/staging/receipts/*', route => {
+    expect(route.request().method()).toBe('GET');
+    return fulfillJson(route, { schema: 'tp.orchestrator.upload_receipt.v1', success: true,
+      data: { request_id: requestId, status: 'ready', receipt } });
+  });
+  await gotoHydratedPortal(page, '/portal?view=build');
+  await page.locator('#buildStepTab2').click();
+  const beforeInput = await page.locator('#inputDir').inputValue(), beforeOutput = await page.locator('#outputDir').inputValue();
+  await page.locator('#stagedUploadFilesInput').setInputFiles({ name: 'fixture.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('test') });
+  await page.locator('[data-ui="upload-recovery-cancel"]').click();
+  await expect(page.locator('[data-ui="upload-recovery-accept"]')).toBeVisible();
+  await expect(page.locator('#inputDir')).toHaveValue(beforeInput);
+  await page.locator('[data-ui="upload-recovery-accept"]').click();
+  await expect(page.locator('#inputDir')).toHaveValue(receipt.input_dir);
+  await expect(page.locator('#outputDir')).toHaveValue(beforeOutput);
+  expect(posts).toBe(1); releasePost();
+});

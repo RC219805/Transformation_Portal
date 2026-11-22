@@ -27,7 +27,11 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 # Repository-rooted LUT presets curated for short-form luxury real-estate video.
-REPO_ROOT = Path(__file__).resolve().parent
+# The LUTs are git-tracked under <repo>/assets/luts/ and are not shipped as
+# package data; this module lives at <repo>/src/transformation_portal/processors/,
+# so they only resolve from a source checkout (an installed wheel needs --custom-lut).
+REPO_ROOT = Path(__file__).resolve().parents[3]
+PRESET_LUT_ROOT = REPO_ROOT / "assets" / "luts"
 
 
 @dataclass
@@ -91,7 +95,7 @@ PRESETS: Dict[str, GradePreset] = {
         cool=-0.010,
         sharpen="medium",
         grain=6.0,
-        deband="fine",
+        deband="soft",
         halation_intensity=0.14,
         halation_radius=20.0,
         halation_threshold=0.52,
@@ -130,7 +134,7 @@ PRESETS: Dict[str, GradePreset] = {
         cool=0.0,
         sharpen="strong",
         grain=0.0,
-        deband="fine",
+        deband="soft",
         halation_threshold=0.60,
         notes="Ideal for natural light interiors where texture detail and neutrality are paramount.",
     ),
@@ -157,11 +161,23 @@ UNSHARP_PRESETS = {
     "strong": "unsharp=luma_msize_x=5:luma_msize_y=5:luma_amount=1.6:chroma_msize_x=3:chroma_msize_y=3:chroma_amount=0.8",
 }
 
+# gradfun accepts strength in [0.51, 64]; "soft" sits at that floor.
 DEBAND_PRESETS = {
-    "soft": "gradfun=strength=0.45:radius=12",
+    "soft": "gradfun=strength=0.51:radius=12",
     "medium": "gradfun=strength=0.70:radius=16",
     "strong": "gradfun=strength=0.90:radius=20",
 }
+
+
+# Spellings that switch an optional stage off.  "off" is the documented value;
+# "of" is the historical CLI spelling, kept as an alias for existing scripts.
+DISABLED_VALUES = ("off", "of")
+
+
+def is_disabled(value: object) -> bool:
+    """Return True when a choice-style option is set to one of the "off" spellings."""
+
+    return str(value).lower() in DISABLED_VALUES
 
 
 @dataclass
@@ -337,7 +353,7 @@ def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> Ton
     tone_map_peak = args.tone_map_peak
     tone_map_desat = args.tone_map_desat
 
-    if method == "off":
+    if is_disabled(method):
         return ToneMapPlan(enabled=False, note="Tone mapping disabled by user preference.")
 
     video = extract_video_stream(probe)
@@ -423,7 +439,7 @@ def parse_ffprobe_fraction(value: Optional[str]) -> Optional[Fraction]:
         if "/" in value:
             return Fraction(value)
         return Fraction(float(value)).limit_denominator(100_000)
-    except (ValueError, ZeroDivisionError):
+    except (ValueError, ZeroDivisionError, OverflowError):
         return None
 
 
@@ -435,10 +451,32 @@ def normalize_frame_rate(value: str) -> Tuple[str, Fraction]:
     """Normalise arbitrary frame-rate expressions to a rational string and Fraction."""
 
     parsed = parse_ffprobe_fraction(value)
-    if not parsed:
+    if not parsed or parsed <= 0:
         raise ValueError(f"Unable to parse frame rate value: {value}")
+    ntsc = _snap_ntsc_decimal(value, parsed)
+    if ntsc is not None:
+        return ntsc
     reduced = parsed.limit_denominator(100_000)
     return format_fraction(reduced), reduced
+
+
+def _snap_ntsc_decimal(value: str, parsed: Fraction) -> Optional[Tuple[str, Fraction]]:
+    """Map a rounded NTSC decimal (``23.976``, ``29.97``, ``59.94``) to its exact x000/1001 rate.
+
+    A non-integer decimal snaps only when the NTSC rate, rounded to the number of decimals
+    written, equals it; explicit rationals and whole numbers are never altered.
+    """
+
+    text = value.strip()
+    if "/" in text or "." not in text or parsed.denominator == 1:
+        return None
+    decimals = len(text.split(".", 1)[1].rstrip("0"))
+    if decimals == 0:
+        return None
+    for label, fraction in STANDARD_FRAME_RATES:
+        if fraction.denominator == 1_001 and round(float(fraction), decimals) == float(parsed):
+            return label, fraction
+    return None
 
 
 def choose_standard_rate(fps: Fraction) -> Tuple[str, Fraction]:
@@ -546,7 +584,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     current = new_label
 
     tone_map = config.get("tone_map")
-    if tone_map and str(tone_map).lower() != "of":
+    if tone_map and not is_disabled(tone_map):
         tone_map_peak = config.get("tone_map_peak")
         pre_tonemap_args = ["transfer=linear"]
         if tone_map_peak is not None:
@@ -576,7 +614,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         current = new_label
 
     denoise = config.get("denoise")
-    if denoise and denoise.lower() != "of":
+    if denoise and not is_disabled(denoise):
         expr = HQDN3D_PRESETS.get(denoise.lower())
         if not expr:
             raise ValueError(f"Unsupported denoise preset: {denoise}")
@@ -629,7 +667,24 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
 
     lut_path: Path = Path(config["lut"]).resolve()
     if not lut_path.exists():
-        raise FileNotFoundError(f"LUT file not found: {lut_path}")
+        message = f"LUT file not found: {lut_path}"
+        if lut_path.is_relative_to(PRESET_LUT_ROOT):
+            message += (
+                f". Preset LUTs are read from the repository assets tree ({PRESET_LUT_ROOT}), which ships with a"
+                " source checkout but not with an installed package; pass --custom-lut <file.cube> instead."
+            )
+        raise FileNotFoundError(message)
+
+    lut_strength = float(config.get("lut_strength", 1.0))
+    blend_lut = lut_strength < 0.999
+
+    if blend_lut:
+        # A filtergraph output pad can feed exactly one input pad: the blend
+        # needs the ungraded frames as well as the LUT input, so fan them out.
+        pre_lut_label = next_label()
+        lut_input_label = next_label()
+        nodes.append(f"[{current}]split=2[{pre_lut_label}][{lut_input_label}]")
+        current = lut_input_label
 
     new_label = next_label()
     lut_expr = f"lut3d=file={shlex.quote(str(lut_path))}:interp=tetrahedral"
@@ -637,9 +692,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     current = new_label
     graded_label = current
 
-    lut_strength = float(config.get("lut_strength", 1.0))
-
-    if lut_strength < 0.999:
+    if blend_lut:
         blend_label = next_label()
         nodes.append(
             f"[{pre_lut_label}][{graded_label}]blend=all_expr='A*(1-{lut_strength:.4f})+B*{lut_strength:.4f}'[{blend_label}]"
@@ -647,7 +700,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         current = blend_label
 
     sharpen = config.get("sharpen")
-    if sharpen and sharpen.lower() != "of":
+    if sharpen and not is_disabled(sharpen):
         expr = UNSHARP_PRESETS.get(sharpen.lower())
         if not expr:
             raise ValueError(f"Unsupported sharpen preset: {sharpen}")
@@ -662,7 +715,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         current = new_label
 
     deband = config.get("deband")
-    if deband and str(deband).lower() != "of":
+    if deband and not is_disabled(deband):
         expr = DEBAND_PRESETS.get(str(deband).lower())
         if not expr:
             raise ValueError(f"Unsupported deband preset: {deband}")
@@ -844,7 +897,10 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--custom-lut",
         type=Path,
-        help="Override the preset LUT with a custom .cube file.",
+        help=(
+            "Override the preset LUT with a custom .cube file (required when the repository assets/luts/ tree is"
+            " unavailable, e.g. an installed package)."
+        ),
     )
     parser.add_argument(
         "--lut-strength",
@@ -853,7 +909,7 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--denoise",
-        choices=list(HQDN3D_PRESETS) + ["of"],
+        choices=list(HQDN3D_PRESETS) + list(DISABLED_VALUES),
         help="Override denoise strength.",
     )
     parser.add_argument("--contrast", type=float, help="Override contrast multiplier.")
@@ -864,15 +920,15 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument("--cool", type=float, help="Override cool mid-tone tint (blue channel).")
     parser.add_argument(
         "--sharpen",
-        choices=list(UNSHARP_PRESETS) + ["of"],
+        choices=list(UNSHARP_PRESETS) + list(DISABLED_VALUES),
         help="Override clarity setting.",
     )
     parser.add_argument("--grain", type=float, help="Override film-grain intensity.")
     parser.add_argument(
         "--tone-map",
-        choices=["auto", "of", "hable", "mobius", "reinhard", "bt2390"],
+        choices=["auto", *DISABLED_VALUES, "hable", "mobius", "reinhard", "bt2390"],
         default="auto",
-        help="Tone-mapping operator to apply (auto = detect HDR metadata).",
+        help="Tone-mapping operator to apply (auto = detect HDR metadata, off = never tone-map; 'of' is a legacy alias).",
     )
     parser.add_argument(
         "--tone-map-peak",
@@ -888,21 +944,18 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--deband",
-        choices=list(DEBAND_PRESETS) + ["of"],
-        default="of",
-        help="Apply debanding (gradfun) smoothing after grain.",
+        choices=list(DEBAND_PRESETS) + list(DISABLED_VALUES),
+        help="Override debanding (gradfun) smoothing after grain (preset value when omitted).",
     )
     parser.add_argument(
         "--halation-intensity",
         type=float,
-        default=0.0,
-        help="Strength of halation bloom (0.0 disables).",
+        help="Override strength of halation bloom (0.0 disables; preset value when omitted).",
     )
     parser.add_argument(
         "--halation-radius",
         type=float,
-        default=18.0,
-        help="Radius of the halation blur kernel when enabled.",
+        help="Override radius of the halation blur kernel when enabled (preset value when omitted).",
     )
     parser.add_argument(
         "--halation-threshold",

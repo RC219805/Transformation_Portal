@@ -39,6 +39,12 @@ def puct_select(node: MCTSNode, c_puct: float = 1.5) -> int | None:
 
     PUCT(a) = Q(a) + c_puct * P(a) * sqrt(N_parent) / (1 + N(a))
 
+    Unvisited children use the parent's mean value ``node.Q`` as their
+    first-play urgency instead of ``0``. Backed-up values are predicted
+    scores (typically positive), so scoring unvisited actions at ``0`` made
+    the first expanded action beat every untried one and the search never
+    explored past it.
+
     Args:
         node: Current node
         c_puct: Exploration constant
@@ -57,8 +63,8 @@ def puct_select(node: MCTSNode, c_puct: float = 1.5) -> int | None:
     for action in node.children:
         child = node.children[action]
 
-        # Q-value (exploitation)
-        q = child.Q if child else 0.0
+        # Q-value (exploitation); unvisited children inherit the parent's value
+        q = child.Q if child else node.Q
 
         # Visit count
         n = child.N if child else 0
@@ -197,6 +203,7 @@ class MCTS:
         """
         node = root
         path = [node]
+        leaf_score: float | None = None
 
         # SELECT: Traverse to leaf
         while not node.is_leaf():
@@ -222,6 +229,7 @@ class MCTS:
                 # Simulate transition
                 pred = self.world_model.predict(node.state, action)
                 child_state = pred.next_state
+                leaf_score = float(pred.score)
 
                 # Create child node
                 child = node.add_child(action, child_state)
@@ -239,8 +247,13 @@ class MCTS:
                 path.append(child)
                 node = child
 
-        # SIMULATE: Rollout from leaf
+        # SIMULATE: Rollout from leaf. The predicted score of the transition
+        # that created the leaf is part of the leaf's value: averaging it with
+        # the rollout steps keeps the value on the same scale as the rollout.
         value = self._rollout(node.state)
+        if leaf_score is not None:
+            depth = max(int(self.config.rollout_depth), 0)
+            value = (leaf_score + value * depth) / (depth + 1)
 
         # BACKUP: Update values along path
         for n in reversed(path):
@@ -406,7 +419,8 @@ class MCTSPipelineOptimizer:
         Returns:
             Optimized pipeline
         """
-        from transformation_portal.execution_graph.patcher import apply_fix
+        from transformation_portal.evals.self_healing import FixSuggestion
+        from transformation_portal.execution_graph.patcher import PatchError, apply_fix
 
         # Generate candidates using MCTS
         candidates = []
@@ -417,10 +431,15 @@ class MCTSPipelineOptimizer:
             for _ in range(steps):
                 action_idx = self.plan_step(current)
                 action = self.actions[action_idx]
+                # apply_fix needs a FixSuggestion; RL actions (RLAction) are
+                # converted the same way the RL environments do.
+                fix = FixSuggestion(**action.to_fix_suggestion()) if hasattr(action, "to_fix_suggestion") else action
 
                 try:
-                    current = apply_fix(current, action)
-                except Exception as e:
+                    current = apply_fix(current, fix)
+                except PatchError as e:
+                    # The planned action does not apply to this pipeline
+                    # (e.g. absent target node): stop extending this candidate.
                     logger.warning("Apply fix failed: %s", e)
                     break
 

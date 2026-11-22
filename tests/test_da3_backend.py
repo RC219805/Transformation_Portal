@@ -41,12 +41,17 @@ def _install_fake_depth_anything3(monkeypatch):
     import types
 
     class FakeDepthAnything3:
+        requested_revisions: list = []
+
         def __init__(self):
             self.loaded_device = None
 
         @classmethod
-        def from_pretrained(cls, model_id):
+        def from_pretrained(cls, model_id, revision=None):
+            # Mirrors the real hub-mixin signature: the engine pins the load to the
+            # resolved contract revision and no longer retries without it (LC-05).
             del model_id
+            cls.requested_revisions.append(revision)
             return cls()
 
         def to(self, device):
@@ -75,6 +80,7 @@ def _install_fake_depth_anything3(monkeypatch):
 
     monkeypatch.setitem(sys.modules, "depth_anything_3", fake_pkg)
     monkeypatch.setitem(sys.modules, "depth_anything_3.api", fake_api)
+    return FakeDepthAnything3
 
 
 def test_da3_backend_implements_protocol():
@@ -448,6 +454,60 @@ def test_da3_backend_subprocess_protocol_error_reports_category(tmp_path):
             backend.compute(np.zeros((4, 5, 3), dtype=np.uint8))
 
 
+def _write_npy(path, array):
+    np.save(path, array, allow_pickle=False)
+
+
+@pytest.mark.parametrize(
+    ("write_depth", "payload"),
+    [
+        (lambda path: _write_npy(path, np.full((4, 5), np.nan, dtype=np.float32)), {"metadata": {}}),
+        (lambda path: _write_npy(path, np.zeros((4, 5, 3), dtype=np.float32)), {"metadata": {}}),
+        (lambda path: _write_npy(path, np.zeros((0, 5), dtype=np.float32)), {"metadata": {}}),
+        (lambda path: _write_npy(path, np.array([["a"] * 5] * 4)), {"metadata": {}}),
+        (lambda path: _write_npy(path, np.zeros((4, 5), dtype=np.float32)), []),
+        (lambda path: path.write_bytes(b""), {"metadata": {}}),
+        (lambda path: _write_npy(path, np.zeros((4, 5), dtype=np.float32)), {"input_size": ["x", "y"]}),
+        (lambda path: _write_npy(path, np.zeros((4, 5), dtype=np.float32)), {"input_size": [0, 5]}),
+    ],
+    ids=[
+        "non_finite",
+        "three_dimensional",
+        "empty",
+        "string_dtype",
+        "json_list",
+        "empty_npy",
+        "bad_input_size",
+        "zero_input_size",
+    ],
+)
+def test_da3_backend_subprocess_rejects_malformed_exit_zero_output(tmp_path, write_depth, payload):
+    """An exit-0 worker's depth and payload are validated inside the failure classification."""
+    from unittest.mock import MagicMock, patch
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    backend = DA3Backend(
+        _licensed_da3_config(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+        )
+    )
+
+    def fake_run(command, **kwargs):
+        del kwargs
+        if "--check" not in command:
+            write_depth(Path(command[command.index("--output-depth") + 1]))
+            Path(command[command.index("--output-json") + 1]).write_text(json.dumps(payload), encoding="utf-8")
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    with patch("transformation_portal.depth.backends.da3.subprocess.run", side_effect=fake_run):
+        with pytest.raises(RuntimeError, match="Failure category: protocol_error"):
+            backend.compute(np.zeros((4, 5, 3), dtype=np.uint8))
+
+
 def test_da3_backend_subprocess_compute_returns_depth_result(tmp_path):
     """Subprocess worker output should map back to the DepthResult contract."""
     from unittest.mock import MagicMock, patch
@@ -519,6 +579,8 @@ def test_da3_backend_subprocess_compute_returns_depth_result(tmp_path):
 
 def test_da3_worker_inference_propagates_non_commercial_ack(monkeypatch, tmp_path):
     """Worker subprocess config should preserve parent non-commercial acknowledgement."""
+    # _run_inference seeds torch before the (faked) engine is constructed.
+    pytest.importorskip("torch")
     import transformation_portal.depth.backends.da3_worker as da3_worker
     import transformation_portal.lux_depth_v3.inference as inference_module
 
@@ -630,6 +692,65 @@ def test_da3_backend_prepare_image_scales_normalized_float_arrays():
         dtype=np.uint8,
     )
     assert np.array_equal(image_array, expected)
+
+
+def test_da3_backend_prepare_image_scales_uint16_instead_of_wrapping():
+    """A 16-bit image maps its full range to uint8; a direct cast wraps modulo 256."""
+    backend = DA3Backend(_licensed_da3_config())
+    image = np.repeat(np.array([[0, 255, 256, 32768, 65535]], dtype=np.uint16)[:, :, None], 3, axis=2)
+
+    image_pil, image_array = backend._prepare_image(image)
+
+    assert image_array[0, :, 0].tolist() == [0, 1, 1, 128, 255]
+    assert np.array_equal(np.asarray(image_pil), image_array)
+
+
+def test_da3_backend_prepare_image_clips_normalized_float_undershoot():
+    """A tiny negative undershoot must not turn a normalized float image into a black frame."""
+    backend = DA3Backend(_licensed_da3_config())
+    image = np.repeat(np.array([[-0.02, 0.5, 1.0]], dtype=np.float32)[:, :, None], 3, axis=2)
+
+    _, image_array = backend._prepare_image(image)
+
+    assert image_array[0, :, 0].tolist() == [0, 127, 255]
+
+
+@pytest.mark.parametrize(
+    "image",
+    [
+        np.tile(np.linspace(0, 65535, 64).astype(np.uint16), (2, 1))[:, :, None].repeat(3, axis=2),
+        np.tile(np.linspace(-0.05, 1.0, 64, dtype=np.float32), (2, 1))[:, :, None].repeat(3, axis=2),
+        np.tile(np.linspace(0.0, 300.0, 64), (2, 1))[:, :, None].repeat(3, axis=2),
+        np.tile(np.arange(-10, 290, 5, dtype=np.int32), (2, 1))[:, :, None].repeat(3, axis=2),
+    ],
+    ids=["uint16", "float_undershoot", "float_0_255_overshoot", "int32_out_of_range"],
+)
+def test_ndarray_inputs_are_interpreted_identically_by_every_backend(image):
+    """Every depth backend must hand the model the same uint8 pixels for one ndarray."""
+    from transformation_portal.depth.backends.depth_pro import DepthProBackend
+    from transformation_portal.depth.backends.depthcrafter import DepthCrafterBackend
+    from transformation_portal.depth.backends.synthetic import SyntheticDepthBackend
+
+    da3_pixels = DA3Backend(_licensed_da3_config())._prepare_image(image)[1]
+    depth_pro_pixels = DepthProBackend.__new__(DepthProBackend)._prepare_image(image)[1]
+    synthetic_pixels = SyntheticDepthBackend().compute(image).original_image
+    depthcrafter_pixels = DepthCrafterBackend._to_rgb_uint8_array(image)
+
+    assert da3_pixels.dtype == np.uint8
+    for pixels in (depth_pro_pixels, synthetic_pixels, depthcrafter_pixels):
+        assert np.array_equal(pixels, da3_pixels)
+    # The conversion is monotone, so a monotone ramp never wraps around.
+    assert (np.diff(da3_pixels[0, :, 0].astype(np.int32)) >= 0).all()
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+def test_da3_backend_prepare_image_rejects_non_finite_float_pixels(bad):
+    backend = DA3Backend(_licensed_da3_config())
+    image = np.full((2, 2, 3), 0.5, dtype=np.float32)
+    image[0, 0, 0] = bad
+
+    with pytest.raises(ValueError, match="non-finite"):
+        backend._prepare_image(image)
 
 
 @pytest.mark.skipif(
@@ -770,6 +891,38 @@ def test_da3_backend_unit_contract_metadata(monkeypatch):
     assert any("normalized to relative" in warning for warning in result.warnings)
 
 
+def test_da3_backend_reuses_engine_for_repeated_explicit_device(monkeypatch):
+    """An unchanged explicit device must not rebuild the in-process engine (D-16)."""
+    config = _licensed_da3_config(depth_device="cpu")
+    backend = DA3Backend(config)
+    monkeypatch.setattr(backend, "ensure_available", lambda: None)
+    monkeypatch.setattr(backend, "_uses_subprocess", lambda: False)
+
+    loads = []
+
+    def fake_load(device):
+        loads.append(device)
+        backend._engine = SimpleNamespace(
+            predict=lambda image: SimpleNamespace(
+                depth_map=np.ones((image.height, image.width), dtype=np.float32),
+                metadata={"device": device},
+            )
+        )
+
+    monkeypatch.setattr(backend, "_load_engine", fake_load)
+    image = Image.new("RGB", (16, 16), color="white")
+
+    for _ in range(4):
+        backend.compute(image, device="cpu")
+    backend.compute(image)
+    assert loads == ["cpu"]
+
+    # A genuinely different device still triggers a reload.
+    backend._candidate_authority = None
+    backend.compute(image, device="mps")
+    assert loads == ["cpu", "mps"]
+
+
 def test_da3_backend_uses_engine_effective_device_metadata(monkeypatch):
     """DA3 adapter should report the engine's effective runtime device."""
     config = _licensed_da3_config(depth_device="cpu")
@@ -799,7 +952,7 @@ def test_da3_backend_smoke_cpu_no_hidden_cuda(monkeypatch):
     pytest.importorskip("torch")
     import transformation_portal.lux_depth_v3.inference as inference_module
 
-    _install_fake_depth_anything3(monkeypatch)
+    fake_da3 = _install_fake_depth_anything3(monkeypatch)
     monkeypatch.setattr(DA3Backend, "ensure_available", lambda self: None)
     monkeypatch.setattr(inference_module, "TRANSFORMERS_AVAILABLE", True)
 
@@ -808,6 +961,9 @@ def test_da3_backend_smoke_cpu_no_hidden_cuda(monkeypatch):
 
     assert result.device == "cpu"
     assert result.depth_map.shape == (64, 64)
+    # The weights are requested once, at the revision the resolved contract records.
+    assert fake_da3.requested_revisions == [backend._resolved_model_contract.revision]
+    assert fake_da3.requested_revisions[0]
 
 
 def test_da3_backend_smoke_mps_no_hidden_cuda(monkeypatch):

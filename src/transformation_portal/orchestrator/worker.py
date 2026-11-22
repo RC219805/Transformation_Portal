@@ -89,14 +89,36 @@ class RetryableExecutorUnavailable(Exception):
     """
 
 
+class WorkerCancellation(asyncio.Event):
+    """Executor stop signal that also records why the worker withdrew authority.
+
+    The heartbeat sets it both when the broker reports an orchestrator-requested
+    cancel (``LeaseStatus.cancelled``) and when the lease can no longer be
+    confirmed. ``lease_lost`` is true only for the second case, so an executor
+    can record that infrastructure abort as retriable ``worker_lost`` rather
+    than as a user-style ``canceled``. Executors that only need the stop signal
+    keep using it as a plain ``asyncio.Event``.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lease_lost = False
+
+
+def lease_was_lost(cancellation_event: asyncio.Event) -> bool:
+    """True when the worker stopped the executor without a confirmed lease."""
+    return isinstance(cancellation_event, WorkerCancellation) and cancellation_event.lease_lost
+
+
 # Signature: ``executor(request, cancellation_event) -> int`` where the
 # return value is an exit code (0 = succeeded, nonzero = failed) that the
 # caller will translate into a JobRepository state update. Both arguments
 # are positional so the type alias matches the ``WorkerRunner.step`` /
 # ``_default_executor`` call shape exactly. ``cancellation_event`` is set
-# by the heartbeat loop when the broker reports ``LeaseStatus.cancelled``;
-# the executor must observe it and exit promptly so the lease can be
-# released.
+# by the heartbeat loop when the broker reports ``LeaseStatus.cancelled``
+# or when the lease can no longer be confirmed (``lease_was_lost`` tells
+# the two apart); the executor must observe it and exit promptly so the
+# lease can be released.
 JobExecutor = Callable[[JobEnqueueRequest | DispatchLocator, asyncio.Event], Awaitable[int]]
 
 
@@ -207,7 +229,7 @@ class WorkerRunner:
                 logger.exception("claim unavailable; retaining broker lease for fail-closed recovery")
                 return False
         token = _dispatch_fence.set(fence)
-        cancellation_event = asyncio.Event()
+        cancellation_event = WorkerCancellation()
         heartbeat_task = asyncio.create_task(self._heartbeat_loop(lease.job_id, cancellation_event, fence, lease_deadline))
         release_lease = True
         finish_uncommitted_dispatch = True
@@ -305,6 +327,9 @@ class WorkerRunner:
             except Exception:
                 # This deadline is independent of TCP/socket cancellation: a
                 # paused server cannot keep a child alive past its last lease.
+                # Nobody requested this stop: say so before waking the executor.
+                if isinstance(cancellation_event, WorkerCancellation):
+                    cancellation_event.lease_lost = True
                 cancellation_event.set()
                 logger.exception(
                     "worker %s lost or could not confirm lease for %s; signalling cancellation", self._config.worker_id, job_id
@@ -413,8 +438,10 @@ __all__ = [
     "CancelledByOrchestrator",
     "JobExecutor",
     "RetryableExecutorUnavailable",
+    "WorkerCancellation",
     "WorkerConfig",
     "WorkerRunner",
+    "lease_was_lost",
     "main",
     "monotonic_now",
     "run_worker_forever",

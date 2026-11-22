@@ -8,9 +8,10 @@ import re
 from pathlib import Path
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
-from transformation_portal.lux_depth_v3.__main__ import _parse_bool_flag, app
+from transformation_portal.lux_depth_v3.__main__ import _normalize_log_level, _parse_bool_flag, app
 
 pytestmark = pytest.mark.unit
 
@@ -64,6 +65,47 @@ class TestBoolFlagParsing:
     def test_parse_bool_flag(self, value, expected):
         """Test that _parse_bool_flag correctly parses various boolean string formats."""
         assert _parse_bool_flag(value) == expected
+
+    @pytest.mark.parametrize("value", ["enabled", "y", "onn", "ture", "", "2"])
+    def test_parse_bool_flag_rejects_unrecognised_values(self, value):
+        """An unknown spelling is a usage error, never a silent ``off``."""
+        with pytest.raises(typer.BadParameter, match="not a recognised boolean"):
+            _parse_bool_flag(value, "--pbr")
+
+
+class TestLogLevelNormalization:
+    """``--log-level`` rejects unknown names without breaking values that worked."""
+
+    @pytest.mark.parametrize(
+        ("value", "expected_level"),
+        [
+            ("DEBUG", logging.DEBUG),
+            ("info ", logging.INFO),
+            ("Warning", logging.WARNING),
+            ("WARN", logging.WARNING),
+            ("warn", logging.WARNING),
+            ("error", logging.ERROR),
+            ("CRITICAL", logging.CRITICAL),
+            ("fatal", logging.CRITICAL),
+            ("NOTSET", logging.NOTSET),
+        ],
+    )
+    def test_standard_logging_level_names_select_their_level(self, value, expected_level):
+        """Every stdlib level name, including the WARN/FATAL aliases, keeps its level."""
+        normalized = _normalize_log_level(value)
+
+        assert normalized is not None
+        assert logging.getLevelName(normalized) == expected_level
+
+    @pytest.mark.parametrize("value", [None, "", "  "])
+    def test_unset_or_empty_log_level_means_not_set(self, value):
+        """An empty value keeps deferring to --verbose/--quiet and the default."""
+        assert _normalize_log_level(value) is None
+
+    @pytest.mark.parametrize("value", ["nonsense", "10", "WARNINGS", "basicConfig"])
+    def test_unknown_log_level_is_a_usage_error(self, value):
+        with pytest.raises(typer.BadParameter, match="is not a log level"):
+            _normalize_log_level(value)
 
 
 class TestCLIValidation:

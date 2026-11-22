@@ -201,6 +201,24 @@ def test_gc_skips_non_directory_entries(tmp_path: Path) -> None:
     assert store.has_object(obj.sha256)
 
 
+def test_gc_leaves_in_flight_writer_temp_files_alone(tmp_path: Path) -> None:
+    """STOR-05: a concurrent writer's temp file is not an object to collect."""
+    store = _store(tmp_path)
+    kept = store.add_bytes(b"referenced")
+    # Exactly the name pattern _atomic_write_file/_atomic_write_bytes use.
+    in_flight = kept.path.parent / ".cas_write_abc123.tmp"
+    in_flight.write_bytes(b"half-written object of another writer")
+    # A hash-named file in the wrong shard is not a valid object either.
+    misplaced = kept.path.parent / ("f" * 64)
+    misplaced.write_bytes(b"not in its own shard")
+
+    for dry_run in (True, False):
+        assert store.gc({kept.sha256}, dry_run=dry_run) == []
+    assert in_flight.read_bytes() == b"half-written object of another writer"
+    assert misplaced.exists()
+    assert store.has_object(kept.sha256)
+
+
 # --------------------------------------------------------------------------- #
 # gc_quarantine
 # --------------------------------------------------------------------------- #

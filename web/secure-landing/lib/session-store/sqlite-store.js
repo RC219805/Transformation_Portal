@@ -16,6 +16,14 @@ function getSessionDb() {
   return getDb(getConfig().sessionDbPath);
 }
 
+function normalizeThrottleKeys(throttleKeys) {
+  const keys = Array.isArray(throttleKeys) ? throttleKeys.map((key) => String(key || "")) : [];
+  if (!keys.length || keys.some((key) => !key)) {
+    throw new Error("reserveLoginAttempt requires at least one non-empty throttle key");
+  }
+  return keys;
+}
+
 export class SqliteSessionStore {
   /** @type {"sqlite"} */
   get backend() {
@@ -80,6 +88,12 @@ export class SqliteSessionStore {
     getSessionDb().prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
   }
 
+  pruneExpiredSessions(nowMs) {
+    getSessionDb()
+      .prepare("DELETE FROM sessions WHERE idle_expires_at <= ? OR absolute_expires_at <= ?")
+      .run(nowMs, nowMs);
+  }
+
   countLoginFailures(throttleKey, sinceMs) {
     const row = getSessionDb()
       .prepare(
@@ -104,6 +118,40 @@ export class SqliteSessionStore {
         `
       )
       .run(attempt.throttle_key, attempt.attempted_at, attempt.success, attempt.remote_addr || null);
+  }
+
+  reserveLoginAttempt(throttleKeys, { attemptedAt, sinceMs, limit, remoteAddr = null } = {}) {
+    const keys = normalizeThrottleKeys(throttleKeys);
+    const db = getSessionDb();
+    const countFailures = db.prepare(
+      `
+        SELECT COUNT(*) AS failures
+        FROM login_attempts
+        WHERE throttle_key = ?
+          AND success = 0
+          AND attempted_at >= ?
+      `
+    );
+    const insertFailure = db.prepare(
+      `
+        INSERT INTO login_attempts (throttle_key, attempted_at, success, remote_addr)
+        VALUES (?, ?, 0, ?)
+      `
+    );
+    // BEGIN IMMEDIATE takes the write lock before the count, so the check and
+    // the insert are atomic even across processes sharing the database file.
+    const reserve = db.transaction(() => {
+      for (const key of keys) {
+        if (Number(countFailures.get(key, sinceMs)?.failures || 0) >= limit) {
+          return false;
+        }
+      }
+      for (const key of keys) {
+        insertFailure.run(key, attemptedAt, remoteAddr || null);
+      }
+      return true;
+    });
+    return reserve.immediate();
   }
 
   resetLoginAttempts(throttleKey) {

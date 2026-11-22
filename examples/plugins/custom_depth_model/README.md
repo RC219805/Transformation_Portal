@@ -15,6 +15,10 @@ registry = get_global_registry()
 registry.discover_plugins(['examples/plugins/'])
 ```
 
+Paths outside the built-in plugin root are opt-in: export
+`TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS=1` before starting Python,
+otherwise `discover_plugins` raises `ValueError` for this directory.
+
 ## Usage
 
 ```python

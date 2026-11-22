@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, BinaryIO, Callable, Mapping
 
 import numpy as np
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from transformation_portal.core.depth_artifact import DepthArtifact
 from transformation_portal.core.image_artifact import ImageMaster, ImageProxy, ProxyTransform, metadata_payload
@@ -33,6 +33,19 @@ from transformation_portal.lux_depth_v4.color_preparation import (
 
 RAW_SUFFIXES = frozenset({".arw", ".cr2", ".cr3", ".dng", ".nef", ".nrw", ".orf", ".raf", ".raw", ".rw2"})
 RawDecoder = Callable[[bytes, str], tuple[np.ndarray, Mapping[str, Any]]]
+
+
+class DecodedPixelLimitError(ValueError):
+    """Header geometry exceeds the caller's ``max_pixels`` before pixels are allocated."""
+
+    def __init__(self, height: int, width: int) -> None:
+        super().__init__("Decoded image dimensions exceed max_pixels")
+        self.height = height
+        self.width = width
+
+    def __reduce__(self) -> tuple[type["DecodedPixelLimitError"], tuple[int, int]]:
+        # args holds only the message, so default pickling would call __init__ with one argument.
+        return type(self), (self.height, self.width)
 
 
 def _orient(array: np.ndarray, orientation: int) -> np.ndarray:
@@ -151,6 +164,10 @@ def _standard_color_metadata(
     return profile, declared_color, exif_color
 
 
+_PNG_BASE_CHUNK_BUDGET = 8192
+_PNG_MIN_AVERAGE_CHUNK_BYTES = 1024
+
+
 def _png_color_metadata(source: BinaryIO, image: Image.Image, *, input_color: str) -> tuple[Image.Exif, dict[str, Any]]:
     """Inspect bounded color chunks, including late EXIF, without raster reads.
 
@@ -158,6 +175,12 @@ def _png_color_metadata(source: BinaryIO, image: Image.Image, *, input_color: st
     length, duplication and placement checks so malformed metadata cannot be
     mistaken for an untagged image by either preview or execution.
     """
+    # The chunk walk is bounded by the admitted stream size, not a flat count:
+    # libpng-family writers emit 8 KiB IDAT chunks, so large valid PNGs carry
+    # more than 8192 chunks, while a chunk bomb of tiny chunks still fails
+    # closed once it averages under _PNG_MIN_AVERAGE_CHUNK_BYTES per chunk.
+    stream_bytes = source.seek(0, io.SEEK_END)
+    chunk_budget = _PNG_BASE_CHUNK_BUDGET + stream_bytes // _PNG_MIN_AVERAGE_CHUNK_BYTES
     source.seek(8)
     seen: set[bytes] = set()
     metadata: dict[str, Any] = {}
@@ -165,7 +188,7 @@ def _png_color_metadata(source: BinaryIO, image: Image.Image, *, input_color: st
     seen_pixels = False
     color_chunks = {b"IHDR", b"iCCP", b"sRGB", b"gAMA", b"cHRM", b"cICP", b"eXIf", b"tRNS", b"mDCV", b"cLLI"}
     lengths = {b"IHDR": 13, b"sRGB": 1, b"gAMA": 4, b"cHRM": 32, b"cICP": 4, b"mDCV": 24, b"cLLI": 8}
-    for _ in range(8192):
+    for _ in range(chunk_budget):
         header = source.read(8)
         if len(header) != 8:
             raise ValueError("Incomplete PNG metadata")
@@ -265,7 +288,15 @@ def validate_input_color_metadata(
             grayscale = page.photometric == tifffile.PHOTOMETRIC.MINISBLACK
             image_format = "TIFF"
     else:
-        with Image.open(source) as image:
+        # Only JPEG and PNG are admitted here. Restricting Pillow to those two plugins keeps the probe
+        # independent of which other plugins the process has registered: after Image.init() Pillow tries
+        # plugins alphabetically, and some read through file methods the bounded preflight reader does
+        # not offer, which used to escape as AttributeError.
+        try:
+            probe = Image.open(source, formats=("JPEG", "PNG"))
+        except UnidentifiedImageError as exc:
+            raise ValueError("V4 standard ingest supports RGB/gray JPEG, PNG and TIFF") from exc
+        with probe as image:
             height, width = image.height, image.width
             image_format = str(image.format)
             if image_format not in {"JPEG", "PNG"}:
@@ -341,7 +372,7 @@ def decode_master(
 
     def check_dimensions(height: int, width: int) -> None:
         if height <= 0 or width <= 0 or height * width > max_pixels:
-            raise ValueError("Decoded image dimensions exceed max_pixels")
+            raise DecodedPixelLimitError(height, width)
 
     source_sha256 = hashlib.sha256(source_bytes).hexdigest()
     if Path(source_name).suffix.lower() in RAW_SUFFIXES:

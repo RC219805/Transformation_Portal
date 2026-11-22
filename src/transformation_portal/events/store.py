@@ -102,7 +102,7 @@ class EventStore:
         if offset:
             events = events[offset:]
 
-        if limit:
+        if limit is not None:
             events = events[:limit]
 
         return events
@@ -120,8 +120,9 @@ class EventStore:
         with self._lock:
             filtered = [e for e in self._events if e.type == event_type]
 
-        if limit:
-            filtered = filtered[-limit:]
+        if limit is not None:
+            # ``filtered[-0:]`` is the whole list, so limit=0 needs its own case.
+            filtered = filtered[-limit:] if limit else []
 
         return filtered
 
@@ -154,8 +155,9 @@ class EventStore:
         """Clear all events from store."""
         with self._lock:
             self._events.clear()
-            # Clear persisted events
-            for event_file in self.storage_path.glob("*.json"):
+            # Clear persisted events. They live in per-date subdirectories and
+            # are reloaded with rglob, so they must be removed the same way.
+            for event_file in self.storage_path.rglob("*.json"):
                 event_file.unlink()
 
     def _persist_event(self, event: Event) -> None:

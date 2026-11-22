@@ -1673,6 +1673,90 @@ test("development local bypass still allows login without Cloudflare Access", as
   }
 });
 
+async function postLocalBypassLogin(POST, session, password, extraHeaders = {}) {
+  const response = await POST(buildRequest("http://localhost:3000/login", {
+    method: "POST",
+    headers: new Headers({
+      origin: "http://localhost:3000",
+      "content-type": "application/x-www-form-urlencoded",
+      cookie: `tp_session=${session.id}`,
+      ...extraHeaders
+    }),
+    body: new URLSearchParams({ username: "admin", password, csrf_token: session.csrfToken })
+  }));
+  return new URL(response.headers.get("location")).searchParams.get("error") || "success";
+}
+
+async function withLocalBypassLogin(run) {
+  const passwordHash = await argon2.hash("correct horse battery staple");
+  const env = withTempEnvironment({
+    NODE_ENV: "development",
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
+    usersFileEntries: [
+      { username: "admin", password_hash: passwordHash, access_email: "admin@example.com", role: "admin" }
+    ]
+  });
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+    const { getConfig } = await importFresh("../lib/config.js");
+    await run({ sessions, POST, limit: getConfig().loginAttemptLimit });
+  } finally {
+    env.cleanup();
+  }
+}
+
+test("login POST throttle holds under a concurrent burst from one session", async () => {
+  await withLocalBypassLogin(async ({ sessions, POST, limit }) => {
+    const session = await sessions.createAnonymousSession();
+    await withCapturedAuditEvents(async (events) => {
+      const outcomes = await Promise.all(
+        Array.from({ length: 4 * limit }, (_, index) =>
+          postLocalBypassLogin(POST, session, `wrong-${index}`, { "x-forwarded-for": "198.51.100.2" })
+        )
+      );
+      const passwordChecks = events.filter((event) => event.event === "login_failure").length;
+      assert.equal(passwordChecks, limit, "only `limit` attempts may reach password verification");
+      assert.equal(outcomes.filter((outcome) => outcome === "throttled").length, 3 * limit);
+    });
+  });
+});
+
+test("login POST throttle is not reset by rotating forwarded client addresses", async () => {
+  await withLocalBypassLogin(async ({ sessions, POST, limit }) => {
+    const session = await sessions.createAnonymousSession();
+    const outcomes = [];
+    for (let index = 0; index < limit + 3; index += 1) {
+      const headers = index % 2
+        ? { "cf-connecting-ip": `2001:db8::${index.toString(16)}` }
+        : { "x-forwarded-for": `203.0.113.${index}, 10.0.0.1` };
+      outcomes.push(await postLocalBypassLogin(POST, session, `wrong-${index}`, headers));
+    }
+    assert.deepEqual(outcomes.slice(0, limit), Array(limit).fill("invalid"));
+    assert.deepEqual(outcomes.slice(limit), Array(3).fill("throttled"));
+    // The correct password is refused while the account bucket is exhausted.
+    assert.equal(
+      await postLocalBypassLogin(POST, session, "correct horse battery staple", { "x-forwarded-for": "192.0.2.77" }),
+      "throttled"
+    );
+  });
+});
+
+test("login POST success clears the failures it reserved", async () => {
+  await withLocalBypassLogin(async ({ sessions, POST, limit }) => {
+    const session = await sessions.createAnonymousSession();
+    for (let index = 0; index < limit - 1; index += 1) {
+      assert.equal(await postLocalBypassLogin(POST, session, `wrong-${index}`), "invalid");
+    }
+    assert.equal(await postLocalBypassLogin(POST, session, "correct horse battery staple"), "success");
+    const next = await sessions.createAnonymousSession();
+    for (let index = 0; index < limit; index += 1) {
+      assert.equal(await postLocalBypassLogin(POST, next, `again-${index}`), "invalid");
+    }
+    assert.equal(await postLocalBypassLogin(POST, next, "again-final"), "throttled");
+  });
+});
+
 test("development local bypass login still works when the browser omits origin and referrer", async () => {
   const passwordHash = await argon2.hash("correct horse battery staple");
   const env = withTempEnvironment({
@@ -3033,9 +3117,14 @@ test("shared portal asset manifest pins the managed asset proxy allowlist", asyn
     "portal-photographic-support.js",
     "portal-photographic-editor.js",
     "portal-photographic.css",
+    "portal-operate-tools.js",
     "portal-config-transfer.js",
     "portal-photographic-drafts.js",
-    "portal-photographic-loader.js"
+    "portal-photographic-loader.js",
+    "portal-photographic-workspace.js",
+    "portal-photographic-workspace.css",
+    "portal-photographic-thumbnails.js",
+    "portal-client-recovery.js"
   ]);
 });
 

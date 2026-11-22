@@ -17,6 +17,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from transformation_portal.core.execution_plan import MAX_PLAN_BODY_BYTES, decode_bounded_json_object
+from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.lux_depth_v4 import backend, worker
 
 pytestmark = pytest.mark.unit
@@ -47,7 +49,7 @@ def test_blocked_request_write_obeys_timeout():
     session = _process_session("import time; time.sleep(30)", timeout=0.2)
     try:
         with pytest.raises(TimeoutError, match="wall-time"):
-            session._rpc({"command": "prepare", "plan": "x" * 2_000_000})
+            session._rpc({"command": "prepare", "plan": "x" * 1_000_000})
     finally:
         session.close()
     assert session.process.poll() is not None
@@ -58,7 +60,7 @@ def test_blocked_request_write_obeys_cancellation():
     session = _process_session("import time; time.sleep(30)", cancellation=lambda: time.monotonic() - start > 0.2)
     try:
         with pytest.raises(RuntimeError, match="cancelled"):
-            session._rpc({"command": "prepare", "plan": "x" * 2_000_000})
+            session._rpc({"command": "prepare", "plan": "x" * 1_000_000})
     finally:
         session.close()
 
@@ -77,6 +79,57 @@ def test_rpc_returns_response_and_rejects_duplicate_keys():
             session._rpc({"command": "verify"})
     finally:
         session.close()
+
+
+def test_rpc_frame_of_admitted_non_ascii_plan_fits_worker_ingress():
+    """LN-10: a plan within the 1 MiB plan bound must not expand past it on the wire."""
+    session = _process_session(
+        "import json, sys; line = sys.stdin.buffer.readline(); "
+        "print(json.dumps({'ok': True, 'result': {'bytes': len(line)}}), flush=True)"
+    )
+    request = {"command": "prepare", "plan": {"inputs": ["写真ファイル" * 600] * 90}}
+    expected = len(canonicalize_json(request)) + 1
+    assert expected <= MAX_PLAN_BODY_BYTES
+    try:
+        assert session._rpc(request) == {"bytes": expected}
+    finally:
+        session.close()
+    decode_bounded_json_object(canonicalize_json(request) + b"\n")
+
+
+def test_rpc_rejects_frame_beyond_worker_ingress_bound_truthfully():
+    session = _process_session("import time; time.sleep(30)")
+    try:
+        with pytest.raises(RuntimeError, match="worker ingress bound"):
+            session._rpc({"command": "prepare", "plan": "x" * MAX_PLAN_BODY_BYTES})
+    finally:
+        session.close()
+
+
+def test_worker_error_reply_stays_readable_by_the_parent(monkeypatch, capsys):
+    def failing(_plan_bytes):
+        raise ValueError("model failure " + "x" * 20_000)
+
+    monkeypatch.setattr(worker, "parse_photography_plan", failing)
+    monkeypatch.setattr(worker.sys, "stdin", SimpleNamespace(buffer=io.BytesIO(b'{"command":"prepare","plan":{}}\n')))
+    assert worker.main([]) == 1
+    reply = decode_bounded_json_object(capsys.readouterr().out.strip())
+    assert reply["ok"] is False
+    assert reply["error"].startswith("model failure xxx") and reply["error"].endswith("[truncated]")
+    assert len(reply["error"]) <= worker.MAX_WORKER_ERROR_CHARS + len(" [truncated]")
+
+
+@pytest.mark.parametrize("character", ["写", "😀"])
+def test_worker_error_reply_bounds_escaped_non_ascii_errors(character):
+    # LN-10: the parent's decoder counts escaped JSON text, so a non-ASCII error
+    # within the character budget (e.g. naming a CJK path) was still masked.
+    message = "cannot read 写真.tif: " + character * 3000
+    reply = decode_bounded_json_object(worker.error_reply(ValueError(message)))
+    assert reply["ok"] is False
+    assert reply["error"].endswith(" [truncated]")
+    assert message.startswith(reply["error"][: -len(" [truncated]")])
+    short = decode_bounded_json_object(worker.error_reply(ValueError("cannot read 写真.tif")))
+    assert short["error"] == "cannot read 写真.tif"
 
 
 def test_close_terminates_descendants_after_leader_exit_and_is_idempotent(tmp_path):
@@ -247,3 +300,22 @@ def test_worker_environment_removes_ambient_python_import_paths(monkeypatch):
     assert env["PYTHONPATH"] != "/untrusted"
     assert "PYTHONHOME" not in env and "VIRTUAL_ENV" not in env
     assert env["HF_HUB_OFFLINE"] == env["TP_STRICT_MODEL_LOCK"] == "1"
+
+
+def test_worker_environment_withholds_service_credentials(monkeypatch):
+    """LN-11: DA3 and RAW workers must not receive the parent's service secrets."""
+    secrets = {
+        "TP_API_KEY": "tp-secret",
+        "TP_DATABASE_URL": "postgresql://user:pw@db/tp",
+        "TP_REDIS_URL": "redis://cache",
+        "AWS_SECRET_ACCESS_KEY": "aws-secret",
+        "HF_TOKEN": "hf-secret",
+        "VENDOR_PRIVATE_KEY": "key",
+    }
+    for key, value in secrets.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("HF_HOME", "/models/hf")
+    env = backend.worker_environment()
+    assert not set(secrets) & set(env)
+    # Model-cache locations recorded by the DA3 runtime identity still cross.
+    assert env["HF_HOME"] == "/models/hf"

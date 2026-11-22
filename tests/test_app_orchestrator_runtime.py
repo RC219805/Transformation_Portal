@@ -17,6 +17,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
@@ -786,27 +787,98 @@ def test_preview_reports_non_integer_output_bit_depth_without_truncation(
     )
 
 
+@pytest.mark.parametrize("enable_v2", [True, False], ids=["v2", "materials-only"])
 @pytest.mark.parametrize("policy", ["auto", "auto_assume_srgb", "srgb", "linear_srgb", None])
-def test_managed_v3_carries_explicit_finishing_input_color(policy: str | None, tmp_path: Path) -> None:
+def test_managed_v3_carries_explicit_finishing_input_color(policy: str | None, enable_v2: bool, tmp_path: Path) -> None:
     source = tmp_path / "input"
     source.mkdir()
-    args = {"input_dir": str(source), "output_dir": str(tmp_path / "output"), "enable_v2": True, "v2_input_color": policy}
+    args = {
+        "input_dir": str(source),
+        "output_dir": str(tmp_path / "output"),
+        "enable_v2": enable_v2,
+        "materials_v3": not enable_v2,
+        "v2_input_color": policy,
+    }
     preview = orchestrator_app._build_lux_config_preview(args)
     assert preview["normalized_args"]["v2_input_color"] == (policy or "auto")
     argv = orchestrator_app._argv_from_request({"pipeline": "lux-depth-v3", "args": args})
     assert _flag_value(argv, "--v2-input-color") == (policy or "auto")
 
 
+@pytest.mark.parametrize("enable_v2", [True, False], ids=["v2", "materials-only"])
 @pytest.mark.parametrize("invalid", [True, "assume_any_profile", [], {}])
-def test_managed_v3_rejects_unknown_finishing_color_policy(invalid: object, tmp_path: Path) -> None:
+def test_managed_v3_rejects_unknown_finishing_color_policy(invalid: object, enable_v2: bool, tmp_path: Path) -> None:
     source = tmp_path / "input"
     source.mkdir()
-    args = {"input_dir": str(source), "output_dir": str(tmp_path / "output"), "enable_v2": True, "v2_input_color": invalid}
+    args = {
+        "input_dir": str(source),
+        "output_dir": str(tmp_path / "output"),
+        "enable_v2": enable_v2,
+        "materials_v3": not enable_v2,
+        "v2_input_color": invalid,
+    }
     preview = orchestrator_app._build_lux_config_preview(args)
     assert any(error["field"] == "v2_input_color" for error in preview["field_errors"])
     with pytest.raises(orchestrator_app.HTTPException) as rejection:
         orchestrator_app._argv_from_request({"pipeline": "lux-depth-v3", "args": args})
     assert rejection.value.status_code == 400
+
+
+@pytest.mark.parametrize("suffix", ["png", "tiff"])
+def test_managed_v3_materials_only_uses_portal_color_for_untagged_image(
+    suffix: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unittest.mock import Mock
+
+    import numpy as np
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3 import segmentation_backend
+    from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    source = input_dir / f"scene.{suffix}"
+    pixels = np.full((8, 10, 3), [64, 96, 128], dtype=np.uint8)
+    Image.fromarray(pixels).save(source)
+    output_dir = tmp_path / "output"
+    args = {
+        "input_dir": str(input_dir),
+        "output_dir": str(output_dir),
+        "materials_v3": True,
+        "enable_v2": False,
+        "v2_input_color": "auto_assume_srgb",
+        "v2_preset": "none",
+    }
+
+    argv = orchestrator_app._argv_from_request({"pipeline": "lux-depth-v3", "args": args})
+    assert "--v2-preset" not in argv
+    config = _capture_lux_cli_config_from_args(argv[3:])
+    assert config.enable_materials_v3 and not config.enable_v2
+
+    proxy = pixels.astype(np.float32) / 255
+    mask = np.ones(proxy.shape[:2], dtype=np.float32)
+    process = Mock(return_value={"material_masks": {"stone": mask}})
+    monkeypatch.setattr(segmentation_backend, "segment_materials", lambda *args, **kwargs: {"stone": mask})
+    monkeypatch.setattr(segmentation_backend, "get_last_segmentation_runtime_metadata", lambda: {})
+    orchestrator = object.__new__(EnhanceOrchestrator)
+    orchestrator.config = config
+    orchestrator.output_root = output_dir
+    orchestrator.segmentation_dir = output_dir / "segmentation"
+    orchestrator.materials_v3_engine = SimpleNamespace(process=process)
+
+    result, _, _ = orchestrator._run_materials_v3_stage(
+        preprocessed_array=proxy, source_path=source, depth_map=mask, output_key=Path("scene")
+    )
+
+    assert result is not None
+    np.testing.assert_allclose(process.call_args.kwargs["image"], proxy, atol=1e-6, rtol=0)
+    metadata = result["materials_v3_metadata"]["segmentation_metadata"]
+    assert metadata["color_preparation"]["preparation"]["resolution"] == "untagged_input_srgb_assumption"
+    with np.load(metadata["mask_artifact_path"], allow_pickle=False) as masks:
+        np.testing.assert_array_equal(masks["stone"], mask)
+    preview = orchestrator_app._build_lux_config_preview(args)
+    assert "--v2-input-color auto_assume_srgb" in preview["argv_preview"]
 
 
 def test_argv_rejects_explicit_8_with_truthy_legacy_bit_depth_alias() -> None:
@@ -967,6 +1039,7 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
     assert f'data-review-surface-css-url="{bundle.urls["portal-review.css"]}"' in html_content
     assert f'data-photographic-review-js-url="{bundle.urls["portal-photographic.js"]}"' in html_content
     assert f'data-photographic-review-css-url="{bundle.urls["portal-photographic.css"]}"' in html_content
+    assert f'data-photographic-workspace-css-url="{bundle.urls["portal-photographic-workspace.css"]}"' in html_content
     assert f'data-profile-surface-js-url="{bundle.urls["portal-profile.js"]}"' in html_content
     assert "@import" not in css_content
     assert "--ux-target-min-size:" in css_content
@@ -986,6 +1059,29 @@ def test_portal_html_signature_tracks_preloaded_font_fingerprint() -> None:
     font_fingerprint = orchestrator_app._get_portal_direct_asset_fingerprint("fonts/portal-sans.woff2")
 
     assert ("fonts/portal-sans.woff2", font_fingerprint) in signature
+
+
+def test_portal_direct_asset_fingerprint_cache_holds_every_manifest_asset() -> None:
+    """A warm page load must not re-read and re-hash portal assets (LRU thrash)."""
+    asset_names = [name for name in portal_asset_bundle.PORTAL_ASSET_MANIFEST if name != "portal.css"]
+    fingerprint_cache = portal_asset_bundle._build_portal_direct_asset_fingerprint
+
+    def _page_load() -> None:
+        orchestrator_app._get_portal_asset_bundle()
+        for asset_name in asset_names:
+            orchestrator_app._get_portal_direct_asset_fingerprint(asset_name)
+
+    fingerprint_cache.cache_clear()
+    try:
+        _page_load()
+        warm = fingerprint_cache.cache_info()
+        _page_load()
+        after = fingerprint_cache.cache_info()
+    finally:
+        fingerprint_cache.cache_clear()
+
+    assert after.misses == warm.misses
+    assert after.hits > warm.hits
 
 
 def test_portal_css_signature_tracks_active_template_token_assets_only() -> None:
@@ -1114,15 +1210,20 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal-photographic-editor.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-editor.js",
         "portal-photographic-drafts.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-drafts.js",
         "portal-photographic-loader.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-loader.js",
+        "portal-photographic-workspace.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-workspace.js",
+        "portal-photographic-thumbnails.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-thumbnails.js",
+        "portal-photographic-workspace.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic-workspace.css",
         "portal-photographic.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-photographic.css",
         "portal-review.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.css",
         # Surface-split deferred bundles. Operate, Build, and Profile are real
         # carves; Overview is an intentional placeholder (see commit fe2ed28).
         "portal-operate.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-operate.js",
+        "portal-operate-tools.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-operate-tools.js",
         "portal-build.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-build.js",
         "portal-profile.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-profile.js",
         "portal-overview.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-overview.js",
         "portal-config-transfer.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-config-transfer.js",
+        "portal-client-recovery.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-client-recovery.js",
         "fonts/portal-sans.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
         "fonts/portal-mono.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
         "brand/dna-symbol-dark.svg": orchestrator_app.PORTAL_ASSETS_DIR / "brand" / "dna-symbol-dark.svg",
@@ -1138,13 +1239,18 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal-photographic-editor.js": "text/javascript; charset=utf-8",
         "portal-photographic-drafts.js": "text/javascript; charset=utf-8",
         "portal-photographic-loader.js": "text/javascript; charset=utf-8",
+        "portal-photographic-workspace.js": "text/javascript; charset=utf-8",
+        "portal-photographic-thumbnails.js": "text/javascript; charset=utf-8",
+        "portal-photographic-workspace.css": "text/css; charset=utf-8",
         "portal-photographic.css": "text/css; charset=utf-8",
         "portal-review.css": "text/css; charset=utf-8",
         "portal-operate.js": "text/javascript; charset=utf-8",
+        "portal-operate-tools.js": "text/javascript; charset=utf-8",
         "portal-build.js": "text/javascript; charset=utf-8",
         "portal-profile.js": "text/javascript; charset=utf-8",
         "portal-overview.js": "text/javascript; charset=utf-8",
         "portal-config-transfer.js": "text/javascript; charset=utf-8",
+        "portal-client-recovery.js": "text/javascript; charset=utf-8",
         "fonts/portal-sans.woff2": "font/woff2",
         "fonts/portal-mono.woff2": "font/woff2",
         "brand/dna-symbol-dark.svg": "image/svg+xml",
@@ -1171,6 +1277,21 @@ def test_photographic_editor_import_binds_deferred_manifest_bytes() -> None:
     assert f"./portal-photographic-editor.js?v={fingerprint}" in viewer
     for entry in ("portal.js", "portal-review.js"):
         assert "portal-photographic-editor.js" not in orchestrator_app.PORTAL_ASSET_PATHS[entry].read_text()
+
+
+@pytest.mark.parametrize(
+    ("asset", "consumers"),
+    [
+        ("portal-photographic-workspace.js", ("portal-photographic.js", "portal-photographic-editor.js")),
+        ("portal-photographic-thumbnails.js", ("portal-photographic.js",)),
+    ],
+)
+def test_photographic_workspace_imports_bind_deferred_manifest_bytes(asset: str, consumers: tuple[str, ...]) -> None:
+    fingerprint = hashlib.sha256(orchestrator_app.PORTAL_ASSET_PATHS[asset].read_bytes()).hexdigest()[:12]
+    for consumer in consumers:
+        assert f"./{asset}?v={fingerprint}" in orchestrator_app.PORTAL_ASSET_PATHS[consumer].read_text()
+    for entry in ("portal.js", "portal-review.js"):
+        assert asset not in orchestrator_app.PORTAL_ASSET_PATHS[entry].read_text()
 
 
 def test_portal_asset_manifest_rejects_paths_outside_portal_assets_dir(
@@ -1212,8 +1333,11 @@ def test_portal_html_asset_references_are_covered_by_manifest() -> None:
         "/portal/assets/shared-ui-tokens.css",
         "/portal/assets/portal-photographic-support.js",
         "/portal/assets/portal-photographic-editor.js",
+        "/portal/assets/portal-operate-tools.js",
         "/portal/assets/portal-photographic-drafts.js",
         "/portal/assets/portal-photographic-loader.js",
+        "/portal/assets/portal-photographic-workspace.js",
+        "/portal/assets/portal-photographic-thumbnails.js",
     }
     for asset_url in bundled_asset_urls:
         asset_name = _portal_asset_name(asset_url)
@@ -1329,8 +1453,10 @@ def test_portal_rum_tracks_queue_actions_and_sse_reconnects() -> None:
     fetch_sse_body = _extract_js_function_body(content, "_startAuthorizedFetchSse")
     native_sse_body = _extract_js_function_body(content, "startJobEventStream")
 
-    assert "eventType: 'queue_request'" in submit_body
-    assert "metric: 'submit'" in submit_body
+    recovery_body = _extract_js_function_body(content, "_loadClientRecoverySurface")
+    assert "await api.submit(payload, { separate });" in submit_body
+    assert "eventType: 'queue_request'" in recovery_body
+    assert "metric: 'submit'" in recovery_body
     assert "eventType: 'queue_request'" in cancel_body
     assert "metric: 'cancel'" in cancel_body
     assert "eventType: 'sse_reconnect'" in fetch_sse_body
@@ -1561,7 +1687,11 @@ def test_portal_protected_suppression_reads_managed_error_envelope_details() -> 
     assert "if (_isProtectedFamilySuppressed('jobs_list')) return;" in recover_body
     assert "await _maybeSuppressOnProtectedResponse('jobs_list', res);" in recover_body
     assert "if (_isProtectedFamilySuppressed('uploads_staging')) {" in upload_body
-    assert "_recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);" in upload_body
+    recovery_body = _extract_js_function_body(content, "_loadClientRecoverySurface")
+    assert (
+        "_recordProtectedFamilySuppression(type === 'upload' ? 'uploads_staging' : 'jobs_list', nonRetryableDetails);"
+        in recovery_body
+    )
 
 
 def test_portal_lux_dispatch_payload_preserves_path_fields_after_canonical_args() -> None:
@@ -1600,11 +1730,13 @@ def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> N
     )
     assert "function _stagedUploadsSupportedForState() {" in content
     assert "function _stagedUploadsEnabledForState() {" in content
-    assert "function _stagedUploadsVisibleForState() {" in content
+    assert "const visible = _stagedUploadsSupportedForState() || Boolean(state.portalUi.recoveryUploadPresent);" in content
     assert "Staged upload controls are visible for this pipeline but gated for this portal cohort." in content
-    assert "_buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });" in content
-    assert "xhr.open('POST', `${API_BASE}/v1/uploads/staging`);" in content
-    assert "formData.append('files', file, relativePath);" in content
+    recovery_body = _extract_js_function_body(content, "_loadClientRecoverySurface")
+    transport = PORTAL_TEMPLATE_SOURCE_PATH.with_name("client-recovery-deferred.js").read_text(encoding="utf-8")
+    assert "headers: (extra, method) => _buildAuthHeaders(extra, method)" in recovery_body
+    assert 'xhr.open("POST", `${host.apiBase || ""}/v1/uploads/staging`);' in transport
+    assert 'form.append("files", file, relativePath)' in transport
     assert "els.inputDir.dispatchEvent(new Event('input', { bubbles: true }));" in content
     assert "els.inputDir.dispatchEvent(new Event('change', { bubbles: true }));" in content
     assert "function _renderStagedUploadSummary(container, uploadState) {" in content
@@ -2522,10 +2654,10 @@ def test_portal_theme_preference_defaults_to_system_without_persisting_boot_valu
     assert "if (normalizedPreference === 'system') localStorage.removeItem(THEME_STORAGE_KEY);" in apply_body
     assert "else localStorage.setItem(THEME_STORAGE_KEY, normalizedPreference);" in apply_body
     assert "_migrateThemePreferenceStorage();" in init_body
-    assert (
-        "const savedThemePreference = _normalizeThemePreference(localStorage.getItem(THEME_STORAGE_KEY)) || 'system';"
-        in init_body
-    )
+    # Denied or full site storage must not abort start-up: the migration and the saved read share one
+    # guard, and applyThemePreference turns a missing saved value into 'system'.
+    assert "savedThemePreference = localStorage.getItem(THEME_STORAGE_KEY);" in init_body
+    assert "} catch { /* storage unavailable */ }" in init_body
     assert "applyThemePreference(savedThemePreference, { persist: false, themeQuery });" in init_body
 
 
@@ -4408,9 +4540,9 @@ def test_portal_selected_job_progress_bar_has_accessible_label() -> None:
 def test_portal_archive_controls_expose_canonical_stage_labels() -> None:
     content = _portal_bundle_content()
 
-    assert "archive-gate-a (Fixity / Manifest Prep)" in content
-    assert "archive-gate-b (BagIt Build)" in content
-    assert "archive-gate-c (METS Export)" in content
+    assert 'value="archive-gate-a">Fixity and manifest · Gate A' in content
+    assert 'value="archive-gate-b">Build archival package · Gate B' in content
+    assert 'value="archive-gate-c">Export metadata · Gate C' in content
     assert "Rights Manifest JSONL" in content
     assert "Canonical Command" in content
 
@@ -4548,8 +4680,10 @@ def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -
     assert "Execution readiness is still loading." in submit_body
     assert "createToast(DISPATCH_BACKEND_OFFLINE_MESSAGE, 'error');" in submit_body
     assert "Pipeline is blocked by missing prerequisites." in submit_body
-    assert "Backend submission failed: ${truncateMiddle(errorMessage, 180)}" in submit_body
-    assert 'createToast(toastMessage, "error");' in submit_body
+    assert "await api.submit(payload, { separate });" in submit_body
+    assert "state.jobs.push" not in submit_body
+    assert "state: 'failed'" not in submit_body
+    assert "createToast(error instanceof Error ? error.message : String(error), 'error');" in submit_body
     assert "els.runJobBtn.focus({ preventScroll: true });" in submit_body
     assert "mock simulation" not in submit_body
 
@@ -4965,6 +5099,13 @@ def test_archive_index_preflight_preview_is_bounded_and_cached(
 
     with orchestrator_app._ARCHIVE_INDEX_PREFLIGHT_CACHE_LOCK:
         orchestrator_app._ARCHIVE_INDEX_PREFLIGHT_CACHE.clear()
+    # A verdict is cached only once the archive root has been unchanged for longer
+    # than the racy-timestamp window; this root was written milliseconds ago.
+    monkeypatch.setattr(
+        orchestrator_app._portal_archive_index_preflight,
+        "_now_ns",
+        lambda: time.time_ns() + 3600 * 1_000_000_000,
+    )
 
     preview_result = orchestrator_app._validate_archive_index_against_root(
         archive_index,
@@ -5532,6 +5673,284 @@ def test_run_job_does_not_spawn_or_rewrite_startup_terminal_authority(
         assert spawned == []
         assert snapshot is not None and await orchestrator_app._job_repository().get(job.id) == snapshot
         assert job.state == "worker_lost" and job.proc is None
+        events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
+        assert [event.payload["state"] for event in events if event.event_type == "done"] == ["worker_lost"]
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("in_memory", [True, False])
+@pytest.mark.parametrize("stranded_state", ["running", "succeeded"])
+def test_reclaim_sweep_does_not_rewrite_finished_job_as_worker_lost(in_memory: bool, stranded_state: str) -> None:
+    class _ExpiredLeaseBroker:
+        def __init__(self, job_ids: list[str]) -> None:
+            self._job_ids = job_ids
+
+        async def server_time(self) -> float:
+            return orchestrator_app._now()
+
+        async def reclaim_expired_leases(self, *, now: float) -> list[str]:
+            del now
+            return list(self._job_ids)
+
+    async def scenario() -> None:
+        finished = orchestrator_app._now() - 5.0
+        done = orchestrator_app.Job(
+            id=f"job_reclaim_done_{in_memory}",
+            created_at=finished - 10.0,
+            started_at=finished - 9.0,
+            finished_at=finished,
+            done_published_at=finished,
+            state="succeeded",
+            exit_code=0,
+        )
+        stranded = orchestrator_app.Job(
+            id=f"job_reclaim_stranded_{in_memory}",
+            created_at=finished - 10.0,
+            started_at=finished - 9.0,
+            state=stranded_state,
+            exit_code=0 if stranded_state == "succeeded" else None,
+        )
+        await _seed_job_async(done)
+        await _seed_job_async(stranded)
+        if not in_memory:
+            orchestrator_app.JOBS.pop(done.id, None)
+            orchestrator_app.JOBS.pop(stranded.id, None)
+        repository = orchestrator_app._job_repository()
+
+        reclaimed = await orchestrator_app._reclaim_sweep_once(_ExpiredLeaseBroker([done.id, stranded.id]), repository)
+
+        assert reclaimed == [done.id, stranded.id]
+        done_record = await repository.get(done.id)
+        assert done_record is not None
+        assert done_record.state == "succeeded"
+        assert done_record.error is None
+        assert done_record.finished_at == finished
+        stranded_record = await repository.get(stranded.id)
+        assert stranded_record is not None and stranded_record.state == "worker_lost"
+        assert stranded_record.error["code"] == orchestrator_app.WORKER_LOST_REASON_RECLAIMED
+        assert stranded_record.finished_at is not None and stranded_record.done_published_at is not None
+        await orchestrator_app._reclaim_sweep_once(_ExpiredLeaseBroker([stranded.id]), repository)
+        events = [event async for event in orchestrator_app._job_event_store().events_since(stranded.id)]
+        assert [event.payload["state"] for event in events if event.event_type == "done"] == ["worker_lost"]
+
+    asyncio.run(scenario())
+
+
+def test_reclaim_during_legacy_mirror_keeps_the_reclaimed_terminal_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        mirror_entered, mirror_released = asyncio.Event(), asyncio.Event()
+        job = orchestrator_app.Job(id="job_reclaim_during_mirror", created_at=orchestrator_app._now())
+        await _seed_job_async(job)
+
+        async def stalled_mirror(_job):
+            mirror_entered.set()
+            await mirror_released.wait()
+
+        class ExpiredLeaseBroker:
+            async def server_time(self):
+                return orchestrator_app._now()
+
+            async def reclaim_expired_leases(self, *, now):
+                return [job.id]
+
+        monkeypatch.setattr(orchestrator_app, "_mirror_job_artifacts_to_store", stalled_mirror)
+        monkeypatch.setattr(orchestrator_app, "_index_job_run_artifacts", lambda _job: [{"path": "result.txt"}])
+        runner = asyncio.create_task(orchestrator_app._run_job(job, [sys.executable, "-c", "pass"]))
+        repository = orchestrator_app._job_repository()
+        try:
+            await asyncio.wait_for(mirror_entered.wait(), timeout=5)
+            provisional = await repository.get(job.id)
+            assert provisional is not None and provisional.state == "succeeded"
+            assert provisional.finished_at is None and provisional.done_published_at is None
+            await orchestrator_app._reclaim_sweep_once(ExpiredLeaseBroker(), repository)
+        finally:
+            mirror_released.set()
+            await asyncio.wait_for(runner, timeout=5)
+
+        completed = await repository.get(job.id)
+        assert completed is not None and completed.state == "worker_lost"
+        assert completed.finished_at is not None and completed.done_published_at is not None
+        events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
+        assert [event.payload["state"] for event in events if event.event_type == "done"] == ["worker_lost"]
+        assert not any(event.event_type == "artifact" for event in events)
+
+    asyncio.run(scenario())
+
+
+def test_reclaim_retries_legacy_terminal_projection_without_a_duplicate_event(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        job = orchestrator_app.Job(id="job_reclaim_transient_store", created_at=orchestrator_app._now(), state="succeeded")
+        await _seed_job_async(job)
+        repository = orchestrator_app._job_repository()
+        original_get, original_update = repository.get, repository.update
+        terminal_writes = 0
+        reads = 0
+
+        async def interrupted_read(job_id):
+            nonlocal reads
+            reads += 1
+            if reads == 1:
+                raise ConnectionError("interrupted reclaim lookup")
+            return await original_get(job_id)
+
+        async def interrupted_projection(job_id, **fields):
+            nonlocal terminal_writes
+            if fields.get("state") == "worker_lost":
+                terminal_writes += 1
+                if terminal_writes <= 2:
+                    raise ConnectionError("interrupted terminal write")
+            return await original_update(job_id, **fields)
+
+        class ExpiredLeaseBroker:
+            sweeps = 0
+
+            async def server_time(self):
+                if self.sweeps == 3:
+                    raise ConnectionError("broker unavailable during projection retry")
+                return orchestrator_app._now()
+
+            async def reclaim_expired_leases(self, *, now):
+                self.sweeps += 1
+                return [job.id] if self.sweeps in {1, 3} else []
+
+        monkeypatch.setattr(repository, "get", interrupted_read)
+        monkeypatch.setattr(repository, "update", interrupted_projection)
+        broker = ExpiredLeaseBroker()
+        pending = {}
+        assert await orchestrator_app._reclaim_sweep_once(broker, repository, pending=pending) == [job.id]
+        assert pending == {job.id: None}
+        assert terminal_writes == 0
+
+        assert await orchestrator_app._reclaim_sweep_once(broker, repository, pending=pending) == []
+        assert terminal_writes == 1
+        staged = pending[job.id]
+        assert staged.state == "worker_lost"
+        provisional = await original_get(job.id)
+        assert provisional.state == "succeeded" and provisional.finished_at is None
+        hydrated = orchestrator_app._overlay_runtime_state(orchestrator_app._job_from_record(provisional), job)
+        assert hydrated is job and hydrated.finished_at == staged.finished_at and hydrated.state == "worker_lost"
+        # The retry owns a detached result even if another local reference
+        # mutates the cached job after publication.
+        job.error["retriable"] = False
+        newer_event_at = staged.done_published_at + 1
+        await original_update(job.id, cancel_requested=True, last_event_at=newer_event_at)
+        assert await orchestrator_app._reclaim_sweep_once(broker, repository, pending=pending) == [job.id]
+        assert pending[job.id] is staged
+        assert terminal_writes == 2
+        assert await orchestrator_app._reclaim_sweep_once(broker, repository, pending=pending) == []
+        assert pending == {}
+
+        completed = await original_get(job.id)
+        assert completed is not None and completed.state == "worker_lost"
+        assert terminal_writes == 3
+        assert completed.error["retriable"] is True
+        assert completed.cancel_requested is True and completed.last_event_at == newer_event_at
+        events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
+        assert [event.payload["state"] for event in events if event.event_type == "done"] == ["worker_lost"]
+
+    asyncio.run(scenario())
+
+
+def test_reclaim_protects_cancellation_published_during_the_repository_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        job = orchestrator_app.Job(id="job_cancel_during_reclaim_lookup", created_at=orchestrator_app._now())
+        await _seed_job_async(job)
+        orchestrator_app.JOBS.pop(job.id)
+        repository = orchestrator_app._job_repository()
+        real_get = repository.get
+        read_paused, read_released = asyncio.Event(), asyncio.Event()
+
+        async def delayed_first_read(job_id):
+            record = await real_get(job_id)
+            if not read_paused.is_set():
+                read_paused.set()
+                await read_released.wait()
+            return record
+
+        class RequeuedBroker:
+            async def server_time(self):
+                return orchestrator_app._now()
+
+            async def reclaim_expired_leases(self, *, now):
+                return [job.id]
+
+            async def cancel(self, job_id):
+                return job_id == job.id
+
+            async def leased_job_ids(self):
+                return []
+
+        broker = RequeuedBroker()
+        pending = {}
+        monkeypatch.setattr(repository, "get", delayed_first_read)
+        monkeypatch.setattr(orchestrator_app, "get_queue_broker", lambda: broker)
+        sweep = asyncio.create_task(orchestrator_app._reclaim_sweep_once(broker, repository, pending=pending))
+        try:
+            await asyncio.wait_for(read_paused.wait(), timeout=5)
+            response = await orchestrator_app._cancel_job(job.id)
+            assert response.status_code == 200
+        finally:
+            read_released.set()
+            await asyncio.wait_for(sweep, timeout=5)
+
+        assert pending[job.id].state == "canceled"
+        await orchestrator_app._reclaim_sweep_once(broker, repository, pending=pending)
+        completed = await real_get(job.id)
+        assert completed.state == "canceled" and pending == {}
+        events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
+        assert [event.payload["state"] for event in events if event.event_type == "done"] == ["canceled"]
+
+    asyncio.run(scenario())
+
+
+def test_legacy_cancel_and_reclaim_share_terminal_publication(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        job = orchestrator_app.Job(id="job_cancel_during_reclaim_publication", created_at=orchestrator_app._now())
+        await _seed_job_async(job)
+        orchestrator_app.JOBS.pop(job.id)
+        repository = orchestrator_app._job_repository()
+        original_publish = orchestrator_app._publish_event
+        publish_entered, publish_released, cancel_ready = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+        async def pause_reclaim_publication(job_id, event, payload):
+            if event == "done" and payload["state"] == "worker_lost":
+                publish_entered.set()
+                await publish_released.wait()
+            await original_publish(job_id, event, payload)
+
+        class RequeuedBroker:
+            async def server_time(self):
+                return orchestrator_app._now()
+
+            async def reclaim_expired_leases(self, *, now):
+                return [job.id]
+
+            async def cancel(self, job_id):
+                return job_id == job.id
+
+            async def leased_job_ids(self):
+                cancel_ready.set()
+                return []
+
+        broker = RequeuedBroker()
+        monkeypatch.setattr(orchestrator_app, "_publish_event", pause_reclaim_publication)
+        monkeypatch.setattr(orchestrator_app, "get_queue_broker", lambda: broker)
+        sweep = asyncio.create_task(orchestrator_app._reclaim_sweep_once(broker, repository))
+        cancel = None
+        try:
+            await asyncio.wait_for(publish_entered.wait(), timeout=5)
+            cancel = asyncio.create_task(orchestrator_app._cancel_job(job.id))
+            await asyncio.wait_for(cancel_ready.wait(), timeout=5)
+            assert not cancel.done()
+        finally:
+            publish_released.set()
+            await asyncio.wait_for(sweep, timeout=5)
+            if cancel is not None:
+                await asyncio.wait_for(cancel, timeout=5)
+
+        completed = await repository.get(job.id)
+        assert completed.state == "worker_lost" and completed.cancel_requested is True
         events = [event async for event in orchestrator_app._job_event_store().events_since(job.id)]
         assert [event.payload["state"] for event in events if event.event_type == "done"] == ["worker_lost"]
 
@@ -7454,6 +7873,298 @@ def test_refresh_job_run_summary_uses_current_output_metadata_not_scoped_items(t
     assert summary["reviewable_outputs"] is False
     assert job.state == "failed"
     assert job.error["code"] == "RUNNER_EXIT_NONZERO"
+
+
+def _runner_write_delay_seconds(directory: Path) -> float:
+    """How long a test runner waits so its files are stamped after its recorded start."""
+
+    probe = directory / ".timestamp-probe"
+    probe.write_bytes(b"")
+    try:
+        whole_second_timestamps = probe.stat().st_mtime_ns % 1_000_000_000 == 0
+    finally:
+        probe.unlink()
+    return 1.1 if whole_second_timestamps else 0.05
+
+
+def _file_writing_runner_argv(output_dir: Path, files: Dict[str, str], *, exit_code: int = 0) -> list[str]:
+    child = (
+        "import json, pathlib, sys, time\n"
+        "time.sleep(float(sys.argv[2]))\n"
+        "for name, text in json.loads(sys.argv[4]).items():\n"
+        "    target = pathlib.Path(sys.argv[1], name)\n"
+        "    target.parent.mkdir(parents=True, exist_ok=True)\n"
+        "    target.write_text(text, encoding='utf-8')\n"
+        "raise SystemExit(int(sys.argv[3]))\n"
+    )
+    return [
+        sys.executable,
+        "-c",
+        child,
+        str(output_dir),
+        str(_runner_write_delay_seconds(output_dir)),
+        str(exit_code),
+        json.dumps(files),
+    ]
+
+
+def _use_local_artifact_store(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
+    from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
+
+    store = LocalArtifactStore(root_dir=root)
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+
+
+def _write_shared_output_dir(output_dir: Path) -> Dict[Path, str]:
+    """Files an operator and other jobs already keep in a shared ``output_dir``."""
+
+    existing = {
+        output_dir / "NOTES.txt": "hand written operator notes",
+        output_dir / "archive_index_normalized.csv.gz": "operator supplied index",
+        output_dir / "bag" / "bagit.txt": "BagIt-Version: 1.0\n",
+        output_dir / "client_deliverables" / "final_render.png": "another job's deliverable",
+    }
+    for path, text in existing.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    return existing
+
+
+def test_run_job_indexes_and_deletes_only_what_its_own_run_produced(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _use_local_artifact_store(monkeypatch, tmp_path / "artifact-store")
+    output_dir = tmp_path / "shared-out"
+    existing = _write_shared_output_dir(output_dir)
+
+    async def scenario() -> None:
+        job = orchestrator_app.Job(
+            id="job_shared_output_dir",
+            created_at=orchestrator_app._now(),
+            request={"pipeline": "archive-gate-b", "args": {"output_dir": str(output_dir)}},
+        )
+        await _seed_job_async(job)
+
+        await orchestrator_app._run_job(
+            job,
+            _file_writing_runner_argv(output_dir, {"bag_validate_report.json": "{}"}, exit_code=4),
+        )
+
+        assert job.state == "failed" and job.exit_code == 4
+        assert [item["relative_path"] for item in job.artifacts["items"]] == ["bag_validate_report.json"]
+        assert set(job.artifact_lookup) == {"bag_validate_report.json"}
+        assert job.artifacts["truncated"] is False
+
+        deleted = await orchestrator_app._delete_job_artifacts_for_job(job, reason="retention_expired")
+
+        assert deleted == 1
+        assert job.artifacts["lifecycle"]["deletion_status"] == "deleted"
+        assert job.artifacts["lifecycle"]["legacy_deleted_count"] == 1
+        assert not (output_dir / "bag_validate_report.json").exists()
+        for path, text in existing.items():
+            assert path.read_text(encoding="utf-8") == text
+
+    asyncio.run(scenario())
+
+
+def test_run_job_cancelled_before_launch_claims_nothing_in_shared_output_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use_local_artifact_store(monkeypatch, tmp_path / "artifact-store")
+    output_dir = tmp_path / "shared-out"
+    existing = _write_shared_output_dir(output_dir)
+
+    async def scenario() -> None:
+        job = orchestrator_app.Job(
+            id="job_cancelled_before_launch",
+            created_at=orchestrator_app._now(),
+            cancel_requested=True,
+            request={"pipeline": "archive-gate-b", "args": {"output_dir": str(output_dir)}},
+        )
+        await _seed_job_async(job)
+
+        await orchestrator_app._run_job(job, ["must-not-spawn"])
+
+        assert job.state == "canceled" and job.started_at is None and job.finished_at is not None
+        assert job.artifacts["items"] == []
+        assert job.artifact_lookup == {}
+        stored = await orchestrator_app._job_repository().get(job.id)
+        assert stored is not None and not stored.artifacts.get("items") and stored.artifact_lookup == {}
+
+    asyncio.run(scenario())
+    for path, text in existing.items():
+        assert path.read_text(encoding="utf-8") == text
+
+
+def test_job_run_window_is_unbounded_only_for_fenced_or_startless_runner_outcomes(tmp_path: Path) -> None:
+    from transformation_portal.orchestrator.dispatch import DispatchFence, DispatchLocator
+    from transformation_portal.orchestrator.dispatch import _dispatch_fence as dispatch_fence_var
+
+    def job(**fields: Any) -> Any:
+        return orchestrator_app.Job(id="job_window", created_at=10.0, **fields)
+
+    assert orchestrator_app._job_run_window(job(state="running", started_at=11.0)) == (11.0, None)
+    assert orchestrator_app._job_run_window(job(state="failed", started_at=11.0, finished_at=12.0)) == (11.0, 12.0)
+    # A job that was never launched owns nothing: no timestamp reaches an infinite lower bound.
+    for unlaunched_state in ("queued", "canceled", "worker_lost"):
+        assert orchestrator_app._job_run_window(job(state=unlaunched_state)) == (float("inf"), None)
+    # A runner outcome without a recorded start (hand-built or imported records) has no window to apply.
+    for outcome in ("running", "succeeded", "partial", "failed"):
+        assert orchestrator_app._job_run_window(job(state=outcome, finished_at=12.0)) == (None, None)
+
+    # A fenced attempt root is created empty for exactly one attempt of exactly this job.
+    locator = DispatchLocator(
+        job_id="job_window",
+        attempt_id="attempt_1",
+        dispatch_id="dispatch_1",
+        plan_digest="0" * 64,
+        tenant_id="default",
+    )
+    fence = DispatchFence(locator, "worker", 1, 0.0, str(tmp_path / "attempt"), str(tmp_path))
+    token = dispatch_fence_var.set(fence)
+    try:
+        assert orchestrator_app._job_run_window(job(state="failed", started_at=11.0, finished_at=12.0)) == (None, None)
+        assert orchestrator_app._job_run_window(job(state="canceled")) == (None, None)
+    finally:
+        dispatch_fence_var.reset(token)
+
+
+def _run_card_text(batch_id: str, *, success: int, error: int, files: list[str]) -> str:
+    return json.dumps(
+        {
+            "batch_id": batch_id,
+            "run_card_version": "v1",
+            "total_images": success + error,
+            "success_count": success,
+            "error_count": error,
+            "artifact_index": [{"relative_path": name} for name in files],
+        }
+    )
+
+
+def test_run_job_without_its_own_run_card_is_not_summarized_from_an_earlier_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use_local_artifact_store(monkeypatch, tmp_path / "artifact-store")
+    output_dir = tmp_path / "reused-out"
+    output_dir.mkdir()
+    # An earlier run into the same directory finished 3 of 4 images.
+    (output_dir / "c_master16.png").write_bytes(b"\x89PNG earlier run")
+    (output_dir / "run_card_2026-02-02_000000.json").write_text(
+        _run_card_text("2026-02-02_000000", success=3, error=1, files=["c_master16.png"]),
+        encoding="utf-8",
+    )
+
+    async def scenario() -> None:
+        job = orchestrator_app.Job(
+            id="job_fails_before_any_output",
+            created_at=orchestrator_app._now(),
+            request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        )
+        await _seed_job_async(job)
+
+        await orchestrator_app._run_job(job, _file_writing_runner_argv(output_dir, {}, exit_code=1))
+
+        assert job.exit_code == 1
+        assert job.state == "failed"
+        assert job.error is not None and job.error["code"] == "RUNNER_EXIT_NONZERO"
+        assert job.run_summary == {}
+        assert job.artifacts["items"] == []
+        stored = await orchestrator_app._job_repository().get(job.id)
+        assert stored is not None
+        assert stored.state == "failed"
+        assert stored.run_summary == {}
+        assert stored.error is not None and stored.error["code"] == "RUNNER_EXIT_NONZERO"
+
+    asyncio.run(scenario())
+    assert (output_dir / "c_master16.png").exists()
+
+
+def test_run_job_summary_comes_from_its_own_run_card_not_the_newest_in_the_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use_local_artifact_store(monkeypatch, tmp_path / "artifact-store")
+    output_dir = tmp_path / "reused-out"
+    output_dir.mkdir()
+    # Another run's partial card sorts as the newest by batch id.
+    (output_dir / "z_master16.png").write_bytes(b"\x89PNG other run")
+    (output_dir / "run_card_2099-01-01_000000.json").write_text(
+        _run_card_text("2099-01-01_000000", success=3, error=1, files=["z_master16.png"]),
+        encoding="utf-8",
+    )
+
+    async def scenario() -> None:
+        job = orchestrator_app.Job(
+            id="job_with_its_own_run_card",
+            created_at=orchestrator_app._now(),
+            request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        )
+        await _seed_job_async(job)
+
+        await orchestrator_app._run_job(
+            job,
+            _file_writing_runner_argv(
+                output_dir,
+                {
+                    "a_master16.png": "own render",
+                    "run_card_2026-03-03_000000.json": _run_card_text(
+                        "2026-03-03_000000", success=2, error=0, files=["a_master16.png"]
+                    ),
+                },
+            ),
+        )
+
+        assert job.state == "succeeded" and job.error is None
+        assert job.run_summary["batch_id"] == "2026-03-03_000000"
+        assert job.run_summary["success_count"] == 2
+        assert job.run_summary["partial"] is False
+        assert {item["relative_path"] for item in job.artifacts["items"]} == {
+            "a_master16.png",
+            "run_card_2026-03-03_000000.json",
+        }
+        stored = await orchestrator_app._job_repository().get(job.id)
+        assert stored is not None and stored.state == "succeeded"
+        assert stored.run_summary["batch_id"] == "2026-03-03_000000"
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "poisoned_run_card",
+    [
+        pytest.param("[" * 50000 + "]" * 50000, id="deep-nesting-recursion-error"),
+        pytest.param('{"batch_id": "b", "total_images": ' + "9" * 5000 + "}", id="int-digit-limit-value-error"),
+    ],
+)
+def test_malformed_run_card_in_one_job_dir_does_not_fail_job_routes(tmp_path: Path, poisoned_run_card: str) -> None:
+    good_dir = tmp_path / "good"
+    bad_dir = tmp_path / "bad"
+    good_dir.mkdir()
+    bad_dir.mkdir()
+    (bad_dir / "run_card_x.json").write_text(poisoned_run_card, encoding="utf-8")
+    now = orchestrator_app._now()
+    for job_id, output_dir in (("job_good_run_card", good_dir), ("job_poisoned_run_card", bad_dir)):
+        request = {"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}}
+        _seed_job(
+            orchestrator_app.Job(
+                id=job_id,
+                created_at=now - 30,
+                started_at=now - 29,
+                finished_at=now - 20,
+                state="succeeded",
+                exit_code=0,
+                request=request,
+                effective_request=request,
+            )
+        )
+
+    listed = asyncio.run(orchestrator_app.list_jobs())
+    detail = asyncio.run(orchestrator_app.get_job("job_poisoned_run_card"))
+
+    assert listed.status_code == 200
+    listed_ids = {entry["id"] for entry in json.loads(listed.body.decode("utf-8"))["data"]["jobs"]}
+    assert {"job_good_run_card", "job_poisoned_run_card"} <= listed_ids
+    assert detail.status_code == 200
+    assert json.loads(detail.body.decode("utf-8"))["data"]["id"] == "job_poisoned_run_card"
+    assert orchestrator_app._load_bounded_json_object(bad_dir / "run_card_x.json") is None
 
 
 def test_create_job_validation_uses_typed_error_envelope() -> None:

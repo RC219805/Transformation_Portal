@@ -861,6 +861,187 @@ def test_runtime_operational_failure_falls_back_to_da2_with_attempt_provenance(t
     assert backend_selection["attempts"][0]["failure_kind"] == "operational"
 
 
+def _enhance_with_every_backend_failing(tmp_path, depth_fallback: str):
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+    test_image = tmp_path / f"all_fail_{depth_fallback}.png"
+    Image.new("RGB", (64, 64), color="white").save(test_image)
+    config = EnhanceConfig(depth_backend="da3", depth_device="cpu", enable_v2=False, depth_fallback=depth_fallback)
+
+    def failing_backend(backend_id, _config):
+        backend = Mock()
+        backend.name = backend_id
+        backend.license_type = Mock(value="commercial")
+        backend.ensure_available.return_value = None
+        backend.compute.side_effect = RuntimeError(f"{backend_id} cannot run")
+        return backend
+
+    registry = Mock()
+    registry.get_backend.side_effect = failing_backend
+
+    with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
+        orchestrator = EnhanceOrchestrator(config, tmp_path / "out")
+        orchestrator.postprocessor = Mock(process=lambda result: result)
+        result = orchestrator.enhance_image(ImageInput(path=test_image))
+    return orchestrator, result
+
+
+def test_v2_auto_after_total_depth_failure_manifest_records_failed_selection(tmp_path):
+    """F9: a manifest must not claim start-up backend success when every depth attempt failed."""
+    import json
+
+    orchestrator, result = _enhance_with_every_backend_failing(tmp_path, "v2-auto")
+
+    assert orchestrator._backend_metadata.resolution_status == "success"
+    assert result["status"] == "ok"
+    assert result["depth_path"] is None
+    attempts = [(a["backend"], a["status"]) for a in result["attempts"]]
+    assert attempts[:2] == [("da3", "failed"), ("da2", "failed")]
+    assert {status for _, status in attempts} == {"failed"}
+
+    backend_selection = json.loads(Path(result["manifest"]).read_text())["backend_selection"]
+    assert backend_selection["requested_backend"] == "da3"
+    assert backend_selection["resolution_status"] == "error"
+    assert backend_selection["resolved_backend"] == "none"
+    assert backend_selection["model_id"] == "none"
+    assert [(a["backend"], a["status"]) for a in backend_selection["attempts"]] == attempts
+    assert "da3 (operational: " in backend_selection["resolution_reason"]
+    assert "depth_fallback=v2-auto" in backend_selection["resolution_reason"]
+    # Result rows keep the start-up candidate (run-card and evidence contract).
+    assert result["backend"] == "da3"
+    assert orchestrator._active_backend_metadata.resolved_backend == "da3"
+
+
+def test_skip_after_total_depth_failure_row_keeps_startup_candidate(tmp_path):
+    """F9: a skipped row (no manifest is written) still names a real candidate and every failed attempt."""
+    orchestrator, result = _enhance_with_every_backend_failing(tmp_path, "skip")
+
+    assert result["status"] == "skipped"
+    assert result["selected_attempt_index"] is None
+    assert result["backend"] == "da3"
+    assert {a["status"] for a in result["attempts"]} == {"failed"}
+    assert [a["backend"] for a in result["attempts"]][:2] == ["da3", "da2"]
+    assert orchestrator._active_backend_metadata.resolved_backend == "da3"
+    assert not list((tmp_path / "out" / "manifests").glob("*_combined.json"))
+
+
+def test_error_row_after_v2_auto_recovery_keeps_startup_candidate(tmp_path):
+    """F9: an image that errors after v2-auto recovery must not report the placeholder backend "none"."""
+    import json
+
+    from PIL import Image
+
+    input_root = tmp_path / "in"
+    input_root.mkdir()
+    Image.new("RGB", (64, 64), color="white").save(input_root / "all_fail.png")
+    config = EnhanceConfig(
+        depth_backend="da3",
+        depth_device="cpu",
+        enable_v2=False,
+        depth_fallback="v2-auto",
+        emit_run_card=True,
+        enable_parallel_processing=False,
+    )
+
+    def failing_backend(backend_id, _config):
+        backend = Mock()
+        backend.name = backend_id
+        backend.license_type = Mock(value="commercial")
+        backend.ensure_available.return_value = None
+        backend.compute.side_effect = RuntimeError(f"{backend_id} cannot run")
+        return backend
+
+    registry = Mock()
+    registry.get_backend.side_effect = failing_backend
+    output_root = tmp_path / "out"
+    with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
+        orchestrator = EnhanceOrchestrator(config, output_root)
+        orchestrator.postprocessor = Mock(process=lambda result: result)
+        with patch.object(orchestrator, "_run_v2_stage", side_effect=RuntimeError("v2 stage exploded")):
+            results = orchestrator.enhance_batch(input_root)
+
+    assert [(row["status"], row["backend"], row["error"]) for row in results] == [("error", "da3", "v2 stage exploded")]
+    assert {attempt["status"] for attempt in results[0]["attempts"]} == {"failed"}
+    batch = json.loads(next((output_root / "manifests").glob("batch_*.json")).read_text())
+    assert [(row["status"], row["backend"]) for row in batch["results"]] == [("error", "da3")]
+    run_card_path = next(path for path in output_root.glob("run_card_*.json") if not path.name.endswith(".self.json"))
+    assert [row["backend"] for row in json.loads(run_card_path.read_text())["result_summary"]] == ["da3"]
+
+
+def test_prepared_v2_auto_total_depth_failure_still_writes_failure_evidence(tmp_path):
+    """F9: on the prepared path a depth-less image must fail required-artifact accounting with evidence on disk.
+
+    The manifest-only "none" selection is not a plan candidate; carrying it
+    into a prepared run aborted the batch before any batch manifest or
+    execution evidence was written, also for the image that succeeded.
+    """
+    import json
+
+    from PIL import Image
+
+    from transformation_portal.depth.backends.protocol import DepthResult
+    from transformation_portal.lux_depth_v3.execution_evidence import ExecutionEvidenceError
+    from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+
+    input_root = tmp_path / "in"
+    input_root.mkdir()
+    failing_image = input_root / "a_fails.png"
+    working_image = input_root / "b_works.png"
+    Image.new("RGB", (64, 48), color=(200, 10, 10)).save(failing_image)
+    Image.new("RGB", (64, 48), color=(10, 200, 10)).save(working_image)
+    prepared = prepare_lux_execution(
+        EnhanceConfig(depth_backend=None, enable_v2=False, emit_run_card=False, depth_fallback="v2-auto"),
+        input_root,
+        [failing_image, working_image],
+    )
+
+    def backend_for(backend_id, _config, **_kwargs):
+        def compute(pil_image):
+            pixels = np.asarray(pil_image.convert("RGB"))
+            if int(pixels[0, 0, 0]) > 100:  # the red image loses every backend
+                raise RuntimeError(f"{backend_id} cannot run")
+            height, width = pixels.shape[:2]
+            ramp = np.linspace(0.0, 1.0, width * height, dtype=np.float32).reshape(height, width)
+            return DepthResult(
+                depth_map=ramp,
+                original_image=pixels,
+                metadata={},
+                depth_units="relative",
+                backend_id=backend_id,
+                device="cpu",
+            )
+
+        backend = Mock()
+        backend.name = backend_id
+        backend.license_type = Mock(value="commercial")
+        backend.ensure_available.return_value = None
+        backend.compute.side_effect = compute
+        return backend
+
+    registry = Mock()
+    registry.get_backend.side_effect = backend_for
+    output_root = tmp_path / "out"
+    with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
+        orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
+    orchestrator.postprocessor = Mock(process=lambda result: result)
+
+    with pytest.raises(ExecutionEvidenceError, match="required artifact accounting"):
+        orchestrator.enhance_batch(input_root)
+
+    (evidence_path,) = (output_root / "manifests").glob("execution_evidence_*.json")
+    evidence = json.loads(evidence_path.read_text())
+    assert [row["path"] for row in evidence["requested_inputs"]] == ["a_fails.png", "b_works.png"]
+    failed_depth = [
+        outcome
+        for outcome in evidence["failed_artifacts"]
+        if outcome["artifact_kind"] == "depth_u16_png" and outcome["input_id"] == prepared.plan.inputs[0].input_id
+    ]
+    assert len(failed_depth) == 1
+    assert len(list((output_root / "manifests").glob("batch_*.json"))) == 1
+
+
 def test_runtime_semantic_fallback_retries_when_enabled(tmp_path):
     """Semantic-gate failures should retry fallback backend when enabled."""
     import json

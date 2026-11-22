@@ -24,6 +24,7 @@ Reference: V2_ENHANCEMENT_ARCHITECTURAL_GUIDANCE.md
 
 from __future__ import annotations
 
+import glob
 import hashlib
 import io
 import json
@@ -540,7 +541,9 @@ def find_depth_map(depth_dir: Path, image_stem: str) -> Optional[Path]:
         # Fallback: recursive search for nested output_key
         # directories. Sort for deterministic selection.
         for pattern in patterns:
-            recursive_matches = sorted(depth_dir.glob(f"**/{pattern}"))
+            # Escape the stem: '[', ']', '*' and '?' in a filename are literal
+            # characters, not glob syntax (IMG[1] must not match IMG1).
+            recursive_matches = sorted(depth_dir.glob(f"**/{glob.escape(pattern)}"))
             for depth_path in recursive_matches:
                 if depth_path.exists():
                     add_candidate(depth_path)
@@ -566,8 +569,32 @@ def find_depth_map(depth_dir: Path, image_stem: str) -> Optional[Path]:
     return None
 
 
+def _png_ihdr_bit_depth(pil_image: Image.Image) -> Optional[int]:
+    """Return the IHDR sample bit depth of a PNG opened by Pillow, if readable."""
+    header = b""
+    fp = getattr(pil_image, "fp", None)
+    filename = getattr(pil_image, "filename", None)
+    try:
+        if fp is not None:
+            position = fp.tell()
+            try:
+                fp.seek(0)
+                header = fp.read(29)
+            finally:
+                fp.seek(position)
+        elif isinstance(filename, str) and filename:
+            with open(filename, "rb") as handle:
+                header = handle.read(29)
+    except (OSError, ValueError) as exc:
+        logger.debug("Could not read PNG IHDR bit depth: %s", exc)
+        return None
+    if len(header) != 29 or header[:8] != b"\x89PNG\r\n\x1a\n" or header[12:16] != b"IHDR":
+        return None
+    return int(header[24])
+
+
 def detect_input_bit_depth(pil_image: Image.Image) -> int:
-    """Detect bit-depth of input image from TIFF tags.
+    """Detect bit-depth of input image from TIFF tags or the PNG IHDR.
 
     Args:
         pil_image: PIL Image object
@@ -592,6 +619,10 @@ def detect_input_bit_depth(pil_image: Image.Image) -> int:
 
     # Fallback: check PIL mode
     if pil_image.mode in ("I;16", "I;16B", "I;16L", "I;16N"):
+        return 16
+
+    # Pillow decodes 16-bit RGB/RGBA PNG into 8-bit modes; read the IHDR.
+    if pil_image.format == "PNG" and _png_ihdr_bit_depth(pil_image) == 16:
         return 16
 
     # Default to 8-bit
@@ -774,7 +805,7 @@ def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = Fa
 
     # Track actual loaded bits
     actual_bits = detected_input_bits
-    if detected_input_bits == 16:
+    if detected_input_bits == 16 and image_array.dtype != np.uint16:
         # We got here via PIL fallback - input was downconverted
         logger.warning(
             f"16-bit input was downconverted to 8-bit by PIL. " f"Original BitsPerSample=16, loaded as {image_array.dtype}"
@@ -1047,7 +1078,6 @@ def enhance_image(
                             "V3 finishing supports at most 16-bit integer masters; use Unified/V5/V6 to retain float precision"
                         ) from load_error
             raise
-        input_dtype = str(np.dtype(np.uint16 if input_bits == 16 else np.uint8)) if corrected_geometry else str(image.dtype)
         # Pixel processing has one explicit color domain. Preserve the source
         # precision through the existing V4/V5 photographic color authority;
         # an ICC is a transform, never a label copied onto unrelated pixels.
@@ -1059,6 +1089,12 @@ def enhance_image(
         if master is None:
             master = decode_v2_source(source_snapshot, source_name=input_path.name, input_color=input_color)
         prepared_pixels = image if corrected_geometry else bounded_encoded_srgb(master)
+        if not corrected_geometry:
+            # The decoded photographic master supplies every processed pixel,
+            # so its source precision (not the Pillow proxy, which reads 16-bit
+            # RGB PNG as 8-bit) is the bit-depth authority for encoding/evidence.
+            input_bits = master.source_bit_depth
+        input_dtype = str(np.dtype(np.uint16 if input_bits == 16 else np.uint8))
         color_preparation = metadata_payload(master.metadata["color_preparation"])
         icc_profile = metadata.get("icc_profile")
         source_icc_profile = icc_profile
@@ -1087,7 +1123,7 @@ def enhance_image(
             target_bits = 8
             logger.warning("Quality Firewall BYPASSED: 16-bit → 8-bit downgrade allowed " "by --allow-8bit flag")
         else:
-            target_dtype = np.dtype(input_dtype) if corrected_geometry else np.dtype(image.dtype)
+            target_dtype = np.dtype(input_dtype)
             target_bits = input_bits
             if input_bits == 16:
                 logger.info("Quality Firewall ACTIVE: 16-bit input detected - " "will preserve 16-bit output")

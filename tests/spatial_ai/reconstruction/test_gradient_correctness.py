@@ -117,6 +117,38 @@ def _assert_gradients_match_fd(
         )
 
 
+def test_colour_gradients_carry_occlusion_weights():
+    """A colour's gradient is the share of the pixel its splat keeps behind nearer splats."""
+    image_size = (8, 8)
+    h, w = image_size
+    # The far splat is supplied first on purpose; both are centred on pixel (4, 4),
+    # where the footprint weight is exactly 1.
+    positions = torch.tensor([[0.0, 0.0, 6.0], [0.0, 0.0, 2.0]])
+    colors = torch.tensor([[0.2, 0.3, 0.9], [0.8, 0.4, 0.1]], requires_grad=True)
+    scales = torch.tensor([[0.6, 0.6, 0.6], [0.2, 0.2, 0.2]])
+    rotations = torch.tensor([[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]])
+    opacities = torch.tensor([[0.9], [0.6]])
+    intrinsics = torch.tensor([[20.0, 0.0, w / 2.0], [0.0, 20.0, h / 2.0], [0.0, 0.0, 1.0]])
+
+    rendered = render_gaussians(
+        positions=positions,
+        colors=colors,
+        scales=scales,
+        rotations=rotations,
+        opacities=opacities,
+        intrinsics=intrinsics,
+        extrinsics=torch.eye(4),
+        image_size=image_size,
+        device="cpu",
+    )
+    rendered[h // 2, w // 2].sum().backward()
+
+    near_weight = 0.6
+    far_weight = (1.0 - 0.6) * 0.9
+    assert colors.grad[1].tolist() == pytest.approx([near_weight] * 3, abs=1e-6)
+    assert colors.grad[0].tolist() == pytest.approx([far_weight] * 3, abs=1e-6)
+
+
 def test_finite_difference_matches_autograd_for_core_params():
     """Compare finite differences vs autograd for positions/colors/scales."""
     torch.manual_seed(42)

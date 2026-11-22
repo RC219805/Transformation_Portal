@@ -34,9 +34,11 @@ Example:
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import platform
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Optional
@@ -338,6 +340,52 @@ def _normalize_pip_freeze(freeze_output: str) -> str:
     return "\n".join(packages)
 
 
+def _interpreter_pip_command(*arguments: str) -> list[str]:
+    """Build a pip invocation for the interpreter that is running this code.
+
+    A bare ``pip`` is whichever one comes first on PATH, which describes a
+    different environment whenever the interpreter was started without
+    activating its virtualenv. ``-P`` keeps the working directory off
+    ``sys.path`` so a project checkout there is not reported as installed.
+    """
+    return [sys.executable, "-P", "-m", "pip", *arguments]
+
+
+def _interpreter_is_runnable() -> bool:
+    """Whether ``sys.executable`` starts the interpreter that runs this code.
+
+    It is empty when Python cannot locate its own binary. In a frozen
+    application it is the application itself, which must not be started
+    again just to ask for its packages.
+    """
+    return bool(sys.executable) and not getattr(sys, "frozen", False)
+
+
+@functools.lru_cache(maxsize=1)
+def _pip_freeze_fingerprint() -> str:
+    """Fingerprint ``pip freeze`` of the running interpreter, once per process.
+
+    Only an outcome that describes the environment is kept: the fingerprint,
+    or the placeholder for an interpreter whose pip cannot list it. A timeout
+    or a failure to start the process raises instead, so the next call tries
+    again rather than leaving the whole process on a placeholder.
+    """
+    result = subprocess.run(
+        _interpreter_pip_command("freeze"),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0:
+        # pip freeze failed - return placeholder
+        return "sha256:unknown-pip-freeze-failed"
+    # Normalize pip freeze output for deterministic hashing
+    normalized = _normalize_pip_freeze(result.stdout)
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
+
+
 def get_env_fingerprint() -> str:
     """Compute SHA256 fingerprint of the current pip environment.
 
@@ -350,31 +398,24 @@ def get_env_fingerprint() -> str:
     invalidating cached artifacts.
 
     Note:
-        Uses normalized `pip freeze` output for cross-platform consistency.
+        Uses normalized `pip freeze` output for cross-platform consistency,
+        taken from the running interpreter's own pip.
         Normalization excludes editable installs and sorts packages
         to ensure identical environments produce identical fingerprints.
         If pip is unavailable, returns a placeholder fingerprint.
+
+        The result is computed once per process: identity code asks for it
+        for every stage and again for every cache hit. A timed-out or
+        unstartable pip is the exception; it is asked again on the next call.
     """
+    if not _interpreter_is_runnable():
+        return "sha256:unknown-pip-unavailable"
     try:
-        result = subprocess.run(
-            ["pip", "freeze"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
-        if result.returncode == 0:
-            # Normalize pip freeze output for deterministic hashing
-            normalized = _normalize_pip_freeze(result.stdout)
-            digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
-            return f"sha256:{digest}"
-        else:
-            # pip freeze failed - return placeholder
-            return "sha256:unknown-pip-freeze-failed"
+        return _pip_freeze_fingerprint()
     except subprocess.TimeoutExpired:
         # pip freeze timed out
         return "sha256:unknown-pip-timeout"
-    except (FileNotFoundError, OSError):
+    except OSError:
         # pip not available
         return "sha256:unknown-pip-unavailable"
 
@@ -385,9 +426,11 @@ def get_pip_version() -> str:
     Returns:
         Pip version string, or "unknown" if unavailable.
     """
+    if not _interpreter_is_runnable():
+        return "unknown"
     try:
         result = subprocess.run(
-            ["pip", "--version"],
+            _interpreter_pip_command("--version"),
             capture_output=True,
             text=True,
             timeout=10,
@@ -466,8 +509,6 @@ def get_platform_fingerprint(
     Returns:
         Dictionary with complete platform identity for CAS.
     """
-    import sys
-
     matrix = PlatformMatrix.detect(accel)
 
     fingerprint: Dict[str, Any] = {

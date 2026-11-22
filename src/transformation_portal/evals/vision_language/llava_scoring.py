@@ -16,6 +16,17 @@ _SEVERITY_PENALTIES = {
 }
 
 
+def _normalize_severity(severity: object) -> str:
+    """Return the canonical severity label; anything unrecognised is ``"high"``.
+
+    Model output may carry stray whitespace, different casing or labels outside
+    the schema (``"critical"``, ``"severe"``). Those must never be treated as
+    harmless: they are mapped to the worst level so scoring and gating agree.
+    """
+    label = str(severity).strip().lower()
+    return label if label in _SEVERITY_PENALTIES else "high"
+
+
 def recompute_summary_score(result: VQAResult) -> float:
     """Recompute summary score from issues using deterministic penalties.
 
@@ -39,7 +50,7 @@ def recompute_summary_score(result: VQAResult) -> float:
     """
     score = 1.0
     for issue in result.issues:
-        penalty = _SEVERITY_PENALTIES.get(issue.severity, 0.50)
+        penalty = _SEVERITY_PENALTIES[_normalize_severity(issue.severity)]
         score -= penalty
 
     # Clamp to valid range
@@ -73,9 +84,10 @@ def compute_quality_gate_pass(
     if result.summary_score < min_score:
         return False
 
-    # Count issues by severity
-    high_count = sum(1 for i in result.issues if i.severity == "high")
-    medium_count = sum(1 for i in result.issues if i.severity == "medium")
+    # Count issues by severity; unrecognised severities count as high (fail closed)
+    severities = [_normalize_severity(i.severity) for i in result.issues]
+    high_count = sum(1 for s in severities if s == "high")
+    medium_count = sum(1 for s in severities if s == "medium")
 
     # Check issue count thresholds
     if high_count > max_high_severity_issues:

@@ -57,6 +57,7 @@ NON_COMMERCIAL_HF_MODEL_IDS = frozenset(
     }
 )
 ACCEPTED_NON_COMMERCIAL_LICENSE_MARKERS = frozenset({"non_commercial", "research_only"})
+_HF_REFERENCE_SCHEME = "hf://"
 
 
 def require_non_commercial(reason: str = "") -> Callable[[F], F]:
@@ -115,17 +116,60 @@ def require_non_commercial(reason: str = "") -> Callable[[F], F]:
     return decorator
 
 
+def _is_non_commercial_model_reference(value: Any) -> bool:
+    """Return True when a preset string names a known non-commercial model.
+
+    Matching stays exact on the model id; only surrounding whitespace, letter
+    case and the ``hf://`` scheme used by checkpoint fields are normalised.
+    """
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip().lower()
+    if normalized.startswith(_HF_REFERENCE_SCHEME):
+        normalized = normalized[len(_HF_REFERENCE_SCHEME) :]
+    return normalized in NON_COMMERCIAL_HF_MODEL_IDS
+
+
+def _find_non_commercial_model_references(preset_dict: Dict[str, Any]) -> list[tuple[str, str]]:
+    """Return ``(location, value)`` for every non-commercial model reference in a preset.
+
+    The whole preset is searched, mapping keys included, because shipped
+    presets name models under ``fallback.model.hf_id`` and in
+    ``depth.models[*].checkpoint`` as well as under ``model.hf_id``.
+    """
+    references: list[tuple[str, str]] = []
+    seen_containers: Set[int] = set()
+    pending: list[tuple[str, Any]] = [("", preset_dict)]
+    while pending:
+        location, node = pending.pop()
+        if isinstance(node, (dict, list, tuple)):
+            # YAML anchors can make a container contain itself.
+            if id(node) in seen_containers:
+                continue
+            seen_containers.add(id(node))
+        if isinstance(node, dict):
+            for key, value in node.items():
+                child_location = f"{location}.{key}" if location else str(key)
+                if _is_non_commercial_model_reference(key):
+                    references.append((child_location, key))
+                pending.append((child_location, value))
+        elif isinstance(node, (list, tuple)):
+            pending.extend((f"{location}[{index}]", value) for index, value in enumerate(node))
+        elif _is_non_commercial_model_reference(node):
+            references.append((location, node))
+    return sorted(references)
+
+
 def validate_non_commercial_preset(preset_dict: Dict[str, Any]) -> bool:
     """Validate that non-commercial presets have required licensing markers.
 
-    Checks if a preset dictionary (from YAML) contains an exact Hugging Face
-    model ID known to be non-commercial. If so, ensures the preset has an
-    explicit `license_restriction` acknowledgement marker of either
-    `non_commercial` or `research_only`.
+    Checks if a preset dictionary (from YAML) contains, anywhere in its
+    structure, an exact Hugging Face model ID known to be non-commercial.
+    If so, ensures the preset has an explicit top-level `license_restriction`
+    acknowledgement marker of either `non_commercial` or `research_only`.
 
     Args:
         preset_dict: Dictionary loaded from a preset YAML file
-                    (should have 'model' key with 'hf_id')
 
     Returns:
         True if preset is valid (either commercial or properly marked non-commercial)
@@ -138,17 +182,14 @@ def validate_non_commercial_preset(preset_dict: Dict[str, Any]) -> bool:
     if not isinstance(preset_dict, dict):
         raise ValueError(f"Preset must be a mapping (dict), got {type(preset_dict).__name__}.")
 
-    model = preset_dict.get("model", {})
-    hf_id = model.get("hf_id", "")
-
-    normalized_hf_id = hf_id.strip().lower() if isinstance(hf_id, str) else ""
-
-    if normalized_hf_id in NON_COMMERCIAL_HF_MODEL_IDS:
+    references = _find_non_commercial_model_references(preset_dict)
+    if references:
         # Verify marker exists
         license_restriction = preset_dict.get("license_restriction")
         if license_restriction not in ACCEPTED_NON_COMMERCIAL_LICENSE_MARKERS:
+            location, hf_id = references[0]
             raise LicenseRestrictionError(
-                f"Preset uses non-commercial model (hf_id={hf_id}) "
+                f"Preset uses non-commercial model (hf_id={hf_id} at {location}) "
                 "but lacks license_restriction='non_commercial' or 'research_only' marker.\n"
                 "Please add one of these markers to acknowledge CC BY-NC 4.0 restrictions."
             )

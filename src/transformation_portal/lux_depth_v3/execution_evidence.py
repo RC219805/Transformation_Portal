@@ -203,8 +203,18 @@ class _PinnedOutputRoot:
     component_descriptors: tuple[int, ...]
     component_identities: tuple[tuple[int, int], ...]
 
-    def confined_relative_path(self, candidate: Path) -> str:
-        """Return a canonical relative path without resolving in-root links."""
+    def confined_relative_path(self, candidate: Path, *, root_relative: bool = False) -> str:
+        """Return a canonical relative path without resolving in-root links.
+
+        A relative ``candidate`` is ambiguous: runtime writers spell paths the
+        way the caller spelled the output root (``out/depth/x.png`` relative
+        to the working directory), while evidence records, run-card index
+        entries, portable batch-manifest pointers and the values this method
+        returns are output-root-relative (``depth/x.png``).  Pass
+        ``root_relative=True`` for the latter: such a value is never
+        interpreted against the process working directory, so its meaning
+        cannot change with where the process happens to run.
+        """
 
         raw_candidate = Path(candidate)
         if raw_candidate.is_absolute():
@@ -231,22 +241,24 @@ class _PinnedOutputRoot:
                 )
             # Runtime writers preserve a caller's relative output-root
             # spelling (``out/depth/x.png``), while manifest pointers may be
-            # root-relative (``depth/x.png``). Resolve the former against the
-            # current working directory first, then fall back to the latter;
-            # both candidates must still be lexically confined.
-            cwd_candidate = Path(os.path.abspath(os.fspath(raw_candidate)))
-            cwd_variants = (cwd_candidate, _canonicalize_top_level_alias(cwd_candidate))
-            root_spellings = (self.lexical_path, self.canonical_path)
+            # root-relative (``depth/x.png``). Unless the caller knows the
+            # value is root-relative by contract, resolve the former against
+            # the current working directory first, then fall back to the
+            # latter; both candidates must still be lexically confined.
             relative = None
-            for variant in cwd_variants:
-                for root_spelling in root_spellings:
-                    try:
-                        relative = variant.relative_to(root_spelling)
-                    except ValueError:
-                        continue
-                    break
-                if relative is not None:
-                    break
+            if not root_relative:
+                cwd_candidate = Path(os.path.abspath(os.fspath(raw_candidate)))
+                cwd_variants = (cwd_candidate, _canonicalize_top_level_alias(cwd_candidate))
+                root_spellings = (self.lexical_path, self.canonical_path)
+                for variant in cwd_variants:
+                    for root_spelling in root_spellings:
+                        try:
+                            relative = variant.relative_to(root_spelling)
+                        except ValueError:
+                            continue
+                        break
+                    if relative is not None:
+                        break
             if relative is None:
                 rooted_candidate = Path(os.path.abspath(os.fspath(self.canonical_path / raw_candidate)))
                 try:
@@ -903,8 +915,13 @@ def _open_or_create_relative_parent(root: _PinnedOutputRoot, relative_path: str)
         raise ArtifactEvidenceError(code, "Artifact carrier parent cannot be created safely") from exc
 
 
-def _open_confined_artifact(root: _PinnedOutputRoot, candidate: Path) -> tuple[int, str]:
-    relative_path = root.confined_relative_path(candidate)
+def _open_confined_artifact(
+    root: _PinnedOutputRoot,
+    candidate: Path,
+    *,
+    root_relative: bool = False,
+) -> tuple[int, str]:
+    relative_path = root.confined_relative_path(candidate, root_relative=root_relative)
     flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0)
     parent_descriptor: Optional[int] = None
     descriptor: Optional[int] = None
@@ -942,7 +959,7 @@ def _validate_confined_entry_identity(
 ) -> None:
     """Prove a confined name still resolves to the exact captured inode."""
 
-    descriptor, _ = _open_confined_artifact(root, Path(relative_path))
+    descriptor, _ = _open_confined_artifact(root, Path(relative_path), root_relative=True)
     try:
         actual = os.fstat(descriptor)
     finally:
@@ -968,8 +985,9 @@ def _capture_artifact(
     *,
     budget: _CaptureBudget,
     max_bytes: Optional[int] = None,
+    root_relative: bool = False,
 ) -> _ArtifactCapture:
-    descriptor, relative_path = _open_confined_artifact(root, candidate)
+    descriptor, relative_path = _open_confined_artifact(root, candidate, root_relative=root_relative)
     effective_max_bytes = _MAX_ARTIFACT_BYTES if max_bytes is None else min(max_bytes, _MAX_ARTIFACT_BYTES)
 
     try:
@@ -1047,8 +1065,9 @@ def _read_confined_artifact_bytes(
     context: str,
     max_bytes: Optional[int] = None,
     manifest_budget: Optional[_ManifestBudget] = None,
+    root_relative: bool = False,
 ) -> tuple[bytes, str, os.stat_result]:
-    descriptor, relative_path = _open_confined_artifact(root, artifact_path)
+    descriptor, relative_path = _open_confined_artifact(root, artifact_path, root_relative=root_relative)
     data = bytearray()
     byte_count = 0
     try:
@@ -1589,6 +1608,7 @@ def restore_confined_artifact_bytes_if_matches(
                 Path(relative_path),
                 context="Restored prepared manifest",
                 max_bytes=_MAX_BOUND_MANIFEST_BYTES,
+                root_relative=True,
             )
             if (
                 restored_relative_path != relative_path
@@ -2413,8 +2433,16 @@ def _validate_batch_result_bindings(
     combined_manifest_paths: Mapping[str, str],
     combined_manifest_authorities: Mapping[str, "_CombinedManifestAuthority"],
     expected_reconstruction_paths: Optional[Sequence[Path]],
+    expected_reconstruction_paths_root_relative: bool = False,
 ) -> None:
-    """Bind every batch result row to one exact prepared input and manifest."""
+    """Bind every batch result row to one exact prepared input and manifest.
+
+    Batch result rows carry portable output-root-relative pointers, so they
+    are never read against the working directory.  Combined-manifest declared
+    paths keep the writer's spelling.  ``expected_reconstruction_paths`` are
+    writer observations while evidence is built and root-relative evidence
+    records while it is verified; the caller says which.
+    """
 
     results = payload.get("results")
     if not isinstance(results, list) or len(results) != len(plan.inputs):
@@ -2457,7 +2485,7 @@ def _validate_batch_result_bindings(
                 f"batch_manifest_json successful input {plan_input.input_id!r} lacks its combined manifest"
             )
         try:
-            relative_manifest_path = root.confined_relative_path(Path(manifest_path))
+            relative_manifest_path = root.confined_relative_path(Path(manifest_path), root_relative=True)
         except ArtifactEvidenceError as exc:
             raise _invalid_manifest_binding(
                 f"batch_manifest_json combined-manifest path is invalid for {plan_input.input_id!r}"
@@ -2501,7 +2529,7 @@ def _validate_batch_result_bindings(
             if not isinstance(path_value, str) or not path_value:
                 raise _invalid_manifest_binding(f"batch_manifest_json {field_name} is invalid for {plan_input.input_id!r}")
             try:
-                result_relative_path = root.confined_relative_path(Path(path_value))
+                result_relative_path = root.confined_relative_path(Path(path_value), root_relative=True)
             except ArtifactEvidenceError as exc:
                 raise _invalid_manifest_binding(
                     f"batch_manifest_json {field_name} is outside combined-manifest authority " f"for {plan_input.input_id!r}"
@@ -2520,7 +2548,7 @@ def _validate_batch_result_bindings(
                 if not isinstance(path_value, str) or not path_value:
                     raise _invalid_manifest_binding(f"batch_manifest_json {field_name} is invalid for {plan_input.input_id!r}")
                 try:
-                    observed_reconstruction_paths.append(root.confined_relative_path(Path(path_value)))
+                    observed_reconstruction_paths.append(root.confined_relative_path(Path(path_value), root_relative=True))
                 except ArtifactEvidenceError as exc:
                     raise _invalid_manifest_binding(
                         f"batch_manifest_json {field_name} is outside reconstruction-bundle authority"
@@ -2528,7 +2556,10 @@ def _validate_batch_result_bindings(
 
     if expected_reconstruction_paths is not None:
         try:
-            expected_paths = sorted(root.confined_relative_path(Path(path)) for path in expected_reconstruction_paths)
+            expected_paths = sorted(
+                root.confined_relative_path(Path(path), root_relative=expected_reconstruction_paths_root_relative)
+                for path in expected_reconstruction_paths
+            )
         except ArtifactEvidenceError as exc:
             raise _invalid_manifest_binding("Detached reconstruction-bundle authority is invalid") from exc
         if len(observed_reconstruction_paths) != len(set(observed_reconstruction_paths)):
@@ -2569,7 +2600,7 @@ def _validate_run_card_artifact_index(
                 )
             continue
         try:
-            capture = _capture_artifact(root, Path(relative_path), budget=capture_budget)
+            capture = _capture_artifact(root, Path(relative_path), budget=capture_budget, root_relative=True)
         except ArtifactEvidenceError as exc:
             if exc.code == "artifact_changed" and carrier_change is None:
                 carrier_change = exc
@@ -2667,6 +2698,7 @@ def _validate_run_card_self_integrity(
         context="run_card self-integrity sidecar",
         max_bytes=_MAX_BOUND_MANIFEST_BYTES,
         manifest_budget=manifest_budget,
+        root_relative=True,
     )
     sidecar = _decode_bound_manifest(sidecar_data, artifact_kind="run_card self-integrity sidecar")
     if sidecar.get("run_card_path") != expected_run_card_path:
@@ -2691,8 +2723,15 @@ def _validate_bound_manifest_artifact(
     combined_manifest_paths: Optional[Mapping[str, str]] = None,
     combined_manifest_authorities: Optional[Mapping[str, "_CombinedManifestAuthority"]] = None,
     expected_reconstruction_paths: Optional[Sequence[Path]] = None,
+    evidence_record_paths: bool = False,
 ) -> dict[str, Any]:
-    """Prove a requested manifest points back to this exact plan/sidecar."""
+    """Prove a requested manifest points back to this exact plan/sidecar.
+
+    ``evidence_record_paths`` says that ``candidate`` and
+    ``expected_reconstruction_paths`` are output-root-relative paths read from
+    detached evidence records (verification) rather than writer-supplied
+    observations (evidence construction).
+    """
 
     data, relative_path, _identity = _read_confined_artifact_bytes(
         root,
@@ -2700,6 +2739,7 @@ def _validate_bound_manifest_artifact(
         context=artifact_kind,
         max_bytes=_MAX_BOUND_MANIFEST_BYTES,
         manifest_budget=context.manifest_budget,
+        root_relative=evidence_record_paths,
     )
     if (
         record.get("path") != relative_path
@@ -2796,6 +2836,7 @@ def _validate_bound_manifest_artifact(
             combined_manifest_paths=combined_manifest_paths or {},
             combined_manifest_authorities=combined_manifest_authorities or {},
             expected_reconstruction_paths=expected_reconstruction_paths,
+            expected_reconstruction_paths_root_relative=evidence_record_paths,
         )
         context.batch_binding.bind(artifact_kind, payload)
     elif artifact_kind == "run_card":
@@ -2993,6 +3034,74 @@ def compute_execution_evidence_fingerprint(payload: Mapping[str, Any]) -> str:
     return hashlib.sha256(canonicalize_json(body)).hexdigest()
 
 
+_OUTCOME_PROJECTION_BUCKETS = ("produced_artifacts", "omitted_artifacts", "failed_artifacts")
+
+
+class _CarrierOutcomeProjections:
+    """Memoised ``build_manifest_outcome_projection`` results for one evidence payload.
+
+    Validating every carrier used to rebuild a projection per carrier, each
+    walking every outcome row (O(inputs x outcomes)). The execution-scope
+    projection is built once, and outcome rows are bucketed by ``input_id``
+    once so an input-scope projection only walks that input's rows. The
+    projector skips rows of other inputs, so projecting the bucketed view
+    yields exactly the same result; when the buckets cannot be indexed
+    (malformed rows or unhashable ids) the full payload is projected so the
+    same errors surface.
+    """
+
+    def __init__(self, payload: Mapping[str, Any], *, evidence_path: str) -> None:
+        self._payload = payload
+        self._evidence_path = evidence_path
+        self._projections: dict[Optional[str], dict[str, Any]] = {}
+        self._rows_by_input: Optional[dict[Any, dict[str, list[Any]]]] = None
+        self._indexed = False
+
+    def _index_rows_by_input(self) -> Optional[dict[Any, dict[str, list[Any]]]]:
+        rows_by_input: dict[Any, dict[str, list[Any]]] = {}
+        for field_name in _OUTCOME_PROJECTION_BUCKETS:
+            raw_bucket = self._payload.get(field_name)
+            if not isinstance(raw_bucket, list) or not all(isinstance(item, Mapping) for item in raw_bucket):
+                return None
+            for raw_item in raw_bucket:
+                try:
+                    buckets = rows_by_input.setdefault(raw_item.get("input_id"), {})
+                except TypeError:
+                    return None
+                buckets.setdefault(field_name, []).append(raw_item)
+        return rows_by_input
+
+    def _input_view(self, input_id: str) -> Mapping[str, Any]:
+        if not self._indexed:
+            self._rows_by_input = self._index_rows_by_input()
+            self._indexed = True
+        if self._rows_by_input is None:
+            return self._payload
+        try:
+            buckets = self._rows_by_input.get(input_id, {})
+        except TypeError:
+            return self._payload
+        view = dict(self._payload)
+        for field_name in _OUTCOME_PROJECTION_BUCKETS:
+            view[field_name] = buckets.get(field_name, [])
+        return view
+
+    def __call__(self, input_id: Optional[str]) -> dict[str, Any]:
+        try:
+            cached = self._projections.get(input_id)
+        except TypeError:
+            cached = None
+        if cached is not None:
+            return cached
+        source = self._payload if input_id is None else self._input_view(input_id)
+        projection = build_manifest_outcome_projection(source, evidence_path=self._evidence_path, input_id=input_id)
+        try:
+            self._projections[input_id] = projection
+        except TypeError:
+            pass
+        return projection
+
+
 def _validate_carrier_outcome_projections(
     payload: Mapping[str, Any],
     *,
@@ -3004,14 +3113,11 @@ def _validate_carrier_outcome_projections(
     carriers = context.carrier_outcome_projections
     if not require_all:
         return
+    expected_projection = _CarrierOutcomeProjections(payload, evidence_path=context.projector.evidence_path)
     for artifact_kind, input_id, projection in carriers:
         if not projection:
             raise _invalid_manifest_binding(f"{artifact_kind} is missing its execution outcome projection")
-        expected = build_manifest_outcome_projection(
-            payload,
-            evidence_path=context.projector.evidence_path,
-            input_id=input_id if artifact_kind == "combined_manifest_json" else None,
-        )
+        expected = expected_projection(input_id if artifact_kind == "combined_manifest_json" else None)
         if projection != expected:
             raise _invalid_manifest_binding(f"{artifact_kind} execution outcome projection does not match detached evidence")
 
@@ -3096,7 +3202,7 @@ def _build_execution_evidence_under_root(
         ):
             raise ExecutionEvidenceError("Expected carrier records must contain canonical path, sha256, and size_bytes")
         try:
-            canonical_path = root.confined_relative_path(Path(path))
+            canonical_path = root.confined_relative_path(Path(path), root_relative=True)
         except ArtifactEvidenceError as exc:
             raise ExecutionEvidenceError("Expected carrier record path is not confined") from exc
         if canonical_path != path or path in normalized_expected_carriers:
@@ -3738,6 +3844,7 @@ def _verify_execution_evidence_under_root(
                 Path(recorded["path"]),
                 budget=capture_budget,
                 max_bytes=_MAX_EVIDENCE_BYTES if artifact_kind in _MANIFEST_ARTIFACT_KINDS else None,
+                root_relative=True,
             )
             if capture.record != recorded:
                 raise ExecutionEvidenceError(f"Produced artifact evidence does not match final bytes: {recorded['path']!r}")
@@ -3761,6 +3868,7 @@ def _verify_execution_evidence_under_root(
             record=recorded,
             root=root,
             context=manifest_context,
+            evidence_record_paths=True,
         )
         combined_authority_by_input[input_id] = _compact_combined_manifest_authority(
             manifest_payload,
@@ -3793,6 +3901,7 @@ def _verify_execution_evidence_under_root(
                 combined_manifest_paths=combined_manifest_paths,
                 combined_manifest_authorities=combined_authority_by_input,
                 expected_reconstruction_paths=expected_reconstruction_paths,
+                evidence_record_paths=True,
             )
 
     for outcome in payload["produced_artifacts"]:

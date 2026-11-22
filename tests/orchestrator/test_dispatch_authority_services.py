@@ -50,13 +50,26 @@ def _record(job_id: str, tenant: str = "tenant_a") -> JobRecord:
     )
 
 
+async def _clear_dispatch_tables(connection, expected_database: str) -> None:
+    actual_database = await connection.scalar(text("SELECT current_database()"))
+    if actual_database != expected_database:
+        raise RuntimeError("refusing to truncate a database other than the configured dispatch test database")
+    await connection.execute(
+        text(
+            "TRUNCATE jobs, job_events, job_event_sequences, admission_capacity, dispatch_attempts, dispatch_plans, operational_records, operational_outbox, committed_generations RESTART IDENTITY CASCADE"
+        )
+    )
+
+
 @pytest.fixture
 def service_urls(tmp_path, monkeypatch):
     database_url = os.getenv(DB_ENV)
     redis_url = os.getenv(REDIS_ENV)
     if not database_url or not redis_url:
         pytest.skip("dedicated migrated Postgres and Redis are required")
-    database_name = database_url.rsplit("/", 1)[-1]
+    from sqlalchemy.engine import make_url
+
+    database_name = make_url(database_url).database or ""
     if not (database_name.endswith("_fencing") or database_name.endswith("_test")):
         pytest.fail("refusing to truncate a database without the _fencing or _test suffix")
     monkeypatch.setenv("TP_ORCHESTRATOR_EXECUTION_ROOT", str(tmp_path / "execution-storage"))
@@ -68,11 +81,7 @@ def service_urls(tmp_path, monkeypatch):
         engine = create_async_engine(database_url, poolclass=NullPool)
         try:
             async with engine.begin() as connection:
-                await connection.execute(
-                    text(
-                        "TRUNCATE jobs, job_events, job_event_sequences, admission_capacity, dispatch_attempts, dispatch_plans, operational_records, operational_outbox, committed_generations RESTART IDENTITY CASCADE"
-                    )
-                )
+                await _clear_dispatch_tables(connection, database_name)
         finally:
             await engine.dispose()
 

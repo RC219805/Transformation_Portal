@@ -57,7 +57,7 @@ def build_segmentation_quality_prompt(
             "Return only valid JSON with this schema:\n"
             "{\n"
             '  "passes_basic_quality": boolean,\n'
-            '  "summary_score": number,\n'
+            '  "summary_score": number from 0.0 (worst) to 1.0 (best),\n'
             '  "issues": [\n'
             "    {\n"
             '      "issue_type": string,\n'
@@ -104,7 +104,7 @@ def build_architectural_quality_prompt(
             "Return only valid JSON with this schema:\n"
             "{\n"
             '  "passes_basic_quality": boolean,\n'
-            '  "summary_score": number,\n'
+            '  "summary_score": number from 0.0 (worst) to 1.0 (best),\n'
             '  "issues": [\n'
             "    {\n"
             '      "issue_type": string,\n'
@@ -150,7 +150,7 @@ def build_depth_quality_prompt(
             "Return only valid JSON with this schema:\n"
             "{\n"
             '  "passes_basic_quality": boolean,\n'
-            '  "summary_score": number,\n'
+            '  "summary_score": number from 0.0 (worst) to 1.0 (best),\n'
             '  "issues": [\n'
             "    {\n"
             '      "issue_type": string,\n'

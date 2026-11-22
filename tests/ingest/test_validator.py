@@ -11,6 +11,7 @@ Tests:
 from __future__ import annotations
 
 import json
+import pickle
 from pathlib import Path
 
 import pytest
@@ -493,5 +494,97 @@ class TestValidateIngestContract:
             )
 
         # Should raise SchemaValidationError
+        with pytest.raises(SchemaValidationError):
+            validate_ingest_contract(sidecar_path)
+
+
+def _valid_provenance_payload() -> dict:
+    sidecar = ProvenanceSidecar(
+        file_integrity=FileIntegrity(sha256="a" * 64, size_bytes=1024, path="/input/test.cr2"),
+        exif=ExifMetadata(all_tags={}),
+        toolchain=[ToolchainVersion(name="exiftool", version="12.50")],
+        host=HostEnvironment(hostname="test", os="Linux", os_version="5.10.0", python_version="3.11.0", arch="x86_64"),
+        timestamps=IngestTimestamps(ingest_start="2026-02-10T12:00:00+00:00", ingest_end="2026-02-10T12:05:00+00:00"),
+        pipeline_config=PipelineConfig(config_sha256="b" * 64),
+        run_id="test-run",
+    )
+    return sidecar.model_dump()
+
+
+class TestValidationExitCodeFollowsErrorType:
+    """Regression (D-10): exit codes must not follow sidecar values echoed in messages."""
+
+    @pytest.mark.parametrize(
+        ("section", "field", "bad_value"),
+        [
+            ("file_integrity", "sha256", "gamma"),
+            ("file_integrity", "sha256", "drift"),
+            ("file_integrity", "sha256", "uint8"),
+            ("timestamps", "ingest_start", "non-linear"),
+            (None, "git_commit", "uint8"),
+            (None, "git_commit", "8-bit extra field"),
+        ],
+    )
+    def test_invalid_value_is_schema_validation_failure(self, section, field, bad_value):
+        payload = _valid_provenance_payload()
+        target = payload[section] if section else payload
+        target[field] = bad_value
+
+        errors = validate_schema(payload, schema_type="provenance")
+
+        assert errors
+        assert any(bad_value in error for error in errors)
+        assert classify_validation_errors(errors) == EXIT_SCHEMA_VALIDATION_FAILED
+        assert all(isinstance(error, SchemaValidationFailure) for error in validate_schema_errors(payload))
+
+    def test_unknown_field_is_schema_drift_whatever_its_value(self):
+        payload = _valid_provenance_payload()
+        payload["unknown_field"] = "gamma uint8"
+
+        errors = validate_schema(payload, schema_type="provenance")
+
+        assert classify_validation_errors(errors) == EXIT_SCHEMA_DRIFT
+
+    def test_messages_still_compare_as_plain_strings(self):
+        payload = _valid_provenance_payload()
+        payload["schema_version"] = "2.0.0"
+
+        errors = validate_schema(payload, schema_type="provenance")
+
+        assert "Unsupported schema version: 2.0.0. This validator supports version 1.0.2 only." in errors
+        assert all(isinstance(error, str) for error in errors)
+        assert classify_validation_errors(pickle.loads(pickle.dumps(errors))) == EXIT_SCHEMA_VALIDATION_FAILED
+        assert classify_validation_errors(errors) == EXIT_SCHEMA_VALIDATION_FAILED
+
+
+class TestNonObjectSidecarRoot:
+    """Regression (D-11): valid JSON that is not an object is a schema failure, not a crash."""
+
+    @pytest.mark.parametrize("raw", ["[]", "[1, 2]", "null", '"sidecar"', "42"])
+    def test_non_object_root_reports_schema_failure(self, tmp_path: Path, raw: str):
+        sidecar_path = tmp_path / "sidecar.json"
+        sidecar_path.write_text(raw, encoding="utf-8")
+
+        errors = validate_schema(sidecar_path, schema_type="provenance")
+
+        assert errors == ["Sidecar root must be a JSON object"]
+        assert classify_validation_errors(errors) == EXIT_SCHEMA_VALIDATION_FAILED
+
+    def test_metadata_service_validate_returns_schema_failure(self, tmp_path: Path):
+        from transformation_portal.ingest.metadata_service import MetadataExtractionService, ValidateRequest
+
+        sidecar_path = tmp_path / "list.json"
+        sidecar_path.write_text("[]", encoding="utf-8")
+
+        result = MetadataExtractionService().validate(ValidateRequest(sidecar_path=sidecar_path))
+
+        assert result.success is False
+        assert isinstance(result.dominant_error, SchemaValidationFailure)
+        assert int(result.dominant_error.exit_code) == EXIT_SCHEMA_VALIDATION_FAILED
+
+    def test_non_object_root_raises_schema_validation_error_from_contract_check(self, tmp_path: Path):
+        sidecar_path = tmp_path / "null.json"
+        sidecar_path.write_text("null", encoding="utf-8")
+
         with pytest.raises(SchemaValidationError):
             validate_ingest_contract(sidecar_path)

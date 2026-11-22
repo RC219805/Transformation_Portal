@@ -118,6 +118,18 @@ def test_portal_asset_etag_matching_accepts_exact_match_and_wildcard() -> None:
     assert asset_bundle._portal_asset_request_etag_matches(stale_request, '"abc123"') is False
 
 
+def test_portal_asset_validators_treat_non_ascii_client_values_as_mismatches() -> None:
+    # hmac.compare_digest raises TypeError on non-ASCII str operands; a public
+    # client can send them via a percent-decoded ?v= or a latin-1 header.
+    version_request = _request(query_string=b"v=caf%C3%A9")
+    etag_request = _request(headers=[(b"if-none-match", b'"caf\xe9"')])
+
+    requested = asset_bundle._requested_portal_asset_fingerprint(version_request)
+    assert requested == "caf\u00e9"
+    assert asset_bundle._portal_asset_cache_control("abc123", requested) == asset_bundle.PORTAL_ASSET_CACHE_CONTROL
+    assert asset_bundle._portal_asset_request_etag_matches(etag_request, '"abc123"') is False
+
+
 def test_portal_asset_not_modified_response_sets_cache_headers() -> None:
     response = asset_bundle._portal_asset_not_modified_response(
         etag='"abc123"',

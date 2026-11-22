@@ -122,7 +122,7 @@ def _build_constraint_contract_errors(block: str, pin_needle: str) -> list[str]:
     ("relative_path", "pin_needle", "expected_constraint_count"),
     [
         ("Makefile", "pip==$(PIP_VERSION)", 2),
-        (".github/workflows/enforcement.yml", GOVERNED_PIP_PIN, 4),
+        (".github/workflows/enforcement.yml", GOVERNED_PIP_PIN, 5),
         (".github/workflows/security-unified.yml", GOVERNED_PIP_PIN, 2),
     ],
 )

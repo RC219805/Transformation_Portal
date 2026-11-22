@@ -187,6 +187,17 @@ def _check_materials_governance(data: Dict[str, Any], preset_path: Path) -> List
     return issues
 
 
+def _structure_issue(path: str, expected: str, value: Any) -> HealthIssue:
+    """Report a preset node whose YAML type cannot be validated any further."""
+    found = "null" if value is None else type(value).__name__
+    return HealthIssue(
+        severity="error",
+        category="preset_structure",
+        message=f"Preset {path or 'root'} must be {expected}, found {found}",
+        path=path,
+    )
+
+
 def _check_depth_backend_ids(
     data: Dict,
     available_backend_ids: Optional[List[str]] = None,
@@ -215,6 +226,9 @@ def _check_depth_backend_ids(
 
     # Check top-level depth backend
     depth_section = data.get("depth", {})
+    if not isinstance(depth_section, dict):
+        issues.append(_structure_issue("depth", "a mapping", depth_section))
+        return issues, available_backend_ids
     top_backend = depth_section.get("backend")
     if top_backend and top_backend not in available_backend_ids:
         issues.append(
@@ -228,6 +242,9 @@ def _check_depth_backend_ids(
 
     # Check per-model names in ensemble models list
     models = depth_section.get("models", [])
+    if not isinstance(models, list):
+        issues.append(_structure_issue("depth.models", "a list", models))
+        return issues, available_backend_ids
     for idx, model in enumerate(models):
         if not isinstance(model, dict):
             continue
@@ -318,6 +335,17 @@ def validate_preset(
     with open(preset_path, encoding="utf-8") as f:
         # YAML_GOVERNANCE_EXEMPT: diagnostic preset scanner reads YAML for health checks without executing presets.
         data = yaml.safe_load(f) or {}
+
+    if not isinstance(data, dict):
+        # Every check below reads the preset as a mapping.
+        report = PresetHealthReport(
+            preset_path=str(preset_path),
+            preset_name=preset_path.stem,
+            issues=[_structure_issue("", "a mapping", data)],
+            stages=_check_stages({}),
+        )
+        logger.info("Preset '%s' health: UNHEALTHY (root is not a mapping)", report.preset_name)
+        return report
 
     preset_name = data.get("name", preset_path.stem)
     report = PresetHealthReport(

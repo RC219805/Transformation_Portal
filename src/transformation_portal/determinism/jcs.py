@@ -126,15 +126,19 @@ def _serialize(value: Any) -> str:
     if isinstance(value, int):
         return str(value)
     if isinstance(value, float):
-        return _js_number_to_string(value)
+        # A float subclass may carry its own repr (NumPy 2 prints
+        # ``np.float64(0.5)``); number formatting needs the plain binary64.
+        return _js_number_to_string(float(value))
     if isinstance(value, list):
         return "[" + ",".join(_serialize(v) for v in value) + "]"
     if isinstance(value, dict):
-        # Keys must be strings in JSON. Sort by UTF-16 code units.
+        # Keys must be strings in JSON. Check before sorting: the sort key
+        # itself only works on strings.
+        if not all(isinstance(k, str) for k in value):
+            raise TypeError("JCS only supports string object keys.")
+        # Sort by UTF-16 code units.
         items = []
         for k in sorted(value.keys(), key=_utf16_sort_key):
-            if not isinstance(k, str):
-                raise TypeError("JCS only supports string object keys.")
             items.append(_escape_json_string(k) + ":" + _serialize(value[k]))
         return "{" + ",".join(items) + "}"
     raise TypeError(f"Unsupported type for JCS serialization: {type(value)!r}")

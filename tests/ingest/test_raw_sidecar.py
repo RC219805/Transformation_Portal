@@ -266,3 +266,27 @@ def test_generate_raw_sidecar_matches_default_file_permissions(
     raw_sidecar_module.generate_raw_sidecar(input_path, output_path=output_path, exiftool_path="exiftool")
 
     assert stat.S_IMODE(output_path.stat().st_mode) == baseline_mode
+
+
+@pytest.mark.parametrize(
+    ("input_path", "expected_argument"),
+    [
+        (Path("-x.cr2"), "./-x.cr2"),
+        (Path("frame.cr2"), "frame.cr2"),
+        (Path("/abs/-w.cr2"), "/abs/-w.cr2"),
+    ],
+)
+def test_run_exiftool_json_never_passes_a_dash_prefixed_file_argument(
+    monkeypatch: pytest.MonkeyPatch, input_path: Path, expected_argument: str
+) -> None:
+    """D-13: a bare ``-x.cr2`` must not reach exiftool as an option; other paths stay unchanged."""
+    calls: list[list[str]] = []
+
+    def fake_run(argv, **_kwargs):
+        calls.append(list(argv))
+        return subprocess.CompletedProcess(argv, 0, stdout='[{"SourceFile": "x"}]', stderr="")
+
+    monkeypatch.setattr(raw_sidecar_module.subprocess, "run", fake_run)
+
+    assert raw_sidecar_module._run_exiftool_json(input_path, "/usr/bin/exiftool") == {"SourceFile": "x"}
+    assert calls[0][-1] == expected_argument

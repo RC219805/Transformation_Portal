@@ -349,19 +349,23 @@ class MetadataExtractionService:
 
         counts = Counter(base_paths)
         chosen_paths: List[Path] = []
-        seen: set[Path] = set()
+        # Paths that exactly one input maps to are reserved before any collision
+        # is resolved. Otherwise the disambiguated name of one input
+        # (IMG.CR2 -> IMG.CR2.provenance.json) can equal the untouched name of a
+        # later input (IMG.CR2.jpg) and both sidecars land in the same file.
+        seen: set[Path] = {base_path for base_path, count in counts.items() if count == 1}
         for input_path, base_path in zip(paths, base_paths):
             if counts[base_path] == 1:
-                candidate = base_path
-            else:
-                candidate = base_path.with_name(f"{input_path.name}.provenance.json")
-                if candidate in seen:
-                    digest = self._stable_path_digest(input_path)
-                    candidate = base_path.with_name(f"{input_path.name}" f".{digest}.provenance.json")
-                    counter = 0
-                    while candidate in seen:
-                        counter += 1
-                        candidate = base_path.with_name(f"{input_path.name}" f".{digest}.{counter}" ".provenance.json")
+                chosen_paths.append(base_path)
+                continue
+            candidate = base_path.with_name(f"{input_path.name}.provenance.json")
+            if candidate in seen:
+                digest = self._stable_path_digest(input_path)
+                candidate = base_path.with_name(f"{input_path.name}" f".{digest}.provenance.json")
+                counter = 0
+                while candidate in seen:
+                    counter += 1
+                    candidate = base_path.with_name(f"{input_path.name}" f".{digest}.{counter}" ".provenance.json")
             seen.add(candidate)
             chosen_paths.append(candidate)
 

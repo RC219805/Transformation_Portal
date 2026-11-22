@@ -129,6 +129,16 @@ class PluginManager:
 
         return self._loader.get_loaded_plugins()
 
+    def _load_valid_plugin(self, name: str) -> Optional[LoadedPlugin]:
+        """Return the loaded plugin only when it loaded without errors (fail closed)."""
+        loaded = self._loader.load_plugin(name)
+        if not loaded or not loaded.plugin:
+            return None
+        if not loaded.is_valid:
+            logger.warning("Refusing plugin %s with load errors: %s", name, "; ".join(loaded.load_errors))
+            return None
+        return loaded
+
     def get_plugin(
         self,
         name: str,
@@ -145,7 +155,7 @@ class PluginManager:
         Returns:
             Plugin instance or None if not found
         """
-        loaded = self._loader.load_plugin(name)
+        loaded = self._load_valid_plugin(name)
         if not loaded or not loaded.plugin:
             return None
 
@@ -164,7 +174,7 @@ class PluginManager:
             List of plugin instances
         """
         loaded = self._loader.get_plugins_by_type(plugin_type)
-        return [lp.plugin for lp in loaded if lp.plugin]
+        return [lp.plugin for lp in loaded if lp.plugin and lp.is_valid]
 
     def initialize_plugin(self, name: str, config: Optional[Dict[str, Any]] = None) -> bool:
         """Initialize a plugin with configuration.
@@ -179,7 +189,7 @@ class PluginManager:
         Raises:
             PluginInitializationError: If initialization fails
         """
-        loaded = self._loader.load_plugin(name)
+        loaded = self._load_valid_plugin(name)
         if not loaded or not loaded.plugin:
             raise PluginInitializationError(f"Plugin '{name}' not found")
 
@@ -230,7 +240,7 @@ class PluginManager:
         plugins_to_try = [name] + (fallback_plugins or [])
 
         for plugin_name in plugins_to_try:
-            loaded = self._loader.load_plugin(plugin_name)
+            loaded = self._load_valid_plugin(plugin_name)
             if not loaded or not loaded.plugin:
                 continue
 
@@ -337,7 +347,7 @@ class PluginManager:
             >>> with manager.plugin_session("my_enhancer") as enhancer:
             ...     result = enhancer.enhance(image, strength=0.8)
         """
-        loaded = self._loader.load_plugin(name)
+        loaded = self._load_valid_plugin(name)
         if not loaded or not loaded.plugin:
             raise PluginInitializationError(f"Plugin '{name}' not found")
 
@@ -428,6 +438,10 @@ class PluginManager:
         # Reload via loader
         reloaded = self._loader.reload_plugin(name)
         if not reloaded or not reloaded.plugin:
+            return False
+        if not reloaded.is_valid:
+            # Same rule as discover_plugins(): a plugin with load errors never reaches the registry.
+            logger.warning("Refusing reloaded plugin %s with load errors: %s", name, "; ".join(reloaded.load_errors))
             return False
 
         # Re-register

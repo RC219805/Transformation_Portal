@@ -109,7 +109,7 @@ class PBRGenerator:
         gamma: float,
         masks: List[np.ndarray],
         depth: Optional[np.ndarray] = None,
-        material_hints: Optional[List[str]] = None,
+        material_hints: Optional[List[Optional[str]]] = None,
         config: Optional[MaterialGenerationConfig] = None,
     ) -> List[PBRTextures]:
         """Generate PBR textures for multiple segments.
@@ -122,7 +122,7 @@ class PBRGenerator:
             gamma: Gamma value (must be 1.0).
             masks: List of N segmentation masks (H, W) bool.
             depth: Optional depth map (H, W) float32.
-            material_hints: Optional list of N material categories.
+            material_hints: Optional list of N material categories (``None`` entries are unhinted).
             config: Optional generation configuration.
 
         Returns:
@@ -170,7 +170,7 @@ class PBRGenerator:
         gamma: float,
         masks: List[np.ndarray],
         depth: Optional[np.ndarray],
-        material_hints: Optional[List[str]],
+        material_hints: Optional[List[Optional[str]]],
         config: MaterialGenerationConfig,
     ) -> List[PBRTextures]:
         """Generate heuristic PBR textures by sharing full-image intermediates.

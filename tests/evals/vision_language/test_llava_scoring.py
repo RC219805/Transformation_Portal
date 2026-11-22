@@ -88,6 +88,15 @@ class TestRecomputeSummaryScore:
         )
         assert recompute_summary_score(result) == 0.5
 
+    def test_padded_low_severity_uses_low_penalty(self) -> None:
+        """M-08: whitespace/case variants of a known severity keep their penalty."""
+        result = VQAResult(
+            passes_basic_quality=True,
+            summary_score=0.8,
+            issues=[VQAIssue("test", " Low ", "evidence")],
+        )
+        assert recompute_summary_score(result) == pytest.approx(0.9)
+
 
 class TestComputeQualityGatePass:
     """Tests for compute_quality_gate_pass function."""
@@ -131,6 +140,39 @@ class TestComputeQualityGatePass:
             ],
         )
         assert compute_quality_gate_pass(result, max_medium_severity_issues=2) is False
+
+    @pytest.mark.parametrize("severity", ["critical", "severe", "high ", " HIGH", "unknown"])
+    def test_unrecognised_severity_counts_as_high(self, severity: str) -> None:
+        """M-08: severities outside {low, medium} must fail the gate like 'high'."""
+        result = VQAResult(
+            passes_basic_quality=True,
+            summary_score=0.9,
+            issues=[VQAIssue("test", severity, "evidence")],
+        )
+        assert compute_quality_gate_pass(result, max_high_severity_issues=0) is False
+
+    def test_padded_medium_severity_counts_as_medium(self) -> None:
+        """M-08: whitespace/case variants of 'medium' still count against the medium limit."""
+        result = VQAResult(
+            passes_basic_quality=True,
+            summary_score=0.9,
+            issues=[VQAIssue("t1", "medium ", "e"), VQAIssue("t2", " Medium", "e")],
+        )
+        assert compute_quality_gate_pass(result, max_high_severity_issues=0, max_medium_severity_issues=1) is False
+        assert compute_quality_gate_pass(result, max_high_severity_issues=0, max_medium_severity_issues=2) is True
+
+    def test_gate_agrees_with_parsed_vqa_response(self) -> None:
+        """M-08: parsed model output with stray whitespace / unknown labels fails closed."""
+        from transformation_portal.evals.vision_language.llava_schema import parse_vqa_result
+
+        res = parse_vqa_result(
+            "test-model",
+            '{"passes_basic_quality": true, "summary_score": 0.95, "issues": ['
+            '{"issue_type":"x","severity":"critical","evidence":"e"},'
+            '{"issue_type":"z","severity":"High ","evidence":"e"}]}',
+        )
+        assert [i.severity for i in res.issues] == ["critical", "high"]
+        assert compute_quality_gate_pass(res) is False
 
     def test_custom_thresholds(self) -> None:
         """Should use custom thresholds when provided."""

@@ -372,5 +372,113 @@ class TestDepthEffectShape:
         assert out.shape == (H, W, 3)
 
 
+class TestLoadImageRgb16Bit:
+    """Regression for H-05: 16-bit greyscale inputs were clipped at 255 and loaded as white."""
+
+    @pytest.mark.parametrize("module_path", _DEPTH_TOOLS_MODULES)
+    def test_16bit_greyscale_png_keeps_its_levels(self, module_path, tmp_path):
+        import importlib
+
+        load_image_rgb = importlib.import_module(module_path).load_image_rgb
+        path = tmp_path / "grey16.png"
+        Image.fromarray(np.array([[0, 16448, 32896, 65535]], dtype=np.uint16)).save(path)
+
+        rgb = load_image_rgb(str(path))
+
+        assert rgb.shape == (1, 4, 3)
+        assert np.allclose(rgb[0, :, 0], np.array([0, 64, 128, 255]) / 255.0)
+
+
+def _rgb(value):
+    return Image.fromarray(np.full((24, 32, 3), value, dtype="uint8"))
+
+
+def _depth16():
+    return Image.fromarray(np.linspace(0, 65535, 24 * 32).reshape(24, 32).astype("uint16"))
+
+
+class TestDepthMapPairing:
+    """Regression for M-04: the legacy batch mis-paired depth maps, dropped .tiff depth maps and rejected --fmt tiff."""
+
+    def test_depth16_tiff_map_pairs_with_its_image(self, temp_dirs):
+        _rgb(120).save(Path(temp_dirs["images"]) / "house_enh.jpg")
+        _depth16().save(Path(temp_dirs["depths"]) / "house_depth16.tiff")
+        opts = BatchOptions(temp_dirs["images"], temp_dirs["depths"], temp_dirs["output"], workers=1)
+
+        assert process_batch(opts) == 0
+        assert [p.name for p in Path(temp_dirs["output"]).iterdir()] == ["house_enh_depthhaze.tif"]
+
+    def test_fmt_tiff_is_accepted(self, temp_dirs):
+        _rgb(120).save(Path(temp_dirs["images"]) / "house_enh.jpg")
+        _depth16().save(Path(temp_dirs["depths"]) / "house_depth16.png")
+
+        rc = main(["haze", temp_dirs["images"], temp_dirs["depths"], temp_dirs["output"], "--fmt", "tiff"])
+
+        assert rc == 0
+        assert [p.name for p in Path(temp_dirs["output"]).iterdir()] == ["house_enh_depthhaze.tif"]
+
+    @pytest.mark.parametrize(
+        "argv_tail",
+        [
+            ["dof", "--falloff", "2.0"],
+            ["do", "--fallof", "2.0"],
+            ["dof", "--fallof", "2.0"],
+            ["do", "--falloff", "2.0"],
+            ["do", "--fallo", "2.0"],
+        ],
+    )
+    def test_documented_dof_and_falloff_names_are_accepted(self, temp_dirs, monkeypatch, argv_tail):
+        """Regression for L-05: the documented ``dof`` mode and ``--falloff`` flag were rejected by argparse."""
+        from src.transformation_portal.pipelines import depth_tools
+
+        seen = {}
+        monkeypatch.setattr(depth_tools, "process_batch", lambda opts, progress=None: seen.setdefault("opts", opts) and 0)
+        cmd, *flags = argv_tail
+
+        rc = depth_tools.main([cmd, temp_dirs["images"], temp_dirs["depths"], temp_dirs["output"], *flags])
+
+        assert rc == 0
+        assert seen["opts"].falloff == 2.0
+        assert seen["opts"].mode in ("dof", "do")
+
+    def test_dof_mode_writes_the_historical_output_name(self, temp_dirs):
+        _rgb(120).save(Path(temp_dirs["images"]) / "house_enh.jpg")
+        _depth16().save(Path(temp_dirs["depths"]) / "house_depth16.png")
+
+        rc = main(["dof", temp_dirs["images"], temp_dirs["depths"], temp_dirs["output"], "--falloff", "2.0"])
+
+        assert rc == 0
+        assert [p.name for p in Path(temp_dirs["output"]).iterdir()] == ["house_enh_depthdo.tif"]
+
+    def test_base_does_not_match_longer_base_sharing_its_prefix(self, temp_dirs):
+        from src.transformation_portal.pipelines.depth_tools import find_file_for_base
+
+        _rgb(30).save(Path(temp_dirs["images"]) / "lot1.jpg")
+        _rgb(220).save(Path(temp_dirs["images"]) / "lot10_enh.jpg")
+        _depth16().save(Path(temp_dirs["depths"]) / "lot1_depth16.png")
+        _depth16().save(Path(temp_dirs["depths"]) / "lot10_depth16.png")
+
+        assert Path(find_file_for_base(temp_dirs["images"], "lot1")).name == "lot1.jpg"
+        assert find_file_for_base(temp_dirs["images"], "lot") is None
+        # Priority tags directly after the base still belong to it.
+        assert Path(find_file_for_base(temp_dirs["images"], "lot10")).name == "lot10_enh.jpg"
+
+        opts = BatchOptions(temp_dirs["images"], temp_dirs["depths"], temp_dirs["output"], workers=1)
+        assert process_batch(opts) == 0
+        assert sorted(p.name for p in Path(temp_dirs["output"]).iterdir()) == [
+            "lot10_enh_depthhaze.tif",
+            "lot1_depthhaze.tif",
+        ]
+
+    def test_depth_maps_resolving_to_one_image_fail_closed(self, temp_dirs):
+        _rgb(120).save(Path(temp_dirs["images"]) / "house_enh.jpg")
+        _depth16().save(Path(temp_dirs["depths"]) / "house_depth16.png")
+        _depth16().save(Path(temp_dirs["depths"]) / "house_depth16.tif")
+        opts = BatchOptions(temp_dirs["images"], temp_dirs["depths"], temp_dirs["output"], workers=1)
+
+        assert process_batch(opts) == 2
+        assert list(Path(temp_dirs["output"]).iterdir()) == []
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

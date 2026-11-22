@@ -7,6 +7,7 @@ ensuring deterministic, versioned sidecar generation with complete metadata.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -19,6 +20,7 @@ pytestmark = [
     pytest.mark.unit,
 ]
 
+from transformation_portal.lux_depth_v3 import provenance as provenance_module
 from transformation_portal.lux_depth_v3.provenance import (
     PROVENANCE_SCHEMA_VERSION,
     ExiftoolNotFoundError,
@@ -38,6 +40,14 @@ from transformation_portal.lux_depth_v3.provenance import (
 # =============================================================================
 # Fixtures
 # =============================================================================
+
+
+@pytest.fixture(autouse=True)
+def _fresh_tool_probes():
+    """Tool probes are memoised per process; isolate every test from the others."""
+    provenance_module.clear_tool_probe_caches()
+    yield
+    provenance_module.clear_tool_probe_caches()
 
 
 @pytest.fixture
@@ -146,8 +156,98 @@ def valid_provenance_metadata(
 # =============================================================================
 
 
+_UNUSABLE_TOOL_OS_ERRORS = [
+    PermissionError(13, "Permission denied", "exiftool"),
+    NotADirectoryError(20, "Not a directory", "exiftool"),
+    OSError(8, "Exec format error", "exiftool"),
+]
+_UNUSABLE_TOOL_OS_ERROR_IDS = ["unsearchable-path-entry", "path-entry-is-a-file", "exec-format-error"]
+
+
 class TestExiftoolAvailability:
     """Test exiftool detection and version extraction."""
+
+    @pytest.mark.parametrize("require_exiftool", [True, False])
+    def test_batch_capture_probes_invariant_tools_once(self, sample_tiff_image: Path, require_exiftool: bool):
+        """exiftool -ver and convert -version are batch invariants, not per-image work."""
+        commands: list[tuple[str, ...]] = []
+
+        def fake_run(command, *args, **kwargs):
+            commands.append(tuple(command[:2]))
+            if list(command[:2]) == ["exiftool", "-ver"]:
+                return MagicMock(returncode=0, stdout="12.76\n", stderr="")
+            if list(command[:2]) == ["convert", "-version"]:
+                return MagicMock(returncode=0, stdout="Version: ImageMagick 7.1.1-0\n", stderr="")
+            if list(command[:1]) == ["exiftool"]:
+                return MagicMock(returncode=0, stdout=json.dumps([{"EXIF:Make": "Cam"}]), stderr="")
+            return MagicMock(returncode=0, stdout="abc123\n", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run):
+            records = [
+                capture_provenance(
+                    image_path=sample_tiff_image,
+                    config_fingerprint="sha256:abc123",
+                    require_exiftool=require_exiftool,
+                )
+                for _ in range(4)
+            ]
+
+        assert commands.count(("exiftool", "-ver")) == 1
+        assert commands.count(("convert", "-version")) == 1
+        # Recorded values are unchanged by the memo.
+        assert {record.toolchain["exiftool_version"] for record in records} == {"12.76"}
+        assert {record.toolchain["imagemagick_version"] for record in records} == {"ImageMagick 7.1.1-0"}
+        assert all(record.exif == {"EXIF:Make": "Cam"} for record in records)
+
+    def test_failed_exiftool_probe_is_not_memoised(self):
+        """A tool missing now must be found once it is installed, without a restart."""
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            assert provenance_module._check_exiftool_available() is False
+            assert get_exiftool_version() is None
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="12.76\n")
+            assert provenance_module._check_exiftool_available() is True
+            assert get_exiftool_version() == "12.76"
+            mock_run.assert_called_once()
+
+    @pytest.mark.skipif(os.name != "posix", reason="the fake tools are POSIX shell scripts")
+    def test_replaced_or_removed_tools_are_probed_again(self, tmp_path: Path, monkeypatch):
+        """A long-lived process must not report the version of an executable that is gone."""
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        spawn_log = tmp_path / "spawns.log"
+        spawn_log.write_text("", encoding="utf-8")
+
+        def install(tool: str, output: str) -> None:
+            # A package upgrade publishes a new file over the old name.
+            staged = bin_dir / f"{tool}.staged"
+            staged.write_text(f'#!/bin/sh\necho "{tool}" >> "{spawn_log}"\necho "{output}"\n', encoding="utf-8")
+            staged.chmod(0o755)
+            os.replace(staged, bin_dir / tool)
+
+        monkeypatch.setenv("PATH", str(bin_dir))
+        install("exiftool", "12.76")
+        install("convert", "Version: ImageMagick 7.1.1-0")
+        for _ in range(3):
+            assert provenance_module._check_exiftool_available() is True
+            toolchain = get_toolchain_versions()
+            assert toolchain["exiftool_version"] == "12.76"
+            assert toolchain["imagemagick_version"] == "ImageMagick 7.1.1-0"
+        # Unchanged executables are still probed only once.
+        assert sorted(spawn_log.read_text(encoding="utf-8").split()) == ["convert", "exiftool"]
+
+        install("exiftool", "13.10")
+        install("convert", "Version: ImageMagick 7.1.2-3")
+        toolchain = get_toolchain_versions()
+        assert toolchain["exiftool_version"] == "13.10"
+        assert toolchain["imagemagick_version"] == "ImageMagick 7.1.2-3"
+
+        (bin_dir / "exiftool").unlink()
+        (bin_dir / "convert").unlink()
+        assert provenance_module._check_exiftool_available() is False
+        toolchain = get_toolchain_versions()
+        assert toolchain["exiftool_version"] is None
+        assert toolchain["imagemagick_version"] is None
 
     def test_get_exiftool_version_when_available(self):
         """Test exiftool version retrieval when exiftool is available."""
@@ -172,6 +272,26 @@ class TestExiftoolAvailability:
         with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("exiftool", 5)):
             version = get_exiftool_version()
             assert version is None
+
+    @pytest.mark.parametrize("error", _UNUSABLE_TOOL_OS_ERRORS, ids=_UNUSABLE_TOOL_OS_ERROR_IDS)
+    def test_optional_tool_probes_treat_any_os_error_as_unavailable(self, error: OSError, tmp_path: Path):
+        """A tool the process cannot execute is "unavailable", never a crash.
+
+        ``subprocess.run`` only raises ``FileNotFoundError`` when every PATH
+        entry is searchable. A service account that inherits a PATH containing
+        a directory it cannot traverse gets ``PermissionError`` for a tool that
+        is simply not installed, and a PATH entry that is a regular file yields
+        ``NotADirectoryError``. Availability probes must degrade on all of them.
+        """
+        with patch("subprocess.run", side_effect=error):
+            assert provenance_module._check_exiftool_available() is False
+            assert get_exiftool_version() is None
+            assert get_git_commit_sha(tmp_path) is None
+            versions = get_toolchain_versions()
+
+        assert versions["exiftool_version"] is None
+        assert versions["imagemagick_version"] is None
+        assert versions["python_version"]
 
 
 # =============================================================================
@@ -574,6 +694,34 @@ class TestSidecarFileOperations:
         temp_files = list(tmp_path.glob("*.tmp"))
         assert len(temp_files) == 0
 
+    def test_sidecar_round_trips_non_ascii_exif_under_ascii_locale(
+        self,
+        valid_provenance_metadata: ProvenanceMetadata,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Sidecars are UTF-8 even when the locale default encoding is ASCII (``LC_ALL=C``)."""
+        import builtins
+
+        real_open = builtins.open
+
+        def ascii_default_open(file, mode="r", *args, **kwargs):
+            if "b" not in mode and len(args) < 2 and "encoding" not in kwargs:
+                kwargs["encoding"] = "ascii"
+            return real_open(file, mode, *args, **kwargs)
+
+        monkeypatch.setattr(provenance_module, "open", ascii_default_open, raising=False)
+        valid_provenance_metadata.exif = {"EXIF:Copyright": "© Studio Müller", "EXIF:Artist": "José"}
+        sidecar_path = tmp_path / "test_provenance.json"
+
+        valid_provenance_metadata.write_sidecar(sidecar_path)
+
+        assert sidecar_path.read_bytes() == valid_provenance_metadata.to_json().encode("utf-8")
+        assert "© Studio Müller".encode("utf-8") in sidecar_path.read_bytes()
+        loaded = ProvenanceMetadata.load_sidecar(sidecar_path)
+        assert loaded.exif == valid_provenance_metadata.exif
+        assert sorted(path.name for path in tmp_path.iterdir()) == ["test_provenance.json"]
+
     def test_write_sidecar_validates_before_write(
         self,
         valid_provenance_metadata: ProvenanceMetadata,
@@ -746,6 +894,38 @@ class TestProvenanceCapture:
             assert provenance.exif == {}  # No EXIF extracted
             assert provenance.input.file_sha256  # But hash still computed
 
+    @pytest.mark.parametrize("error", _UNUSABLE_TOOL_OS_ERRORS, ids=_UNUSABLE_TOOL_OS_ERROR_IDS)
+    def test_capture_provenance_best_effort_survives_unexecutable_tools(
+        self,
+        sample_tiff_image: Path,
+        error: OSError,
+    ):
+        """Best-effort capture must not fail the image when optional tools cannot be executed."""
+        with patch("subprocess.run", side_effect=error):
+            provenance = capture_provenance(
+                image_path=sample_tiff_image,
+                config_fingerprint="sha256:abc123",
+                require_exiftool=False,
+            )
+
+        assert provenance.exif == {}
+        assert provenance.input.file_sha256
+        assert provenance.toolchain["exiftool_version"] is None
+        assert provenance.ingest_context.git_commit_sha is None
+
+    def test_capture_provenance_required_exiftool_fails_closed_when_unexecutable(
+        self,
+        sample_tiff_image: Path,
+    ):
+        """Audit-grade capture still hard-fails with the actionable exiftool error."""
+        with patch("subprocess.run", side_effect=PermissionError(13, "Permission denied", "exiftool")):
+            with pytest.raises(ExiftoolNotFoundError):
+                capture_provenance(
+                    image_path=sample_tiff_image,
+                    config_fingerprint="sha256:abc123",
+                    require_exiftool=True,
+                )
+
     def test_capture_provenance_deterministic_hash(
         self,
         sample_tiff_image: Path,
@@ -804,7 +984,7 @@ class TestRealTIFFProvenance:
             )
             if result.returncode != 0:
                 pytest.skip("exiftool not available")
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired):
             pytest.skip("exiftool not available")
 
         # Capture provenance
@@ -845,7 +1025,7 @@ class TestRealTIFFProvenance:
             )
             if result.returncode != 0:
                 pytest.skip("exiftool not available")
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired):
             pytest.skip("exiftool not available")
 
         config_fingerprint = "sha256:determinism_test"

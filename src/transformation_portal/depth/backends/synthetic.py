@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Optional, Union
 import numpy as np
 from PIL import Image
 
+from ._array_contract import to_rgb_uint8
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
@@ -90,15 +91,7 @@ class SyntheticDepthBackend:
         """
         # Convert input to PIL Image if needed
         if isinstance(image, np.ndarray):
-            # Handle float arrays correctly
-            if image.dtype in (np.float32, np.float64):
-                # Scale float [0, 1] to uint8 [0, 255]
-                if image.max() <= 1.0:
-                    image = (image * 255).clip(0, 255).astype(np.uint8)
-                else:
-                    # Already in [0, 255] range
-                    image = image.clip(0, 255).astype(np.uint8)
-            pil_image = Image.fromarray(image.astype(np.uint8))
+            pil_image = Image.fromarray(to_rgb_uint8(image))
             original_array = np.asarray(pil_image, dtype=np.uint8)
         else:
             pil_image = image

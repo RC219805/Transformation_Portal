@@ -8,6 +8,7 @@ accepted as a replayable V6 source.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import math
 from dataclasses import dataclass
@@ -28,6 +29,10 @@ from transformation_portal.lux_depth_v4.photography import create_proxy
 from transformation_portal.lux_depth_v5.evidence import MAX_ICC_BYTES, _array, _image, verify_execution_evidence_v3
 
 _MAX_FILES = 32769
+# GradePlan's fixed per-image geometry ceiling. SourceLimits.max_pixels may be
+# raised further for standalone Depth Pro originals, but retained-V5 grading
+# rejects larger frames, so source admission applies it before any V5 replay.
+MAX_GRADE_IMAGE_PIXELS = 100_000_000
 
 
 def _check(cancellation: Callable[[], bool] | None) -> None:
@@ -205,6 +210,8 @@ def _inspect_image(root: Path, input_id: str, declared: dict[str, dict], target:
     if not isinstance(original, dict) or original.get("shape") != shape:
         raise ValueError("V6 source and retained master geometry must agree before allocation")
     pixels = math.prod(shape)
+    if pixels > MAX_GRADE_IMAGE_PIXELS:
+        raise ValueError("V6 image exceeds the pixel ceiling")
     if pixels > limits.max_pixels:
         raise ValueError("V6 source exceeds its per-image pixel budget")
     # Include the independent V5 semantic replay's retained arrays and working
@@ -225,6 +232,42 @@ def _inspect_image(root: Path, input_id: str, declared: dict[str, dict], target:
     return SourceImage(input_id, tuple(shape), master_record["sha256"], raw)
 
 
+def _admit_source(
+    root: Path, limits: SourceLimits, cancellation: Callable[[], bool] | None
+) -> tuple[bytes, Any, bytes, list[SourceImage]]:
+    """Run every limit-dependent admission check; the caller pins ``root``."""
+    maximum = min(MAX_EVIDENCE_BYTES, limits.max_input_bytes)
+    plan_bytes, _ = snapshot(root, root / "execution-plan.json", maximum_bytes=maximum)
+    plan = parse_plan_v4(plan_bytes)
+    if plan.canonical_bytes != plan_bytes:
+        raise ValueError("V6 requires exact canonical V5 plan bytes")
+    evidence_bytes, completion = snapshot(root, root / "execution-evidence.json", maximum_bytes=maximum)
+    evidence = _decode_evidence(evidence_bytes)
+    declared = _preflight_inventory(evidence, completion, limits)
+    payload = plan.to_payload()
+    images = []
+    for item in payload["inputs"]:
+        _check(cancellation)
+        images.append(_inspect_image(root, item["id"], declared, payload["configuration"]["target_size"], limits))
+    return plan_bytes, plan, evidence_bytes, images
+
+
+def preflight_source(root: Path, *, limits: SourceLimits, cancellation: Callable[[], bool] | None = None) -> None:
+    """Admit the retained parent under ``limits`` without the V5 semantic replay.
+
+    Only inventory bytes and per-image geometry/memory depend on the limits; the
+    semantic replay in :func:`prepare_source` does not, so a tighter caller
+    budget needs this preflight and not a second full replay.
+    """
+    if type(limits) is not SourceLimits:
+        raise TypeError("V6 source requires exact SourceLimits")
+    _check(cancellation)
+    root = directory_path(root)
+    with pinned_directory(root):
+        _admit_source(root, limits, cancellation)
+        _check(cancellation)
+
+
 def prepare_source(
     root: Path, *, limits: SourceLimits = SourceLimits(), cancellation: Callable[[], bool] | None = None
 ) -> VerifiedV5Source:
@@ -234,19 +277,7 @@ def prepare_source(
     _check(cancellation)
     root = directory_path(root)
     with pinned_directory(root):
-        maximum = min(MAX_EVIDENCE_BYTES, limits.max_input_bytes)
-        plan_bytes, _ = snapshot(root, root / "execution-plan.json", maximum_bytes=maximum)
-        plan = parse_plan_v4(plan_bytes)
-        if plan.canonical_bytes != plan_bytes:
-            raise ValueError("V6 requires exact canonical V5 plan bytes")
-        evidence_bytes, completion = snapshot(root, root / "execution-evidence.json", maximum_bytes=maximum)
-        evidence = _decode_evidence(evidence_bytes)
-        declared = _preflight_inventory(evidence, completion, limits)
-        payload = plan.to_payload()
-        images = []
-        for item in payload["inputs"]:
-            _check(cancellation)
-            images.append(_inspect_image(root, item["id"], declared, payload["configuration"]["target_size"], limits))
+        plan_bytes, plan, evidence_bytes, images = _admit_source(root, limits, cancellation)
         _check(cancellation)
         verified = verify_execution_evidence_v3(root, expected_plan_sha256=plan.plan_fingerprint_sha256)
         if verified.canonical_bytes != evidence_bytes:
@@ -328,25 +359,53 @@ def validate_source(source: VerifiedV5Source, *, cancellation: Callable[[], bool
         _check(cancellation)
 
 
+def _frozen_view(source: VerifiedV5Source) -> tuple[dict, dict[str, list[dict]], dict[str, dict]]:
+    """Parse the frozen plan and preflight the frozen inventory once per source.
+
+    The result is a pure function of the immutable plan bytes, evidence bytes
+    and limits, so it is memoised on the carrier and keyed on the identity of
+    exactly those values; per-image file bytes are still re-bound by callers.
+    """
+    cached = source.__dict__.get("_frozen_view_cache")
+    if (
+        cached is not None
+        and cached[0] is source.canonical_plan_bytes
+        and cached[1] is source.canonical_evidence_bytes
+        and cached[2] is source.limits
+    ):
+        return cached[3]
+    payload = parse_plan_v4(source.canonical_plan_bytes).to_payload()
+    inputs: dict[str, list[dict]] = {}
+    for item in payload["inputs"]:
+        inputs.setdefault(item["id"], []).append(item)
+    declared = _preflight_inventory(
+        _decode_evidence(source.canonical_evidence_bytes),
+        {"size_bytes": len(source.canonical_evidence_bytes)},
+        source.limits,
+    )
+    view = (payload, inputs, declared)
+    object.__setattr__(
+        source,
+        "_frozen_view_cache",
+        (source.canonical_plan_bytes, source.canonical_evidence_bytes, source.limits, view),
+    )
+    return view
+
+
 def _selected(source: VerifiedV5Source, input_id: str) -> tuple[SourceImage, dict, dict, dict]:
     if type(source) is not VerifiedV5Source:
         raise TypeError("V6 requires an exact verified source carrier")
     images = [image for image in source.images if image.input_id == input_id]
     if len(images) != 1:
         raise ValueError("V6 source does not contain the requested image")
-    payload = parse_plan_v4(source.canonical_plan_bytes).to_payload()
-    inputs = [item for item in payload["inputs"] if item["id"] == input_id]
+    payload, inputs_by_id, declared = _frozen_view(source)
+    inputs = inputs_by_id.get(input_id, [])
     if len(inputs) != 1:
         raise ValueError("V6 image differs from its frozen V5 plan")
-    declared = _preflight_inventory(
-        _decode_evidence(source.canonical_evidence_bytes),
-        {"size_bytes": len(source.canonical_evidence_bytes)},
-        source.limits,
-    )
     image = _inspect_image(source.root, input_id, declared, payload["configuration"]["target_size"], source.limits)
     if image != images[0]:
         raise ValueError("V6 image descriptor changed after verification")
-    return image, image.descriptor, inputs[0], declared
+    return image, image.descriptor, copy.deepcopy(inputs[0]), declared
 
 
 def _load_image(
@@ -377,7 +436,7 @@ def load_depth_inputs(source: VerifiedV5Source, input_id: str) -> tuple[ImageMas
     with pinned_directory(source.root):
         image, descriptor, input_record, declared = _selected(source, input_id)
         original = _load_image(source, image, descriptor, input_record, declared, original=True)
-        configuration = parse_plan_v4(source.canonical_plan_bytes).to_payload()["configuration"]
+        configuration = copy.deepcopy(_frozen_view(source)[0]["configuration"])
         proxy = create_proxy(original, configuration["target_size"])
         native = _array(
             source.root,

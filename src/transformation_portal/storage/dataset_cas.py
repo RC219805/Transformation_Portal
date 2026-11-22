@@ -120,6 +120,8 @@ class DatasetManifest:
             )
             for f in data.get("files", [])
         ]
+        for file in files:
+            _logical_parts(file.logical_path)
 
         return cls(
             name=data["name"],
@@ -132,6 +134,38 @@ class DatasetManifest:
 
 class DatasetCASError(RuntimeError):
     """Raised for dataset CAS errors."""
+
+
+def _logical_parts(logical_path: Any) -> tuple[str, ...]:
+    """Return the components of a manifest path that stays inside its dataset.
+
+    A logical path names a location *within* a dataset and is later joined
+    under a caller-chosen directory. Absolute paths, drive or UNC anchors,
+    ``..`` components, NUL bytes and empty paths can only point elsewhere, so
+    they are never valid. A whitespace-only file name is unusual but stays
+    inside the dataset (``ingest_directory`` records such files verbatim), so
+    it is accepted.
+    """
+    if not isinstance(logical_path, str) or not logical_path or "\x00" in logical_path:
+        raise DatasetCASError(f"Invalid dataset logical path: {logical_path!r}")
+    candidate = Path(logical_path)
+    if candidate.is_absolute() or candidate.anchor or ".." in candidate.parts or not candidate.parts:
+        raise DatasetCASError(f"Dataset logical path escapes its dataset: {logical_path!r}")
+    return candidate.parts
+
+
+def _confined_destination(root: Path, logical_path: Any) -> Path:
+    """Join ``logical_path`` under the resolved ``root``, refusing any escape.
+
+    The lexical check alone is not enough: a directory symlink already inside
+    the target would redirect the write. The parent is therefore resolved and
+    must still be inside ``root``. The final component is never followed; the
+    CAS replaces it instead.
+    """
+    destination = root.joinpath(*_logical_parts(logical_path))
+    if not destination.parent.resolve().is_relative_to(root):
+        raise DatasetCASError(f"Dataset logical path escapes the target directory: {logical_path!r}")
+    return destination
 
 
 class DatasetCAS:
@@ -183,6 +217,39 @@ class DatasetCAS:
         safe_version = "".join(c if c.isalnum() or c in "_-." else "_" for c in version)
         return self.dataset_root / f"{safe_name}_{safe_version}.json"
 
+    @staticmethod
+    def _manifest_owner(path: Path) -> Optional[tuple[str, str]]:
+        """Return the ``(name, version)`` recorded in the manifest at ``path``.
+
+        ``None`` when there is no file or it is not a readable manifest.
+        """
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, ValueError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        name, version = data.get("name"), data.get("version")
+        if not isinstance(name, str) or not isinstance(version, str):
+            return None
+        return name, version
+
+    def _writable_manifest_path(self, name: str, version: str) -> Path:
+        """Return the manifest path for ``(name, version)``, refusing collisions.
+
+        Sanitization maps distinct pairs onto one file name (``train/v1`` and
+        ``train_v1``; ``a_b``/``1`` and ``a``/``b_1``). Saving one of them must
+        not silently replace the manifest of another dataset.
+        """
+        path = self._manifest_path(name, version)
+        owner = self._manifest_owner(path)
+        if owner is not None and owner != (name, version):
+            raise DatasetCASError(
+                f"Dataset {name!r} v{version!r} collides with existing dataset "
+                f"{owner[0]!r} v{owner[1]!r} at {path.name}; choose a different name or version"
+            )
+        return path
+
     def ingest_directory(
         self,
         name: str,
@@ -208,6 +275,8 @@ class DatasetCAS:
         """
         if not src_dir.exists():
             raise DatasetCASError(f"Source directory not found: {src_dir}")
+        # Refuse a manifest-path collision before anything is added to the CAS.
+        self._writable_manifest_path(name, version)
 
         files: List[DatasetFile] = []
         total_bytes = 0
@@ -263,7 +332,7 @@ class DatasetCAS:
         )
 
         # Save manifest
-        manifest_path = self._manifest_path(name, version)
+        manifest_path = self._writable_manifest_path(name, version)
         manifest.save(manifest_path)
 
         unique_count = len(manifest.unique_shas)
@@ -299,6 +368,11 @@ class DatasetCAS:
         """
         dataset_files: List[DatasetFile] = []
 
+        # Refuse an unusable manifest before anything is added to the CAS.
+        for logical_path, _src_path in files:
+            _logical_parts(logical_path)
+        self._writable_manifest_path(name, version)
+
         for logical_path, src_path in files:
             if not src_path.exists():
                 logger.warning("File not found, skipping: %s", src_path)
@@ -321,7 +395,7 @@ class DatasetCAS:
             metadata=metadata or {},
         )
 
-        manifest_path = self._manifest_path(name, version)
+        manifest_path = self._writable_manifest_path(name, version)
         manifest.save(manifest_path)
 
         return manifest
@@ -344,12 +418,21 @@ class DatasetCAS:
 
         Returns:
             Target directory path
+
+        Raises:
+            DatasetCASError: If any logical path would be written outside
+                ``target_dir``. Nothing is materialized in that case.
         """
         target_dir.mkdir(parents=True, exist_ok=True)
+        root = target_dir.resolve()
+        # Check every entry before writing any: a manifest is untrusted input
+        # and one hostile path must not leave the dataset half materialized.
+        for file in manifest.files:
+            _confined_destination(root, file.logical_path)
         materialized = 0
 
         for file in manifest.files:
-            dst = target_dir / file.logical_path
+            dst = _confined_destination(root, file.logical_path)
             dst.parent.mkdir(parents=True, exist_ok=True)
 
             try:
@@ -386,7 +469,12 @@ class DatasetCAS:
         path = self._manifest_path(name, version)
         if not path.exists():
             return None
-        return DatasetManifest.load(path)
+        manifest = DatasetManifest.load(path)
+        if (manifest.name, manifest.version) != (name, version):
+            # The file belongs to another dataset whose name sanitizes to the
+            # same file name; the requested dataset does not exist.
+            return None
+        return manifest
 
     def list_datasets(self) -> List[tuple[str, str]]:
         """List all datasets.
@@ -416,7 +504,7 @@ class DatasetCAS:
             True if deleted
         """
         path = self._manifest_path(name, version)
-        if path.exists():
+        if path.exists() and self._manifest_owner(path) in (None, (name, version)):
             path.unlink()
             logger.info("Deleted dataset manifest: %s v%s", name, version)
             return True

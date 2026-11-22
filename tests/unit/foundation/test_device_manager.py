@@ -476,3 +476,45 @@ class TestPublicConvenienceMethods:
 
         assert isinstance(opt, dict)
         assert len(opt) > 0
+
+
+# ---------------------------------------------------------------------------
+# CPU core counts off macOS
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.ml
+class TestCpuCoreCountsOffDarwin:
+    """Non-Darwin hosts must report their real core count, not M4 Max defaults."""
+
+    def test_linux_reports_physical_cores_and_no_efficiency_cores(self):
+        psutil = pytest.importorskip("psutil")
+        with (
+            patch("platform.system", return_value="Linux"),
+            patch.object(psutil, "cpu_count", return_value=6),
+        ):
+            assert _make_manager()._get_cpu_core_counts() == (6, 0)
+
+    def test_falls_back_to_os_cpu_count_when_physical_unknown(self):
+        psutil = pytest.importorskip("psutil")
+        with (
+            patch("platform.system", return_value="Linux"),
+            patch.object(psutil, "cpu_count", return_value=None),
+            patch("os.cpu_count", return_value=3),
+        ):
+            assert _make_manager()._get_cpu_core_counts() == (3, 0)
+
+    def test_cpu_num_workers_follows_host_core_count(self):
+        psutil = pytest.importorskip("psutil")
+        with (
+            patch("torch.backends.mps.is_available", return_value=False),
+            patch("torch.cuda.is_available", return_value=False),
+            patch("platform.system", return_value="Linux"),
+            patch.object(psutil, "cpu_count", return_value=2),
+            patch("transformation_portal.foundation.device_manager.DeviceManager._log_device_info"),
+        ):
+            info = _make_manager().detect_devices()
+
+        assert info.capabilities.performance_cores == 2
+        assert info.capabilities.efficiency_cores == 0
+        assert info.optimization_config["num_workers"] == 2

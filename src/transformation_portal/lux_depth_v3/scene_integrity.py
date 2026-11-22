@@ -225,11 +225,10 @@ def verify_scene_integrity(
         )
         if image_path is None or not image_path.exists():
             raise RuntimeError(f"Scene integrity error: missing image {image.get('path')}")
-        expected_image_hash = image.get("sha256")
-        if isinstance(expected_image_hash, str):
-            actual_image_hash = compute_file_sha256(image_path)
-            if actual_image_hash != expected_image_hash:
-                raise RuntimeError(f"Scene integrity error: SHA256 mismatch for image {image_path}")
+        expected_image_hash = _require_sha256_digest(image.get("sha256"), what=f"image {image.get('path')}")
+        actual_image_hash = compute_file_sha256(image_path)
+        if actual_image_hash != expected_image_hash:
+            raise RuntimeError(f"Scene integrity error: SHA256 mismatch for image {image_path}")
 
     cameras = scene_manifest.get("cameras", [])
     if isinstance(cameras, list) and len(cameras) != len(images):
@@ -244,11 +243,12 @@ def verify_scene_integrity(
         segmentation_path = _resolve_manifest_path(segmentation.get("path"), base_dir=base_dir)
         if segmentation_path is None or not segmentation_path.exists():
             raise RuntimeError(f"Scene integrity error: missing segmentation artifact {segmentation.get('path')}")
-        expected_segmentation_hash = segmentation.get("sha256")
-        if isinstance(expected_segmentation_hash, str):
-            actual_segmentation_hash = compute_file_sha256(segmentation_path)
-            if actual_segmentation_hash != expected_segmentation_hash:
-                raise RuntimeError(f"Scene integrity error: SHA256 mismatch for {segmentation_path}")
+        expected_segmentation_hash = _require_sha256_digest(
+            segmentation.get("sha256"), what=f"segmentation artifact {segmentation.get('path')}"
+        )
+        actual_segmentation_hash = compute_file_sha256(segmentation_path)
+        if actual_segmentation_hash != expected_segmentation_hash:
+            raise RuntimeError(f"Scene integrity error: SHA256 mismatch for {segmentation_path}")
 
     if "camera_sidecar" in scene_manifest:
         sidecar = scene_manifest["camera_sidecar"]
@@ -281,9 +281,9 @@ def verify_scene_integrity(
             index_entry = artifact_index.get(relative_path)
             if not isinstance(index_entry, Mapping):
                 raise RuntimeError(f"Scene integrity error: missing artifact index entry for {relative_path}")
-            expected_digest = input_hashes.get(relative_path)
+            expected_digest = _require_sha256_digest(input_hashes.get(relative_path), what=f"input {relative_path}")
             actual_digest = index_entry.get("sha256")
-            if isinstance(expected_digest, str) and actual_digest != expected_digest:
+            if actual_digest != expected_digest:
                 raise RuntimeError(f"Scene integrity error: artifact hash mismatch for {relative_path}")
 
 
@@ -454,9 +454,10 @@ def check_camera_geometry_sanity(
             raise ValueError("Invalid rotation matrix")
         if not np.isfinite(translation).all():
             raise ValueError("Camera translation contains NaN/Inf")
-        focal_length_x = float(intrinsics[0, 0])
-        if focal_length_x <= 0.0 or focal_length_x > MAX_FOCAL_LENGTH:
-            raise ValueError("Suspicious focal length")
+        for focal_length in (float(intrinsics[0, 0]), float(intrinsics[1, 1])):
+            # Written as a positive range check so NaN (all comparisons False) is rejected too.
+            if not (np.isfinite(focal_length) and 0.0 < focal_length <= MAX_FOCAL_LENGTH):
+                raise ValueError("Suspicious focal length")
         centers.append(_camera_center_from_extrinsics(camera.params.extrinsics))
 
     stacked_centers = np.stack(centers).astype(np.float32)
@@ -642,10 +643,19 @@ def _relative_to_output_root(path: Path, output_root_resolved: Path) -> Optional
         return None
 
 
+def _require_sha256_digest(value: Any, *, what: str) -> str:
+    """Return ``value`` if it is a lowercase 64-hex SHA-256 digest; fail closed otherwise."""
+    if not isinstance(value, str) or len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+        raise RuntimeError(f"Scene integrity error: missing or invalid SHA256 for {what}")
+    return value
+
+
 def _resolve_manifest_path(path_value: Any, *, base_dir: Optional[Path]) -> Optional[Path]:
     if not isinstance(path_value, str) or not path_value:
         return None
     path = Path(path_value)
     if path.is_absolute() or base_dir is None:
         return path
+    if ".." in path.parts:
+        raise RuntimeError(f"Scene integrity error: manifest path escapes its base directory: {path_value}")
     return base_dir / path

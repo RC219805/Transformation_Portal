@@ -261,6 +261,21 @@ test("session rotation creates a new authenticated session id", async () => {
   }
 });
 
+test("validateCsrfToken rejects multi-byte candidates of equal string length instead of throwing", async () => {
+  const sessions = await import(`../lib/sessions.js?case=${Date.now()}`);
+  const session = { csrfToken: "a".repeat(48) };
+  // Same string length (48) but a longer UTF-8 byte length; this used to
+  // reach timingSafeEqual() with unequal buffers and throw RangeError.
+  const multiByte = `${"a".repeat(47)}é`;
+  assert.equal(multiByte.length, session.csrfToken.length);
+
+  assert.equal(sessions.validateCsrfToken(session, multiByte), false);
+  assert.equal(sessions.validateCsrfToken(session, "b".repeat(48)), false);
+  assert.equal(sessions.validateCsrfToken(session, "a".repeat(47)), false);
+  assert.equal(sessions.validateCsrfToken(session, ""), false);
+  assert.equal(sessions.validateCsrfToken(session, session.csrfToken), true);
+});
+
 test("login throttling trips after repeated failures in the same window", async () => {
   const temp = withTempDb();
   try {
@@ -321,6 +336,54 @@ test("buildUpstreamHeaders strips browser auth and injects backend auth", async 
   assert.equal(headers.get("x-real-ip"), "203.0.113.5");
   assert.equal(headers.get("x-tp-actor"), "admin");
   assert.equal(headers.get("traceparent"), traceparent);
+});
+
+test("buildUpstreamHeaders drops hop-by-hop and Connection-scoped request headers", async () => {
+  const { buildUpstreamHeaders } = await import(`../lib/proxy.js?case=hop-${Date.now()}`);
+  const headers = buildUpstreamHeaders(
+    new Headers({
+      Accept: "application/json",
+      Connection: "keep-alive, X-Client-Hop",
+      Expect: "100-continue",
+      "Keep-Alive": "timeout=5",
+      "Proxy-Authorization": "Basic Zm9vOmJhcg==",
+      "Proxy-Authenticate": "Basic",
+      "Proxy-Connection": "keep-alive",
+      TE: "trailers",
+      Trailer: "x-checksum",
+      "Transfer-Encoding": "chunked",
+      Upgrade: "h2c",
+      "X-Client-Hop": "per-connection",
+      "X-Request-Id": "end-to-end"
+    }),
+    { backendApiKey: "backend-secret", actor: null }
+  );
+
+  for (const name of [
+    "connection",
+    "expect",
+    "keep-alive",
+    "proxy-authorization",
+    "proxy-authenticate",
+    "proxy-connection",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    "x-client-hop"
+  ]) {
+    assert.equal(headers.has(name), false, `${name} must not be forwarded upstream`);
+  }
+  assert.equal(headers.get("accept"), "application/json");
+  assert.equal(headers.get("x-request-id"), "end-to-end");
+  assert.equal(headers.get("authorization"), "Bearer backend-secret");
+
+  // undici refuses some of these on the upstream fetch; the stripped set must be accepted.
+  assert.doesNotThrow(() => new Request("http://127.0.0.1:9/v1/config-preview", {
+    method: "POST",
+    headers,
+    body: "{}"
+  }));
 });
 
 test("trace helpers normalize valid traceparent values and mint stable children", async () => {

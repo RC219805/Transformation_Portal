@@ -93,6 +93,10 @@ class IngestStage:
         input_size: (height, width) tuple.
         input_dtype: Original input dtype string.
         gamma: Always 1.0 (enforced).
+        input_format: Detected input format (e.g. "TIFF", "PNG", "RAW_DNG").
+        color_space: Color space of linear_rgb (e.g. "linear_sRGB").
+        content_hash: SHA-256 of linear_rgb bytes.
+        ingest_fingerprint: RAW ingest fingerprint (RAW inputs only).
 
     Resource Profile:
         GPU: 0 MB (CPU-only)
@@ -113,7 +117,9 @@ class IngestStage:
         """Stage metadata for IngestStage."""
         return StageMetadata(
             name="linear_ingest",
-            version="1.0.0",
+            # 1.1.0: outputs carry input_format / color_space / content_hash
+            # (/ ingest_fingerprint), so 1.0.0 cache entries without them are not reused.
+            version="1.1.0",
             description="Linear RGB ingest with gamma=1.0 enforcement (Phase 1)",
             resource_requirements=ResourceRequirements(
                 gpu_memory_mb=0,
@@ -136,7 +142,8 @@ class IngestStage:
             context: ExecutionContext with device, config, output_dir.
 
         Returns:
-            Dict with linear_rgb, input_size, input_dtype, gamma.
+            Dict with linear_rgb, input_size, input_dtype, gamma, input_format,
+            color_space, content_hash and (RAW only) ingest_fingerprint.
 
         Raises:
             ValueError: If input_path missing or invalid.
@@ -174,20 +181,27 @@ class IngestStage:
             emit_provenance=emit_prov and output_dir is not None,
         )
 
-        return {
+        outputs: Dict[str, Any] = {
             "linear_rgb": result.linear_rgb,
             "input_size": result.input_size,
             "input_dtype": result.dtype,
             "gamma": 1.0,
+            "input_format": result.input_format,
+            "color_space": result.color_space,
+            "content_hash": result.content_hash,
         }
+        if result.ingest_fingerprint is not None:
+            outputs["ingest_fingerprint"] = result.ingest_fingerprint
+        return outputs
 
     def compute_cache_key(self, inputs: Dict[str, Any], context: Any) -> str:
         """Compute content-addressed cache key.
 
         Key components:
         - Stage version
-        - Input file content hash (first 4KB + size)
+        - Input file content hash (full-file SHA256)
         - Strict ingest flag
+        - When sidecars are written: EXR/provenance flags, output directory, input stem
 
         Args:
             inputs: Stage inputs.
@@ -224,6 +238,8 @@ class IngestStage:
         # Config components
         config = context.config if hasattr(context, "config") else {}
         strict = config.get("strict_ingest", self._config.strict_ingest)
+        emit_exr = config.get("emit_exr", self._config.emit_exr)
+        emit_prov = config.get("emit_provenance", self._config.emit_provenance)
 
         # Combine components
         components = [
@@ -231,6 +247,21 @@ class IngestStage:
             f"file:{file_hash}",
             f"strict:{strict}",
         ]
+
+        # Sidecars (<stem>_linear.exr, <stem>_provenance.json) are side effects of
+        # execute() that a cache hit does not reproduce, so a run that writes them
+        # must not share a key with a run that does not, or with a run writing them
+        # under another name or directory. Runs without sidecars keep their key.
+        output_dir = getattr(context, "output_dir", None)
+        if output_dir and (emit_exr or emit_prov):
+            components.extend(
+                [
+                    f"exr:{bool(emit_exr)}",
+                    f"provenance:{bool(emit_prov)}",
+                    f"out:{Path(output_dir).resolve()}",
+                    f"stem:{input_path.stem}",
+                ]
+            )
         combined = "|".join(components)
         return hashlib.sha256(combined.encode()).hexdigest()
 
@@ -369,6 +400,7 @@ class SegmentationStage:
         Key components:
         - Stage version
         - Input RGB content hash
+        - Input RGB shape and dtype
         - Model size
         - Material classification flag
 
@@ -394,10 +426,16 @@ class SegmentationStage:
             self._enable_material_classification,
         )
 
+        # Raw bytes alone collide across shapes (4x8 vs 8x4) and dtypes with the
+        # same byte content, so the array layout is part of the identity.
+        rgb_array = np.asarray(linear_rgb)
+        rgb_layout = f"{'x'.join(str(d) for d in rgb_array.shape)}:{rgb_array.dtype.str}"
+
         # Combine components
         components = [
             f"v{self.metadata.version}",
             f"rgb:{rgb_hash}",
+            f"layout:{rgb_layout}",
             f"model:{model_size}",
             f"material:{enable_material}",
         ]

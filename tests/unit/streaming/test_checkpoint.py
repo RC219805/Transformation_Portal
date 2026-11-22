@@ -191,3 +191,76 @@ class TestCheckpointManager:
         mgr.clear()
         assert mgr.list_checkpoints() == []
         assert mgr.get_latest() is None
+
+
+# ---------------------------------------------------------------------------
+# M-16: atomic checkpoint writes and resilient resume
+# ---------------------------------------------------------------------------
+
+
+class TestCheckpointDurability:
+    def test_path_in_state_round_trips_as_string(self, tmp_path):
+        from pathlib import Path
+
+        from transformation_portal.streaming.checkpoint import CheckpointManager
+
+        mgr = CheckpointManager("op-path", checkpoint_dir=tmp_path)
+        saved = mgr.save(mgr.create_checkpoint(progress=10.0, state={"current_index": 3, "file": Path("image_3.jpg")}))
+        assert saved.exists()
+        latest = mgr.get_latest()
+        assert latest is not None
+        assert latest.state == {"current_index": 3, "file": "image_3.jpg"}
+
+    def test_unserialisable_state_leaves_no_file(self, tmp_path):
+        from transformation_portal.streaming.checkpoint import CheckpointManager
+
+        mgr = CheckpointManager("op-bad", checkpoint_dir=tmp_path)
+        with pytest.raises(TypeError):
+            mgr.save(mgr.create_checkpoint(progress=1.0, state={"obj": object()}))
+        assert list(mgr.checkpoint_dir.iterdir()) == []
+        assert mgr.get_latest() is None
+
+    def test_failed_publish_keeps_previous_checkpoint_intact(self, tmp_path, monkeypatch):
+        import importlib
+
+        from transformation_portal.streaming.checkpoint import Checkpoint
+
+        # The package re-exports the ``checkpoint`` decorator under the submodule's name.
+        checkpoint_module = importlib.import_module("transformation_portal.streaming.checkpoint")
+
+        target = tmp_path / "ckpt.json"
+        Checkpoint(id="first", progress=1.0, state={"i": 1}, timestamp=1.0, metadata={}).save(target)
+        before = target.read_bytes()
+
+        def failing_replace(src, dst):
+            raise OSError("simulated crash during publish")
+
+        with monkeypatch.context() as patched:
+            patched.setattr(checkpoint_module.os, "replace", failing_replace)
+            with pytest.raises(OSError):
+                Checkpoint(id="second", progress=2.0, state={"i": 2}, timestamp=2.0, metadata={}).save(target)
+
+        assert target.read_bytes() == before
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["ckpt.json"]
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            "{}",
+            "[1, 2]",
+            '{"id": "x", "progress": 1',
+            '{"id": 1, "progress": 1, "state": {}, "timestamp": "late", "metadata": {}}',
+        ],
+    )
+    def test_stray_or_corrupt_json_does_not_break_resume(self, tmp_path, content):
+        from transformation_portal.streaming.checkpoint import CheckpointManager, resume_from_checkpoint
+
+        mgr = CheckpointManager("op-stray", checkpoint_dir=tmp_path)
+        mgr.save(mgr.create_checkpoint(progress=50.0, state={"current_index": 5}))
+        (mgr.checkpoint_dir / "foreign.json").write_text(content)
+
+        latest = mgr.get_latest()
+        assert latest is not None
+        assert latest.state == {"current_index": 5}
+        assert [c.state for c in mgr.list_checkpoints()] == [{"current_index": 5}]
+        assert resume_from_checkpoint("op-stray", checkpoint_dir=tmp_path) == {"current_index": 5}

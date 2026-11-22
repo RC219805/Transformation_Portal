@@ -50,6 +50,98 @@ from .validators import validate_bit_depth, validate_linear_output
 
 logger = logging.getLogger(__name__)
 
+_PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+# IHDR color types whose 16-bit samples Pillow reduces to 8 bits on load:
+# 2 = RGB, 4 = gray+alpha, 6 = RGBA. 16-bit grayscale (0) is kept as "I;16".
+_PNG_MULTICHANNEL_COLOR_TYPES = frozenset({2, 4, 6})
+
+
+def _png_stores_16bit_multichannel(path: Path) -> bool:
+    """Return True if ``path`` is a PNG stream declaring 16-bit multi-channel samples.
+
+    Reads the fixed-position IHDR fields (bit depth at byte 24, color type at
+    byte 25). Anything that is not a PNG stream returns False.
+    """
+    with path.open("rb") as handle:
+        header = handle.read(26)
+    if len(header) < 26 or header[:8] != _PNG_SIGNATURE or header[12:16] != b"IHDR":
+        return False
+    return header[24] == 16 and header[25] in _PNG_MULTICHANNEL_COLOR_TYPES
+
+
+# TIFF PhotometricInterpretation (tag 262) and Compression (tag 259) codes.
+_TIFF_TAG_PHOTOMETRIC = 262
+_TIFF_PHOTOMETRIC_MINISWHITE = 0
+_TIFF_PHOTOMETRIC_MINISBLACK = 1
+_TIFF_PHOTOMETRIC_RGB = 2
+_TIFF_PHOTOMETRIC_YCBCR = 6
+_TIFF_COMPRESSION_JPEG = 7
+
+
+def _read_tiff_image(tifffile_module: Any, path: Path) -> np.ndarray:
+    """Read the single image of a TIFF file as stored samples in RGB / grey order.
+
+    tifffile returns stored sample values without applying the photometric
+    interpretation and stacks same-shaped pages into one array. Only layouts
+    whose samples are the image's intensities (or can be turned into them
+    exactly) are accepted; everything else fails closed instead of being read
+    as wrong pixels.
+
+    A file without a PhotometricInterpretation tag is read as stored (grey
+    with black as the minimum, or RGB), which is what libtiff assumes for such
+    files; tifffile reports them with a MinIsWhite placeholder that must not
+    be mistaken for a stored interpretation.
+
+    Raises:
+        ValueError: For a multi-page image series or an unsupported photometric
+            interpretation (palette, CMYK, CIELab, uncompressed YCbCr, ...).
+    """
+    with tifffile_module.TiffFile(str(path)) as tif:
+        if not tif.series:
+            raise ValueError(f"TIFF {path.name} contains no image")
+        series = tif.series[0]
+        page = series.keyframe
+        # A stack can also be stored as several planes behind one IFD (truncated
+        # ImageJ / tifffile series), so the page list alone does not show it.
+        samples_per_image = int(np.prod(page.shape, dtype=np.int64))
+        planes = int(np.prod(series.shape, dtype=np.int64)) // samples_per_image if samples_per_image else 1
+        page_count = max(len(series.pages), planes)
+        if page_count > 1:
+            raise ValueError(
+                f"TIFF {path.name} stores {page_count} pages in one image series (shape {series.shape}, "
+                f"axes {series.axes}); multi-page TIFF is not supported. Refusing to read the page stack as one image."
+            )
+        if page.tags.get(_TIFF_TAG_PHOTOMETRIC) is None:
+            return tif.asarray()
+        photometric = int(page.photometric)
+        compression = int(page.compression)
+        samples_per_pixel = int(page.samplesperpixel)
+        bits_per_sample = int(page.bitspersample)
+        if photometric in (_TIFF_PHOTOMETRIC_MINISBLACK, _TIFF_PHOTOMETRIC_RGB) or (
+            # The JPEG codec returns YCbCr-encoded JPEG data as RGB samples.
+            photometric == _TIFF_PHOTOMETRIC_YCBCR
+            and compression == _TIFF_COMPRESSION_JPEG
+        ):
+            return tif.asarray()
+        if photometric == _TIFF_PHOTOMETRIC_MINISWHITE:
+            array = tif.asarray()
+            if samples_per_pixel == 1 and array.dtype.kind == "u" and bits_per_sample == array.dtype.itemsize * 8:
+                # MinIsWhite: the stored maximum is black. Invert exactly.
+                return np.iinfo(array.dtype).max - array
+            raise ValueError(
+                f"TIFF {path.name} is MinIsWhite with {samples_per_pixel} sample(s) of {bits_per_sample}-bit "
+                f"{array.dtype}; only single-channel unsigned-integer MinIsWhite at full sample width can be inverted exactly."
+            )
+    try:
+        photometric_name = tifffile_module.PHOTOMETRIC(photometric).name
+    except ValueError:
+        photometric_name = str(photometric)
+    raise ValueError(
+        f"TIFF {path.name} uses unsupported photometric interpretation {photometric_name} "
+        f"(compression {compression}); its stored samples are not RGB / grey intensities. "
+        "Convert it to RGB or grayscale TIFF before ingest."
+    )
+
 
 def _canonical_f64_list(arr: np.ndarray) -> list:
     """Canonicalize array to a stable float64 list for fingerprint payloads.
@@ -144,7 +236,7 @@ class LinearIngestResult:
     def __post_init__(self):
         """Validate result contract."""
         # Gamma enforcement (SpatialCaptureV1 contract)
-        if abs(self.gamma - 1.0) > 1e-6:
+        if not abs(self.gamma - 1.0) <= 1e-6:  # NaN-safe: NaN fails the comparison
             raise ValueError(
                 f"Linear ingest requires gamma=1.0, got {self.gamma}. " "This violates the SpatialCaptureV1 contract."
             )
@@ -204,7 +296,7 @@ class LinearDecoder:
         Raises:
             ValueError: If gamma != 1.0 (linear ingest contract).
         """
-        if abs(gamma - 1.0) > 1e-6:
+        if not abs(gamma - 1.0) <= 1e-6:  # NaN-safe: NaN fails the comparison
             raise ValueError(
                 f"Linear ingest requires gamma=1.0 (got {gamma}). "
                 "This is a non-negotiable contract for research/training data."
@@ -250,6 +342,8 @@ class LinearDecoder:
         Raises:
             FileNotFoundError: If input file doesn't exist.
             ValueError: If input format not supported.
+            RangeViolationError: If the decoded samples contain NaN, Inf or
+                negative values.
         """
         input_path = Path(input_path)
         if not input_path.exists():
@@ -281,6 +375,10 @@ class LinearDecoder:
 
             # Decode to linear RGB
             linear_rgb, input_size, ingest_fingerprint = self._decode_linear(input_path, format_str)
+
+        # Fail closed on NaN / Inf / negative samples, a non-float32 dtype or a
+        # non-(H, W, 3) shape before anything is hashed, recorded or emitted.
+        validate_linear_output(linear_rgb, self.gamma, input_path)
 
         # Compute content hash
         content_hash = self._compute_content_hash(linear_rgb)
@@ -471,7 +569,10 @@ class LinearDecoder:
             return self._decode_pillow(path, "EXR")
 
     def _decode_pillow(self, path: Path, format_str: str) -> Tuple[np.ndarray, Tuple[int, int]]:
-        """Decode image using Pillow or tifffile (TIFF, PNG, EXR fallback).
+        """Decode image using Pillow, tifffile or OpenCV (TIFF, PNG, EXR fallback).
+
+        16-bit RGB / RGBA / gray+alpha PNG is decoded with OpenCV, because Pillow
+        has no 16-bit multi-channel mode and would reduce those samples to 8 bits.
 
         Args:
             path: Input file path.
@@ -482,21 +583,31 @@ class LinearDecoder:
 
         Raises:
             BitDepthViolationError: If strict_ingest=True and input is 8-bit.
+            RuntimeError: If a 16-bit multi-channel PNG cannot be decoded at its
+                true bit depth (never reduced to 8 bits instead).
         """
         # Use tifffile for TIFF to preserve 16-bit
         if format_str == "TIFF":
             try:
                 import tifffile
 
-                img_array = tifffile.imread(str(path))
+                img_array = _read_tiff_image(tifffile, path)
             except ImportError:
                 # Fallback to PIL
                 logger.warning("tifffile not available, using PIL (may lose bit depth)")
                 img = Image.open(path)
                 img_array = np.array(img)
         else:
-            img = Image.open(path)
-            img_array = np.array(img)
+            # Pillow always parses the header (format and decompression-bomb checks).
+            with Image.open(path) as img:
+                if format_str == "PNG" and _png_stores_16bit_multichannel(path):
+                    img_array = self._decode_png_16bit_multichannel(path, (img.height, img.width))
+                elif img.mode in ("P", "PA"):
+                    # Palette PNG stores indices: expand them to their 8-bit RGB
+                    # palette colours (alpha is dropped like on every other path).
+                    img_array = np.array(img.convert("RGB"))
+                else:
+                    img_array = np.array(img)
 
         # Convert to RGB if grayscale
         if img_array.ndim == 2:
@@ -534,6 +645,48 @@ class LinearDecoder:
 
         height, width = img_array.shape[:2]
         return linear_rgb, (height, width)
+
+    def _decode_png_16bit_multichannel(self, path: Path, expected_size: Tuple[int, int]) -> np.ndarray:
+        """Decode a 16-bit RGB / RGBA / gray+alpha PNG at its true bit depth.
+
+        Fails closed: a result that is not uint16 RGB at the declared size is
+        rejected rather than normalized as if it were the source data.
+
+        Args:
+            path: Path to the PNG file.
+            expected_size: (height, width) declared by the PNG header.
+
+        Returns:
+            uint16 RGB array (H, W, 3); alpha is dropped like on the 8-bit path.
+
+        Raises:
+            RuntimeError: If OpenCV is unavailable or does not return 16-bit
+                color samples at the declared size.
+        """
+        try:
+            import cv2
+        except ImportError as e:
+            raise RuntimeError(
+                f"{path.name} is a 16-bit multi-channel PNG and needs OpenCV (opencv-python-headless) "
+                "to be decoded at its true bit depth. Refusing to silently reduce it to 8-bit."
+            ) from e
+
+        decoded = cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        if decoded is None:
+            raise RuntimeError(f"OpenCV could not decode 16-bit PNG {path.name} (corrupt or truncated pixel data).")
+        if (
+            decoded.dtype != np.uint16
+            or decoded.ndim != 3
+            or decoded.shape[2] not in (3, 4)
+            or decoded.shape[:2] != expected_size
+        ):
+            raise RuntimeError(
+                f"16-bit PNG {path.name} decoded as {decoded.dtype} with shape {decoded.shape}; expected uint16 "
+                f"color samples at {expected_size[0]}x{expected_size[1]} (HxW). Refusing to ingest a reduced decode."
+            )
+
+        # OpenCV returns BGR(A): reorder to RGB and drop alpha.
+        return np.ascontiguousarray(decoded[:, :, 2::-1])
 
     def _decode_raw(self, path: Path, format_str: str) -> Tuple[np.ndarray, Tuple[int, int], Optional[str]]:
         """Decode RAW image using rawpy (LibRaw wrapper).

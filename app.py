@@ -22,8 +22,9 @@ from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from email.parser import BytesParser
 from email.policy import default as email_policy
-from functools import lru_cache
+from functools import lru_cache, partial
 from importlib.util import find_spec
+from itertools import chain
 from pathlib import Path, PurePosixPath
 from typing import (
     TYPE_CHECKING,
@@ -32,6 +33,7 @@ from typing import (
     Callable,
     Deque,
     Dict,
+    Iterable,
     Iterator,
     List,
     Mapping,
@@ -73,6 +75,7 @@ from transformation_portal.api.v1 import (
     UploadStagingEnvelope,
 )
 from transformation_portal.api.v1.jobs import JobSubmissionData, JobSubmissionEnvelope
+from transformation_portal.api.v1.uploads import UploadReceiptData, UploadReceiptEnvelope
 from transformation_portal.core.security.frontdoor_identity import (
     ACTOR_ASSERTION_HEADER,
     IdentityAssertionError,
@@ -80,6 +83,7 @@ from transformation_portal.core.security.frontdoor_identity import (
     parse_actor_tenants,
     verify_actor_assertion,
 )
+from transformation_portal.core.security.path_safety import resolve_rejecting_symlink_loops
 from transformation_portal.core.security.tenant import (
     TenantAwareFSGuard,
     TenantContext,
@@ -122,6 +126,7 @@ from transformation_portal.orchestrator.artifact_store import (
 )
 from transformation_portal.orchestrator.artifact_store.generation_cleanup import cleanup_terminal_generation
 from transformation_portal.orchestrator.dispatch import DispatchLocator, current_dispatch_fence
+from transformation_portal.orchestrator.execution_diagnostics import annotate_job_failure
 from transformation_portal.orchestrator.queue import (
     JobEnqueueRequest,
     QueueBroker,
@@ -145,6 +150,7 @@ from transformation_portal.orchestrator.worker import WorkerConfig, run_worker_f
 from transformation_portal.portal import archive_index_preflight as _portal_archive_index_preflight
 from transformation_portal.portal import asset_bundle as _portal_asset_bundle
 from transformation_portal.portal import job_artifacts as _portal_job_artifacts
+from transformation_portal.portal import json_payload as _portal_json_payload
 from transformation_portal.portal import path_security as _portal_path_security
 from transformation_portal.portal import sam2_checkpoint_security as _portal_sam2_checkpoint_security
 from transformation_portal.portal.asset_bundle import (
@@ -175,6 +181,10 @@ from transformation_portal.portal.job_artifacts import (
     JobRunMetadata,
 )
 from transformation_portal.portal.photographic_review_access import AppReviewAccess, forget_review_for_job
+from transformation_portal.portal.readiness_redaction import (
+    DA3_CANARY_RUNTIME_NOTE_PREFIX,
+    redact_pipeline_readiness_host_details,
+)
 from transformation_portal.portal.sam2_checkpoint_security import (
     ManagedSam2CheckpointValidationResult,
     _ManagedSam2BoundedChecksumCache,
@@ -188,9 +198,11 @@ from transformation_portal.vlm_captioning.fastvlm_runtime import (
 )
 
 if TYPE_CHECKING:
+    from transformation_portal.ingest.upload_staging import StagedUploadResult
     from transformation_portal.orchestrator.execution_policy import ExecutionPolicy
     from transformation_portal.orchestrator.job_execution import JobExecutionService
     from transformation_portal.orchestrator.storage.operational import PostgresOperationalRecordStore
+    from transformation_portal.orchestrator.upload_receipts import PostgresUploadReceiptStore
 
 # ----------------------------
 # In-memory job store (MVP)
@@ -722,6 +734,10 @@ MAX_UPLOAD_REQUEST_BYTES = _env_int("TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES", MAX_RE
 PORTAL_UPLOAD_MAX_FILES = _env_int("TP_PORTAL_UPLOAD_MAX_FILES", 256, minimum=1)
 PORTAL_UPLOAD_MAX_FIELDS = _env_int("TP_PORTAL_UPLOAD_MAX_FIELDS", 32, minimum=1)
 PORTAL_UPLOAD_MAX_PART_BYTES = _env_int("TP_PORTAL_UPLOAD_MAX_PART_BYTES", MAX_UPLOAD_REQUEST_BYTES, minimum=1024)
+# Upper bound on one multipart part's header block. The email parser used for part
+# headers is super-linear (and can recurse without bound) on adversarial input, so
+# oversized header blocks are rejected before they reach it.
+PORTAL_UPLOAD_MAX_PART_HEADER_BYTES = 16 * 1024
 RATE_LIMIT_PER_MINUTE = _env_int("TP_RATE_LIMIT_PER_MINUTE", 60, minimum=0)
 MAX_CONCURRENT_JOBS = _env_int("TP_MAX_CONCURRENT_JOBS", 4, minimum=1)
 PILOT_CONTROL_PLANE_ENABLED = _env_bool("TP_PILOT_CONTROL_PLANE_ENABLED", False)
@@ -1151,6 +1167,7 @@ class Job:
     terminate_task: Optional[asyncio.Task[None]] = None
     cancel_requested: bool = False
     error: Optional[Dict[str, Any]] = None
+    terminal_lock: asyncio.Lock = dataclass_field(default_factory=asyncio.Lock, repr=False, compare=False)
 
     def add_log(self, line: str, limit: int = LOG_TAIL_LIMIT) -> None:
         self.logs_tail.append(line)
@@ -1174,6 +1191,9 @@ ACTIVE_JOB_STATES = {"queued", "running"}
 # terminal-state guard, and operator tooling all agree on what "done"
 # means.
 _TERMINAL_JOB_STATES = {"succeeded", "partial", "failed", "canceled", "worker_lost"}
+# States a job can be in without its runner ever having been launched. Paired
+# with a missing ``started_at`` they mean the job has produced no files.
+_UNLAUNCHED_JOB_STATES = frozenset({"queued", "canceled", "worker_lost"})
 JOB_RUN_SUMMARY_MAX_BYTES = 1024 * 1024
 
 
@@ -1573,7 +1593,10 @@ async def _pilot_enforce_request_paths(
                 # before constructing/resolving any user-controlled Path.
                 candidate = os.path.abspath(os.path.join(os.fspath(REPO_ROOT), raw))
                 shared_roots = runtime_roots.get(field, [])
-                allowed_roots = [*tenant_roots, *(base for root in shared_roots for base in (root.absolute(), root.resolve()))]
+                allowed_roots = [
+                    *tenant_roots,
+                    *(base for root in shared_roots for base in (root.absolute(), resolve_rejecting_symlink_loops(root))),
+                ]
                 for root in allowed_roots:
                     root_text = os.path.abspath(root)
                     prefix = root_text if root_text.endswith(os.sep) else root_text + os.sep
@@ -1584,11 +1607,11 @@ async def _pilot_enforce_request_paths(
                         path = Path(candidate)
                     else:
                         continue
-                    resolved = path.resolve()
+                    resolved = resolve_rejecting_symlink_loops(path)
                     # Shared selectors retain downstream provenance checks.
                     # Keep the admitted lexical path for tenant validation;
                     # passing only its target would erase namespace escapes.
-                    if not any(resolved.is_relative_to(shared.resolve()) for shared in shared_roots):
+                    if not any(resolved.is_relative_to(resolve_rejecting_symlink_loops(shared)) for shared in shared_roots):
                         guard.enforce_path(path)
                     break
                 else:
@@ -1743,7 +1766,10 @@ def _overlay_runtime_state(job: Job, cached: Optional[Job]) -> Job:
         return job
     if cached is None:
         return job
-    if cached.proc is not None and cached.proc.returncode is None:
+    cached_has_completion = cached.finished_at is not None or cached.done_published_at is not None
+    durable_has_completion = job.finished_at is not None or job.done_published_at is not None
+    cached_completion_pending = cached_has_completion and not durable_has_completion
+    if cached.proc is not None and cached.proc.returncode is None and not cached_completion_pending:
         # While the subprocess is alive, the runtime object owns volatile
         # state/progress/log fields. Still refresh durable metadata that may
         # be advanced by non-runner paths such as artifact delete/retention.
@@ -1767,7 +1793,7 @@ def _overlay_runtime_state(job: Job, cached: Optional[Job]) -> Job:
         return cached
     cached_is_terminal = cached.finished_at is not None or cached.state in _TERMINAL_JOB_STATES
     durable_is_terminal = job.finished_at is not None or job.state in _TERMINAL_JOB_STATES
-    if cached_is_terminal and not durable_is_terminal:
+    if cached_completion_pending or (cached_is_terminal and not durable_is_terminal):
         # A terminal runtime cache means the local runner already finished,
         # but its final repository persist may have failed or lagged. Keep
         # the terminal view so list/detail do not regress to stale active
@@ -2017,6 +2043,7 @@ PORTAL_SAFE_ERROR_MESSAGES = {
     "invalid_raw_wb_mode": "The selected RAW white-balance mode is not supported.",
     "invalid_reconstruction_tier": "The selected reconstruction tier is not supported.",
     "invalid_request": "The request contains invalid values.",
+    "invalid_unicode_string": "The request contains a string that is not valid Unicode.",
     "invalid_sam2_model_size": "The selected SAM2 model size is not supported.",
     "invalid_segmentation_backend": "The selected segmentation backend is not supported.",
     "invalid_surface": "The telemetry surface is not supported.",
@@ -2028,6 +2055,7 @@ PORTAL_SAFE_ERROR_MESSAGES = {
     "captioning_feature_disabled": "FastVLM captioning is not enabled for this portal cohort.",
     "manifest_jsonl_required": "A manifest JSONL artifact is required before dispatch.",
     "missing_required_paths": "Input and output paths are required.",
+    "non_finite_number": "The request contains a number that is not finite (NaN, Infinity or out of range).",
     "path_outside_allowed_roots": "Configured paths must stay within the allowed workspace roots.",
     "path_shorthand_traversal_disallowed": "Repo-local shorthand paths cannot include traversal segments.",
     "policy_yaml_required": "A rights policy YAML file is required before dispatch.",
@@ -2604,7 +2632,7 @@ def _lux_depth_readiness(args: Optional[Dict[str, Any]] = None) -> Dict[str, Any
             )
         )
     if canary_status == "ready":
-        notes.append(f"Repo-local DA3 canary runtime resolved at {canary_runtime}.")
+        notes.append(f"{DA3_CANARY_RUNTIME_NOTE_PREFIX}{canary_runtime}.")
     elif canary_status == "degraded":
         notes.append("ML libraries are present in the active environment, but no isolated DA3 runtime contract was found.")
     else:
@@ -3321,26 +3349,44 @@ def _portal_upload_boundary_bytes(content_type: str) -> bytes:
     return boundary.encode("utf-8")
 
 
+def _portal_upload_part_headers_too_large() -> UploadStagingError:
+    return UploadStagingError(
+        "invalid_multipart_payload",
+        f"multipart part headers exceed {PORTAL_UPLOAD_MAX_PART_HEADER_BYTES} bytes",
+    )
+
+
 def _parse_portal_upload_part_headers(header_bytes: bytes) -> _PortalMultipartPart:
-    header_message = BytesParser(policy=email_policy).parsebytes(header_bytes + b"\r\n\r\n")
-    if header_message.get_content_disposition() != "form-data":
+    if len(header_bytes) > PORTAL_UPLOAD_MAX_PART_HEADER_BYTES:
+        raise _portal_upload_part_headers_too_large()
+    try:
+        header_message = BytesParser(policy=email_policy).parsebytes(header_bytes + b"\r\n\r\n")
+        content_disposition = header_message.get_content_disposition()
+        field_name = str(header_message.get_param("name", header="content-disposition") or "").strip()
+        filename = header_message.get_filename()
+        content_type = str(header_message.get_content_type() or "")
+        charset = str(header_message.get_content_charset("utf-8") or "utf-8")
+    except Exception as exc:  # noqa: BLE001 - the email parser raises arbitrary errors (incl. RecursionError)
+        raise UploadStagingError(
+            "invalid_multipart_payload",
+            "multipart part headers could not be parsed",
+        ) from exc
+    if content_disposition != "form-data":
         raise UploadStagingError(
             "invalid_multipart_payload",
             "multipart parts must use form-data content disposition",
         )
-    field_name = str(header_message.get_param("name", header="content-disposition") or "").strip()
     if not field_name:
         raise UploadStagingError(
             "invalid_multipart_payload",
             "multipart field name is required",
         )
-    filename = header_message.get_filename()
     if filename is not None:
         return _PortalMultipartPart(
             field_name=field_name,
             filename=str(filename or ""),
-            content_type=str(header_message.get_content_type() or ""),
-            charset=str(header_message.get_content_charset("utf-8") or "utf-8"),
+            content_type=content_type,
+            charset=charset,
             file_stream=tempfile.SpooledTemporaryFile(
                 max_size=min(PORTAL_UPLOAD_MAX_PART_BYTES, 1024 * 1024),
                 mode="w+b",
@@ -3349,8 +3395,8 @@ def _parse_portal_upload_part_headers(header_bytes: bytes) -> _PortalMultipartPa
     return _PortalMultipartPart(
         field_name=field_name,
         filename=None,
-        content_type=str(header_message.get_content_type() or ""),
-        charset=str(header_message.get_content_charset("utf-8") or "utf-8"),
+        content_type=content_type,
+        charset=charset,
     )
 
 
@@ -3516,6 +3562,10 @@ async def _parse_portal_upload_multipart(request: Request) -> _ParsedPortalUploa
 
             if state == "headers":
                 header_index = buffer.find(b"\r\n\r\n")
+                if header_index > PORTAL_UPLOAD_MAX_PART_HEADER_BYTES or (
+                    header_index < 0 and len(buffer) > PORTAL_UPLOAD_MAX_PART_HEADER_BYTES + 3
+                ):
+                    raise _portal_upload_part_headers_too_large()
                 if header_index < 0:
                     if eof:
                         raise UploadStagingError(
@@ -3566,7 +3616,7 @@ async def _parse_portal_upload_multipart(request: Request) -> _ParsedPortalUploa
                 buffer.extend(chunk)
             _advance(eof=False)
         _advance(eof=True)
-    except Exception:
+    except BaseException:
         _cleanup()
         raise
 
@@ -3618,6 +3668,12 @@ async def _cleanup_expired_jobs(
             JOBS.pop(job.id, None)
             EVENT_SUBSCRIBERS.pop(job.id, None)
             _LAST_EVENT_PERSISTED_AT.pop(job.id, None)
+            try:
+                # Replay history must not outlive its job: the memory
+                # repository's delete does not cascade to the event store.
+                await _job_event_store().purge(job.id)
+            except Exception:  # noqa: BLE001 - one failed cleanup must not block others
+                LOGGER.exception("job event purge failed for %s", job.id)
 
 
 def _job_has_undeleted_artifacts(job: "Job") -> bool:
@@ -3634,8 +3690,34 @@ def _artifact_deletion_unconfirmed(job: "Job") -> bool:
     return status in ("pending", "failed") or (_uses_dispatch_authority() and _artifacts_deleted(job) and status != "deleted")
 
 
-def _artifact_retention_due(job: Job, now: float) -> bool:
+# Job ids whose runner (subprocess plus artifact finalisation) is executing in
+# this process, with a count so overlapping runs of one id stay registered.
+_LOCAL_RUNNER_JOB_IDS: Dict[str, int] = {}
+
+
+def _job_artifacts_finalized(job: Job) -> bool:
+    """Return True once no runner can still be indexing/mirroring artifacts.
+
+    The runner writes (and persists) the terminal ``state`` first, then indexes
+    and mirrors artifacts, and only then stamps ``finished_at``. Artifact
+    deletion and retention must wait for that; otherwise a delete accepted in
+    the window finds nothing indexed and the finaliser mirrors every file
+    afterwards.
+
+    A terminal job without ``finished_at`` is therefore held back only while
+    its runner is live in this process. If the process died or was shut down
+    inside the window, the durable row keeps the terminal state with no
+    ``finished_at`` and nothing will ever stamp it (restart recovery only
+    sweeps active states): such a row must stay deletable and subject to
+    retention, as it was before the window was closed.
+    """
     if job.state not in _TERMINAL_JOB_STATES:
+        return False
+    return job.finished_at is not None or job.id not in _LOCAL_RUNNER_JOB_IDS
+
+
+def _artifact_retention_due(job: Job, now: float) -> bool:
+    if not _job_artifacts_finalized(job):
         return False
     unconfirmed = _artifact_deletion_unconfirmed(job)
     if _artifacts_deleted(job) and not unconfirmed:
@@ -3647,10 +3729,68 @@ def _artifact_retention_due(job: Job, now: float) -> bool:
     return isinstance(expires_at, (int, float)) and float(expires_at) <= now
 
 
-def _delete_legacy_job_artifact_files(job: Job) -> int:
+class _AmbiguousLegacyArtifactOwnership(ValueError):
+    """Legacy inventory cannot attribute files to one of the overlapping runs."""
+
+
+async def _require_unambiguous_legacy_artifact_deletion(
+    job: Job, retained: Optional[Tuple[List[JobRecord], int]] = None
+) -> Optional[Tuple[Path, List[JobRecord]]]:
+    if (job.started_at is None and job.state in _UNLAUNCHED_JOB_STATES) or not _artifact_known_relative_paths(job):
+        return None
     output_dir = _job_output_dir(job)
-    if output_dir is None or not output_dir.exists() or not output_dir.is_dir():
+    if output_dir is None:
+        return None
+    try:
+        records, total = retained if retained is not None else await _job_repository().list(limit=None)
+        if len(records) != total:
+            raise _JobRepositoryUnavailable("legacy artifact ownership scan incomplete")
+    except _JobRepositoryUnavailable:
+        raise
+    except Exception as exc:
+        raise _JobRepositoryUnavailable("legacy artifact ownership scan failed") from exc
+    _check_legacy_artifact_output_overlap(job, output_dir, chain(records, JOBS.values()))
+    return output_dir, records
+
+
+def _check_legacy_artifact_output_overlap(job: Job, output_dir: Path, peers: Iterable[Job | JobRecord]) -> None:
+    # Retained rows cover other processes and restarts. Also inspect the runtime
+    # view in case the runner start has not reached the repository yet.
+    for peer in peers:
+        if peer.id == job.id or (peer.started_at is None and peer.state in {"canceled", "worker_lost"}):
+            continue
+        if peer.state not in ACTIVE_JOB_STATES:
+            if job.finished_at is not None and peer.started_at is not None and job.finished_at < peer.started_at:
+                continue
+            if peer.finished_at is not None and job.started_at is not None and peer.finished_at < job.started_at:
+                continue
+        requested = _job_requested_output_dir(peer)
+        if not requested:
+            continue
+        try:
+            # Inspect identity even if the peer's historical root is outside
+            # today's allowlist. This grants no authority over that path.
+            peer_output = _portal_path_security._resolve_untrusted_request_path(requested, repo_root=REPO_ROOT)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise _AmbiguousLegacyArtifactOwnership("legacy peer output identity is unavailable") from exc
+        if output_dir.is_relative_to(peer_output) or peer_output.is_relative_to(output_dir):
+            raise _AmbiguousLegacyArtifactOwnership("legacy jobs share an overlapping output directory and run window")
+
+
+def _delete_legacy_job_artifact_files(
+    job: Job,
+    ownership: Optional[Tuple[Path, List[JobRecord]]],
+    runtime_peers: Tuple[Job, ...],
+) -> int:
+    if ownership is None:
         return 0
+    checked_root, records = ownership
+    output_dir = _job_output_dir(job)
+    if output_dir != checked_root:
+        raise _AmbiguousLegacyArtifactOwnership("legacy output identity changed before deletion")
+    if not checked_root.is_dir():
+        return 0
+    _check_legacy_artifact_output_overlap(job, checked_root, chain(records, runtime_peers))
 
     if not job.artifact_lookup:
         _hydrate_artifact_lookup_from_items(job)
@@ -3670,19 +3810,36 @@ def _delete_legacy_job_artifact_files(job: Job) -> int:
             continue
         candidates[normalized] = Path(output_dir) / Path(*PurePosixPath(normalized).parts)
 
+    # The inventory is not proof of ownership: it may predate run-bound indexing,
+    # and a later run or the operator may have replaced a listed file since. Only
+    # unlink what was created or changed while this job's own runner was alive.
+    not_before, not_after = _job_run_window(job)
     deleted = 0
+    preserved = 0
     seen: set[Path] = set()
     for candidate in candidates.values():
         _, resolved_artifact, _ = _validate_resolved_job_artifact_path(job, candidate)
         if resolved_artifact in seen:
             continue
         seen.add(resolved_artifact)
-        if not resolved_artifact.exists():
+        try:
+            metadata = resolved_artifact.stat(follow_symlinks=False)
+        except FileNotFoundError:
             continue
-        if not resolved_artifact.is_file():
+        if not stat.S_ISREG(metadata.st_mode):
             raise ArtifactPathValidationError("artifact_path_not_file")
+        changed_at = max(metadata.st_mtime, metadata.st_ctime)
+        if (not_before is not None and changed_at < not_before) or (not_after is not None and changed_at > not_after):
+            preserved += 1
+            continue
         resolved_artifact.unlink()
         deleted += 1
+    if preserved:
+        LOGGER.warning(
+            "artifact deletion for job %s preserved %d listed file(s) that its run did not produce",
+            job.id,
+            preserved,
+        )
     return deleted
 
 
@@ -3691,6 +3848,7 @@ async def _delete_job_artifacts_for_job(
     *,
     reason: str,
     fail_closed_on_repository: bool = False,
+    retained: Optional[Tuple[List[JobRecord], int]] = None,
 ) -> Optional[int]:
     if _uses_dispatch_authority():
         try:
@@ -3719,6 +3877,7 @@ async def _delete_job_artifacts_for_job(
             raise _JobRepositoryUnavailable("generation deletion record unavailable") from exc
         await _flush_operational_outbox_best_effort()
         return count
+    ownership = await _require_unambiguous_legacy_artifact_deletion(job, retained)
     try:
         store = _artifact_store()
     except Exception as exc:  # noqa: BLE001 - callers surface this as 503
@@ -3737,7 +3896,9 @@ async def _delete_job_artifacts_for_job(
     lifecycle = _ensure_artifact_lifecycle(job, backend=store.backend)
     try:
         store_deleted_count = await store.delete(_artifact_storage_job_id(job))
-        legacy_deleted_count = await asyncio.to_thread(_delete_legacy_job_artifact_files, job)
+        legacy_deleted_count = await asyncio.to_thread(_delete_legacy_job_artifact_files, job, ownership, tuple(JOBS.values()))
+    except _AmbiguousLegacyArtifactOwnership:
+        raise
     except Exception as exc:  # noqa: BLE001 - cleanup/deletion must be observable and non-fatal
         lifecycle.update(
             {
@@ -3800,7 +3961,8 @@ async def _cleanup_expired_job_artifacts(
         # Bounded request-path sweeps are only opportunistic. The periodic
         # cleanup loop invokes this with ``scan_limit=None`` so old artifact
         # rows are not permanently starved by repository ordering.
-        records, _ = await _job_repository().list(limit=scan_limit)
+        retained = await _job_repository().list(limit=scan_limit)
+        records, _ = retained
     except Exception:  # noqa: BLE001 - cleanup must not break request handling
         LOGGER.exception("job artifact retention scan failed")
         return
@@ -3815,7 +3977,10 @@ async def _cleanup_expired_job_artifacts(
                     "artifact retention preserved legacy job %s without dispatch authority; migration required", job.id
                 )
                 continue
-            deleted = await _delete_job_artifacts_for_job(job, reason="retention_expired")
+            deleted = await _delete_job_artifacts_for_job(job, reason="retention_expired", retained=retained)
+        except _AmbiguousLegacyArtifactOwnership:
+            LOGGER.info("artifact retention preserved legacy job %s because output ownership is ambiguous", record.id)
+            continue
         except Exception:  # noqa: BLE001 - one authority/store failure must not starve later jobs
             LOGGER.exception("artifact retention cleanup failed for job %s", record.id)
             continue
@@ -3843,38 +4008,26 @@ def _cleanup_rate_limit_buckets(now: float) -> None:
 
 
 def _add_staged_input_dir(retained: set[str], job: Job) -> None:
-    effective_request = (
-        job.effective_request if isinstance(job.effective_request, dict) and job.effective_request else job.request
+    from transformation_portal.orchestrator.upload_receipts import upload_source_paths
+
+    retained.update(
+        str(path)
+        for path in upload_source_paths(job.request, job.effective_request, upload_read_base=REPO_ROOT, retention_only=True)
     )
-    if not isinstance(effective_request, dict):
-        return
-    args = effective_request.get("args")
-    if not isinstance(args, dict):
-        return
-    input_dir = args.get("input_dir") or args.get("inputDir")
-    if not input_dir:
-        return
-    try:
-        retained.add(str(Path(os.path.realpath(str(input_dir)))))
-    except (OSError, RuntimeError, ValueError):
-        return
 
 
 async def _retained_staged_input_dirs() -> Optional[set[str]]:
     retained: set[str] = set()
-    for job in list(JOBS.values()):
-        _add_staged_input_dir(retained, job)
-
     try:
+        for job in list(JOBS.values()):
+            _add_staged_input_dir(retained, job)
         records, _ = await _job_repository().list(limit=None)
-    except Exception:  # noqa: BLE001 - upload cleanup must not block on repo errors
-        LOGGER.exception("job repository retained upload scan failed")
+        for record in records:
+            job = _overlay_runtime_state(_job_from_record(record), JOBS.get(record.id))
+            _add_staged_input_dir(retained, job)
+    except Exception:  # noqa: BLE001 - incomplete retained scans must prevent cleanup
+        LOGGER.exception("retained upload scan failed")
         return None
-
-    for record in records:
-        job = _overlay_runtime_state(_job_from_record(record), JOBS.get(record.id))
-        _add_staged_input_dir(retained, job)
-
     return retained
 
 
@@ -3896,6 +4049,14 @@ async def _cleanup_expired_upload_batches(now: float) -> None:
         ttl_seconds=PORTAL_UPLOAD_TTL_SECONDS,
         retained_input_dirs=retained_input_dirs,
     )
+    if os.getenv("TP_ORCHESTRATOR_STATE_BACKEND", "memory").strip().lower() == "postgres":
+        try:
+            from transformation_portal.ingest.upload_recovery import cleanup_correlated_batches
+
+            removed.extend(await cleanup_correlated_batches(_upload_receipt_store(), upload_root, now, retained_input_dirs))
+        except Exception:
+            # Ledger-marked batches never enter legacy filesystem cleanup.
+            LOGGER.exception("Correlated upload cleanup unavailable; ownership remains fenced")
     if removed:
         LOGGER.info("Removed %d expired staged upload batches", len(removed))
 
@@ -4386,7 +4547,7 @@ def _normalize_optional_positive_int(
         return None
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         errors.append(
             _portal_issue(
                 field,
@@ -4418,7 +4579,7 @@ def _normalize_optional_non_negative_int(
         return None
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         errors.append(
             _portal_issue(
                 field,
@@ -4448,7 +4609,7 @@ def _normalize_optional_probability(
         return None
     try:
         parsed = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         errors.append(
             _portal_issue(
                 field,
@@ -6400,7 +6561,7 @@ def _build_archive_config_preview(
             continue
         try:
             parsed = int(value)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             errors.append(
                 _portal_issue(
                     canonical_field,
@@ -6518,6 +6679,35 @@ def _build_archive_config_preview(
     }
 
 
+def _reject_unechoable_preview_args(pipeline: str, args: Dict[str, Any], preview: Dict[str, Any]) -> Dict[str, Any]:
+    """Flag args JSON cannot echo (NaN, Infinity, 1e400, unpaired surrogates).
+
+    Valid JSON can carry such values, but the strict response encoder cannot
+    serialise them back. Each offending arg becomes a field error (so dispatch
+    is refused) and the whole preview is echoed with those values as ``null``.
+    """
+    issues = _portal_json_payload.unechoable_arg_fields(args)
+    if issues:
+        errors = list(preview.get("field_errors") or [])
+        flagged = {issue.get("field") for issue in errors if isinstance(issue, dict)}
+        for field, reason in issues:
+            if field in flagged:
+                continue
+            flagged.add(field)
+            errors.append(_portal_issue(field, reason, _portal_safe_error_message(reason, field=field)))
+        preview["field_errors"] = errors
+        if "argv_preview" in preview:
+            preview["argv_preview"] = ""
+        preview["next_best_action"] = _preview_next_best_action(
+            pipeline=pipeline,
+            errors=errors,
+            warnings=list(preview.get("field_warnings") or []),
+            readiness_snapshot=preview.get("readiness") if isinstance(preview.get("readiness"), dict) else None,
+        )
+    safe_preview = _portal_json_payload.json_safe_echo(preview)
+    return safe_preview if isinstance(safe_preview, dict) else preview
+
+
 def _build_config_preview(
     payload: Dict[str, Any],
     *,
@@ -6546,20 +6736,22 @@ def _build_config_preview(
         preview["next_best_action"] = _preview_next_best_action(
             pipeline=pipeline, errors=preview["field_errors"], warnings=[], readiness_snapshot=preview["readiness"]
         )
-        return preview
+        return _reject_unechoable_preview_args(pipeline, args, preview)
     if pipeline == "lux-depth-v3":
-        return _build_lux_config_preview(
+        preview = _build_lux_config_preview(
             args,
             readiness_snapshot=readiness_snapshot,
             portal_actor=portal_actor,
         )
+        return _reject_unechoable_preview_args(pipeline, args, preview)
     if pipeline in ARCHIVE_GATE_PIPELINES:
-        return _build_archive_config_preview(
+        preview = _build_archive_config_preview(
             pipeline,
             args,
             readiness_snapshot=readiness_snapshot,
             archive_index_scan_mode=archive_index_scan_mode,
         )
+        return _reject_unechoable_preview_args(pipeline, args, preview)
     raise ValueError("Unsupported pipeline")
 
 
@@ -6775,7 +6967,13 @@ def _record_portal_rum(payload: Dict[str, Any], request: Request) -> Tuple[Optio
         return None, "invalid_unit"
 
     value = payload.get("value")
-    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)) or float(value) < 0:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None, "invalid_value"
+    try:
+        numeric_value = float(value)
+    except OverflowError:
+        return None, "invalid_value"
+    if not math.isfinite(numeric_value) or numeric_value < 0:
         return None, "invalid_value"
 
     metric = str(payload.get("metric") or "").strip().lower()
@@ -6802,7 +7000,7 @@ def _record_portal_rum(payload: Dict[str, Any], request: Request) -> Tuple[Optio
         "route": route,
         "view": view,
         "metric": metric,
-        "value": round(float(value), 4),
+        "value": round(numeric_value, 4),
         "unit": unit,
         "metadata": _portal_sanitize_metadata(payload.get("metadata")),
         "trace_id": trace_context.trace_id,
@@ -6834,7 +7032,7 @@ def _is_protected_job_endpoint(path: str) -> bool:
 
 def _is_protected_api_key_endpoint(path: str) -> bool:
     normalized_path = path.rstrip("/") or "/"
-    if _is_protected_job_endpoint(normalized_path):
+    if _is_protected_job_endpoint(normalized_path) or normalized_path.startswith("/v1/uploads/staging/receipts/"):
         return True
     return normalized_path in {
         "/v1/config-metadata",
@@ -6952,7 +7150,12 @@ def _has_valid_api_key(request: Request) -> bool:
 
     if not provided:
         return False
-    return hmac.compare_digest(provided, API_KEY_SECRET)
+    # Compare bytes: hmac.compare_digest raises TypeError for str operands that
+    # contain non-ASCII characters, which any client can send in a header.
+    return hmac.compare_digest(
+        provided.encode("utf-8", "surrogatepass"),
+        API_KEY_SECRET.encode("utf-8", "surrogatepass"),
+    )
 
 
 def _enforce_content_length_limit(request: Request) -> Optional[JSONResponse]:
@@ -7231,25 +7434,29 @@ async def _request_cancel(job: Job) -> None:
         job.terminate_task = asyncio.create_task(_terminate_process(job.proc))
 
 
-def _job_output_dir(job: Job) -> Optional[Path]:
+def _job_output_dir(job: Job | JobRecord) -> Optional[Path]:
     fence = current_dispatch_fence()
     if fence is not None and fence.locator.job_id == job.id:
         return Path(fence.output_root)
-    request_payload = (
-        job.effective_request if isinstance(job.effective_request, dict) and job.effective_request else job.request
-    )
-    args = request_payload.get("args") if isinstance(request_payload, dict) else None
-    if not isinstance(args, dict):
-        return None
-    output_dir = str(
-        _pick(args, "output_dir", "outputDir", default=""),
-    ).strip()
+    output_dir = _job_requested_output_dir(job)
     if not output_dir:
         return None
     try:
         return _resolve_allowed_request_path(output_dir, ALLOWED_OUTPUT_ROOTS)
     except ValueError:
         return None
+
+
+def _job_requested_output_dir(job: Job | JobRecord) -> str:
+    request_payload = (
+        job.effective_request if isinstance(job.effective_request, dict) and job.effective_request else job.request
+    )
+    args = request_payload.get("args") if isinstance(request_payload, dict) else None
+    if not isinstance(args, dict):
+        return ""
+    return str(
+        _pick(args, "output_dir", "outputDir", default=""),
+    ).strip()
 
 
 def _resolve_portal_asset(asset_path: str) -> PortalAssetSpec:
@@ -7408,13 +7615,47 @@ def _build_scoped_job_artifacts_from_run_metadata(
     )
 
 
+def _job_run_window(job: Job) -> Tuple[Optional[float], Optional[float]]:
+    """Return the ``(not_before, not_after)`` window in which ``job``'s runner could write files.
+
+    A request-supplied ``output_dir`` may be shared with other jobs and with
+    operator files. Artifact indexing, run-card lookup and artifact deletion
+    therefore only accept paths created or changed between this job's runner
+    start and its completion. A job that was never launched owns nothing, which
+    the empty ``(inf, None)`` window expresses. ``(None, None)`` leaves the
+    lookup unbounded: a fenced attempt root is created empty for exactly one
+    attempt, and a record that reports a runner outcome without a recorded start
+    carries no window to apply.
+    """
+
+    fence = current_dispatch_fence()
+    if fence is not None and fence.locator.job_id == job.id:
+        return None, None
+    if job.started_at is not None:
+        return job.started_at, job.finished_at
+    if job.state in _UNLAUNCHED_JOB_STATES:
+        return math.inf, None
+    return None, None
+
+
 def _refresh_job_run_summary(job: Job) -> Dict[str, Any]:
-    return _execution_summary.refresh_job_run_summary(job, _job_output_dir(job))
+    not_before, not_after = _job_run_window(job)
+    return _execution_summary.refresh_job_run_summary(
+        job,
+        _job_output_dir(job),
+        not_before=not_before,
+        not_after=not_after,
+    )
 
 
 def _serialized_job_run_summary(job: Job) -> Optional[Dict[str, Any]]:
-    if job.state not in ACTIVE_JOB_STATES and job.state != "canceled":
-        _refresh_job_run_summary(job)
+    # The runner derives ``run_summary`` (and any ``partial`` promotion) once,
+    # when it finalizes the job, and persists both. Read paths only project that
+    # record: re-deriving it here re-read the output directory on every list,
+    # detail and SSE request and let a later run into the same directory rewrite
+    # the status of a job that had already finished. Recovery guidance for known
+    # historical failures is still projected, from the job's own log tail alone.
+    annotate_job_failure(job)
     summary = dict(job.run_summary) if isinstance(job.run_summary, dict) and job.run_summary else {}
     if job.state in ACTIVE_JOB_STATES:
         requested_status = _requested_fastvlm_captioning_status(job)
@@ -7453,7 +7694,12 @@ def _hydrate_artifact_lookup_from_items(job: Job) -> Dict[str, Path]:
     return lookup
 
 
-def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
+def _index_job_artifacts(
+    job: Job,
+    *,
+    not_before: Optional[float] = None,
+    not_after: Optional[float] = None,
+) -> List[Dict[str, Any]]:
     result = _portal_job_artifacts._index_job_artifacts(
         job_id=job.id,
         output_dir=_job_output_dir(job),
@@ -7461,10 +7707,25 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         fingerprint_max_bytes=ARTIFACT_FINGERPRINT_MAX_BYTES,
         fingerprint_chunk_bytes=_ARTIFACT_FINGERPRINT_CHUNK_BYTES,
         run_summary_max_bytes=JOB_RUN_SUMMARY_MAX_BYTES,
+        not_before=not_before,
+        not_after=not_after,
     )
     job.artifacts = result.artifacts
     job.artifact_lookup = result.artifact_lookup
     return result.items
+
+
+def _index_job_run_artifacts(job: Job) -> List[Dict[str, Any]]:
+    """Index only what ``job``'s own run left in its output directory.
+
+    Every path that indexes on behalf of a real job (runner finalization and the
+    first artifact fetch of an unindexed job) goes through here, so files that
+    other runs or the operator keep in a shared ``output_dir`` never become this
+    job's to serve, mirror or delete.
+    """
+
+    not_before, not_after = _job_run_window(job)
+    return _index_job_artifacts(job, not_before=not_before, not_after=not_after)
 
 
 def _artifact_store() -> ArtifactStore:
@@ -7754,7 +8015,7 @@ def _int_arg(
         return default
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise ValueError("Invalid archive integer option") from None
     if parsed < minimum:
         raise ValueError("Invalid archive integer option")
@@ -8620,7 +8881,7 @@ def _argv_from_request(
                 return None
             try:
                 parsed = int(value)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 raise _PortalValidationReasonError(f"Invalid {field_name}") from None
             if parsed < 1:
                 raise _PortalValidationReasonError(f"Invalid {field_name}")
@@ -8634,7 +8895,7 @@ def _argv_from_request(
                 return None
             try:
                 parsed = int(value)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 raise _PortalValidationReasonError(f"Invalid {field_name}") from None
             if parsed < 0:
                 raise _PortalValidationReasonError(f"Invalid {field_name}")
@@ -8648,7 +8909,7 @@ def _argv_from_request(
                 return None
             try:
                 parsed = float(value)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 raise _PortalValidationReasonError(f"Invalid {field_name}") from None
             if not math.isfinite(parsed) or parsed < 0.0 or parsed > 1.0:
                 raise _PortalValidationReasonError(f"Invalid {field_name}")
@@ -8707,6 +8968,7 @@ def _argv_from_request(
                 ALLOWED_INPUT_ROOTS,
             )
 
+        enable_materials_v3 = _as_bool(_pick(args, "materials_v3", "materials", default=False))
         argv.extend(
             [
                 "--preset",
@@ -8722,14 +8984,7 @@ def _argv_from_request(
                 "--segmentation-cache",
                 segmentation_cache,
                 "--materials-v3",
-                onoff(
-                    _pick(
-                        args,
-                        "materials_v3",
-                        "materials",
-                        default=False,
-                    )
-                ),
+                onoff(enable_materials_v3),
                 "--pbr",
                 onoff(_pick(args, "pbr", default=False)),
                 "--save-float-depth",
@@ -8823,6 +9078,7 @@ def _argv_from_request(
             v2_preset = _pick(args, "v2_preset", "v2Preset")
             if v2_preset:
                 argv.extend(["--v2-preset", str(v2_preset)])
+        if enable_materials_v3 or enable_v2:
             v2_input_color = _pick(args, "v2_input_color", "v2InputColor", default="auto")
             if not isinstance(v2_input_color, str) or v2_input_color not in {
                 "auto",
@@ -9170,6 +9426,7 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
     if broker is not None:
         app.state.queue_broker = broker
         stop_event = asyncio.Event()
+        pending_legacy_reclaims: Dict[str, Optional[JobRecord]] = {}
         app.state.worker_stop_event = stop_event
         if ORCHESTRATOR_IN_PROCESS_WORKERS_ENABLED:
             for slot in range(MAX_CONCURRENT_JOBS):
@@ -9184,7 +9441,7 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
                         run_worker_forever(
                             broker=broker,
                             config=worker_config,
-                            executor=_orchestrator_job_executor,
+                            executor=partial(_orchestrator_job_executor, pending_legacy_reclaims=pending_legacy_reclaims),
                             stop_event=stop_event,
                         )
                     )
@@ -9194,7 +9451,9 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
         # Phase 2.D — periodic broker-reclaim reconciler. Shares
         # ``stop_event`` with the worker pool so a single signal
         # winds down the whole broker-dispatch substrate.
-        app.state.reclaim_sweep_task = asyncio.create_task(_reclaim_sweep_loop(broker, repo, stop_event))
+        app.state.reclaim_sweep_task = asyncio.create_task(
+            _reclaim_sweep_loop(broker, repo, stop_event, pending_legacy_reclaims=pending_legacy_reclaims)
+        )
     try:
         yield
     finally:
@@ -9396,6 +9655,28 @@ async def security_layer(
 
     _install_stream_body_limit(request)
 
+    # Throttle before authenticating: failed API-key attempts must consume the
+    # per-client budget, otherwise key guessing is never rate limited.
+    client_ip = _extract_client_ip(request)
+    rate_decision = _is_rate_limited(client_ip, _now())
+    if rate_decision.limited:
+        rate_headers = _rate_limit_response_headers(
+            limit=RATE_LIMIT_PER_MINUTE,
+            remaining=0,
+            retry_after=rate_decision.retry_after_seconds,
+            reset_epoch=rate_decision.reset_epoch_seconds,
+        )
+        response = _error_response(
+            429,
+            code="RATE_LIMITED",
+            message="rate limit exceeded",
+            details={"client_ip": client_ip},
+            headers=rate_headers,
+        )
+        if should_echo_traceparent:
+            response.headers.setdefault("traceparent", request.state.trace_context.traceparent)
+        return response
+
     if _is_protected_api_key_endpoint(request.url.path) and _job_api_key_enforced():
         if not API_KEY_SECRET:
             response = _error_response(
@@ -9417,26 +9698,6 @@ async def security_layer(
             if should_echo_traceparent:
                 response.headers.setdefault("traceparent", request.state.trace_context.traceparent)
             return response
-
-    client_ip = _extract_client_ip(request)
-    rate_decision = _is_rate_limited(client_ip, _now())
-    if rate_decision.limited:
-        rate_headers = _rate_limit_response_headers(
-            limit=RATE_LIMIT_PER_MINUTE,
-            remaining=0,
-            retry_after=rate_decision.retry_after_seconds,
-            reset_epoch=rate_decision.reset_epoch_seconds,
-        )
-        response = _error_response(
-            429,
-            code="RATE_LIMITED",
-            message="rate limit exceeded",
-            details={"client_ip": client_ip},
-            headers=rate_headers,
-        )
-        if should_echo_traceparent:
-            response.headers.setdefault("traceparent", request.state.trace_context.traceparent)
-        return response
 
     response = await call_next(request)
     for name, value in SECURITY_HEADERS.items():
@@ -9556,6 +9817,7 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
     actor = _portal_actor_from_request(request)
     recovery_context = None
     submission_receipts = False
+    catalogue_thumbnails = False
     if PILOT_CONTROL_PLANE_ENABLED:
         try:
             tenant, denied = await _pilot_tenant_from_request(request, action="recovery_context", materialize=False)
@@ -9572,6 +9834,16 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
                         tenant.tenant_id, submission_owner(tenant.tenant_id, verified), "capability-probe"
                     )
                     submission_receipts = True
+                if (
+                    _env_bool("TP_PHOTO_REVIEW_ENABLED", False)
+                    and os.getenv("TP_PHOTO_REVIEW_THUMBNAILS_ENABLED", "0").strip() == "1"
+                ):
+                    from transformation_portal.orchestrator.photographic_review_store import get_review_store
+
+                    # Establish the actual projection provider/schema, without
+                    # reading job artifacts or creating a review projection.
+                    await get_review_store().get("thumbnail-capability-probe", tenant.tenant_id)
+                    catalogue_thumbnails = True
         except Exception:  # noqa: BLE001 - preserve bootstrap, fail closed for new capability
             LOGGER.warning("durable recovery bootstrap context unavailable", exc_info=True)
     return JSONResponse(
@@ -9586,12 +9858,14 @@ async def portal_bootstrap(request: Request) -> JSONResponse:
                 "artifactViewerModal": _portal_artifact_viewer_modal_enabled(None),
                 "reviewSurfaceDeferred": _portal_review_surface_deferred_enabled(None),
                 "stagedUploads": _portal_staged_uploads_enabled(None),
+                "uploadReceipts": await _portal_upload_receipts_capability(request),
                 "rumTelemetry": _portal_rum_enabled(None),
                 "fastVlmCaptioning": _portal_fastvlm_captioning_enabled(actor),
                 "photographicDeliveryHistory": os.getenv("TP_PHOTO_REVIEW_HISTORY_UI_ENABLED", "0").strip() == "1",
                 "photographicRecordedPresentation": os.getenv("TP_PHOTO_REVIEW_RECORDED_UI_ENABLED", "0").strip() == "1",
                 "photographicPagedCatalogue": os.getenv("TP_PHOTO_REVIEW_PAGED_UI_ENABLED", "0").strip() == "1",
                 "jobSubmissionReceipts": submission_receipts,
+                "photographicCatalogueThumbnails": catalogue_thumbnails,
             },
         },
         headers={"Cache-Control": "no-store"},
@@ -9683,6 +9957,10 @@ async def readiness(request: Request) -> JSONResponse:
         "archive-gate-c",
     ):
         pipeline_data[pipeline_name] = _evaluate_pipeline_readiness(pipeline_name)
+    if not _has_valid_api_key(request):
+        # The route is public; interpreter, script and runtime paths are for
+        # authenticated operators only.
+        pipeline_data = redact_pipeline_readiness_host_details(pipeline_data)
 
     audit_response = await _record_pilot_audit(
         action="readiness",
@@ -9896,6 +10174,239 @@ async def portal_rum(request: Request, payload: Dict[str, Any]) -> JSONResponse:
     )
 
 
+def _upload_receipt_store() -> PostgresUploadReceiptStore:
+    from transformation_portal.orchestrator.upload_receipts import PostgresUploadReceiptStore
+
+    records = _configured_operational_record_store()
+    return PostgresUploadReceiptStore(database_url=records.database_url)
+
+
+async def _upload_receipt_context(
+    request: Request, *, write: bool = False
+) -> tuple[TenantContext | None, str | None, PostgresUploadReceiptStore | None, JSONResponse | None]:
+    from transformation_portal.orchestrator.upload_receipts import upload_owner
+
+    if write and not _env_bool("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", False):
+        return None, None, None, _error_response(503, code="SERVICE_UNAVAILABLE", message="upload recovery is unavailable")
+    try:
+        tenant, error = await _pilot_tenant_from_request(request, action="upload_receipt")
+        if error is not None:
+            return None, None, None, error
+        if tenant is None:
+            return None, None, None, _error_response(403, code="FORBIDDEN", message="managed tenant identity is required")
+        owner = upload_owner(tenant.tenant_id, _verified_frontdoor_actor(request))
+        store = _upload_receipt_store()
+    except (IdentityAssertionError, IdentityConfigurationError, ValueError, RuntimeError, OSError):
+        return None, None, None, _error_response(503, code="SERVICE_UNAVAILABLE", message="upload recovery is unavailable")
+    return tenant, owner, store, None
+
+
+async def _portal_upload_receipts_capability(request: Request) -> bool:
+    if (
+        not _env_bool("TP_PORTAL_UPLOAD_RECEIPTS_ENABLED", False)
+        or not _portal_staged_uploads_enabled(_portal_actor_from_request(request))
+        or not _uses_dispatch_authority()
+        or os.name != "posix"
+    ):
+        return False
+    try:
+        tenant, owner, store, error = await _upload_receipt_context(request, write=True)
+        if error is not None:
+            return False
+        assert tenant is not None and owner is not None and store is not None
+        from transformation_portal.ingest.upload_recovery import UploadBatchLock
+
+        root = _resolved_portal_upload_root()
+        path_error = await _pilot_enforce_request_paths(
+            tenant, {"args": {"input_dir": str(root)}}, action="upload_capability", request=request
+        )
+        if path_error is not None:
+            return False
+        # Probe the migrated table and actual configured root's lock semantics.
+        # This reserved probe has no batch directory or upload request identity.
+        await store.get(tenant.tenant_id, owner, "00000000-0000-0000-0000-000000000000")
+        first = UploadBatchLock(root, "upload_capability_probe")
+        try:
+            second = UploadBatchLock(root, "upload_capability_probe")
+            try:
+                return first.acquire() and not second.acquire()
+            finally:
+                second.close()
+        finally:
+            first.close()
+    except Exception:
+        LOGGER.exception("Upload receipt capability unavailable")
+        return False
+
+
+async def _stage_correlated_portal_upload(request: Request, upload_root: Path) -> JSONResponse:
+    from transformation_portal.ingest.upload_recovery import (
+        UploadBatchLock,
+        initialize_batch,
+        seal_completion,
+        verify_completion,
+    )
+    from transformation_portal.orchestrator.photographic_admission import drain_owned
+    from transformation_portal.orchestrator.upload_receipts import (
+        UploadReceiptConflict,
+        UploadReceiptExpired,
+        UploadReservation,
+        validate_upload_request_id,
+    )
+
+    try:
+        request_id = validate_upload_request_id(request.headers.get("X-TP-Upload-Request-ID", ""))
+    except ValueError:
+        return _error_response(400, code="INVALID_ARGUMENT", message="invalid upload request ID")
+    tenant, owner, store, error = await _upload_receipt_context(request, write=True)
+    if error is not None:
+        return error
+    assert tenant is not None and owner is not None and store is not None
+    path_error = await _pilot_enforce_request_paths(
+        tenant, {"args": {"input_dir": str(upload_root)}}, action="upload_stage", request=request
+    )
+    if path_error is not None:
+        return path_error
+    batch_id = "upload_" + uuid.uuid4().hex
+    now = _now()
+    reservation = UploadReservation(
+        batch_id,
+        tenant.tenant_id,
+        owner,
+        request_id,
+        uuid.uuid4().hex,
+        str(upload_root / batch_id),
+        "staging",
+        now,
+        now + PORTAL_UPLOAD_TTL_SECONDS,
+    )
+    lock = None
+    parsed = None
+    try:
+        await store.reserve(reservation)
+        lock = UploadBatchLock(upload_root, batch_id)
+        await drain_owned(asyncio.to_thread(lock.acquire, blocking=True))
+        current = await store.get(tenant.tenant_id, owner, request_id)
+        if current is None or current.generation != reservation.generation or current.state != "staging":
+            raise RuntimeError("upload staging ownership is unavailable")
+        initialize_batch(reservation)
+        parsed = await _parse_portal_upload_multipart(request)
+        paths = parse_client_manifest_relative_paths(parsed.client_manifest_raw, expected_count=len(parsed.uploads))
+
+        async def finish() -> StagedUploadResult:
+            assert parsed is not None
+
+            def stage_and_seal() -> tuple[StagedUploadResult, str, dict[str, Any]]:
+                result = stage_upload_batch(
+                    upload_root=upload_root,
+                    uploads=parsed.uploads,
+                    client_manifest_paths=paths,
+                    capture_metadata_enabled=_env_bool("TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED", False),
+                    now=now,
+                    reserved_batch_id=batch_id,
+                    cleanup_on_error=False,
+                )
+                seal_completion(reservation, result)
+                digest, data = verify_completion(reservation, max_files=PORTAL_UPLOAD_MAX_FILES)
+                return result, digest, data
+
+            result, digest, data = await asyncio.to_thread(stage_and_seal)
+            await store.complete(reservation, digest, data)
+            return result
+
+        # Disconnects never close the stream or lock while its worker survives.
+        result = await drain_owned(finish())
+        return JSONResponse(
+            _api_envelope("tp.orchestrator.upload_staging.v1", success=True, data=result.to_response_data(), error=None)
+        )
+    except UploadReceiptExpired:
+        return _error_response(409, code="CONFLICT", message="staged upload expired", details={"reason": "upload_expired"})
+    except UploadReceiptConflict:
+        return _error_response(409, code="CONFLICT", message="upload request ID is already reserved")
+    except UploadStagingError as exc:
+        return _error_response(
+            exc.status_code,
+            code=_http_status_error_code(exc.status_code),
+            message=exc.message,
+            details={"field": exc.field, "reason": exc.reason},
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        # ASGI receive task groups may wrap a single stream-limit rejection.
+        failure: BaseException = exc
+        while isinstance(failure, BaseExceptionGroup):
+            members = getattr(failure, "exceptions")
+            if len(members) != 1:
+                break
+            failure = members[0]
+        if isinstance(failure, HTTPException):
+            raise failure
+        LOGGER.exception("correlated upload staging failed")
+        return _error_response(503, code="SERVICE_UNAVAILABLE", message="upload outcome is unresolved")
+    finally:
+        if parsed is not None:
+            parsed.close()
+        if lock is not None:
+            lock.close()
+
+
+@app.get("/v1/uploads/staging/receipts/{request_id}", response_model=UploadReceiptEnvelope)
+async def get_portal_upload_receipt(request: Request, request_id: str) -> JSONResponse:
+    from transformation_portal.ingest.upload_recovery import UploadBatchLock, verify_completion
+    from transformation_portal.orchestrator.photographic_admission import drain_owned
+    from transformation_portal.orchestrator.upload_receipts import UploadReceiptExpired, validate_upload_request_id
+
+    try:
+        validate_upload_request_id(request_id)
+    except ValueError:
+        return _error_response(400, code="INVALID_ARGUMENT", message="invalid upload request ID")
+    tenant, owner, store, error = await _upload_receipt_context(request)
+    if error is not None:
+        return error
+    assert tenant is not None and owner is not None and store is not None
+    try:
+        reservation = await store.get(tenant.tenant_id, owner, request_id)
+        status, data = "unknown", None
+        if reservation is not None:
+            if reservation.state in {"deleting", "expired"} or reservation.expires_at <= _now():
+                status = "expired"
+            else:
+                root = _resolved_portal_upload_root()
+                batch = Path(reservation.batch_root)
+                if batch.parent != root or batch.name != reservation.batch_id:
+                    raise ValueError("configured upload root changed")
+                path_error = await _pilot_enforce_request_paths(
+                    tenant, {"args": {"input_dir": str(batch / "input")}}, action="upload_receipt", request=request
+                )
+                if path_error is not None:
+                    return path_error
+                lock = UploadBatchLock(root, reservation.batch_id)
+                try:
+                    status = "pending"
+                    if lock.acquire():
+                        try:
+                            digest, data = await drain_owned(asyncio.to_thread(verify_completion, reservation))
+                            await store.complete(reservation, digest, data)
+                            status = "ready"
+                        except UploadReceiptExpired:
+                            status, data = "expired", None
+                        except (OSError, ValueError, KeyError, TypeError):
+                            status, data = "unknown", None
+                finally:
+                    lock.close()
+        body = UploadReceiptData.model_validate({"request_id": request_id, "status": status, "receipt": data})
+        return JSONResponse(
+            UploadReceiptEnvelope(schema="tp.orchestrator.upload_receipt.v1", success=True, data=body, error=None).model_dump(
+                mode="json", by_alias=True
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
+    except Exception:
+        LOGGER.exception("upload receipt lookup failed")
+        return _error_response(503, code="SERVICE_UNAVAILABLE", message="upload outcome is unresolved")
+
+
 @app.post("/v1/uploads/staging", response_model=UploadStagingEnvelope)
 async def stage_portal_uploads(request: Request) -> JSONResponse:
     if not _portal_staged_uploads_enabled(_portal_actor_from_request(request)):
@@ -9916,6 +10427,9 @@ async def stage_portal_uploads(request: Request) -> JSONResponse:
             details={"path": request.url.path, "reason": "upload_root_invalid"},
         )
 
+    if "X-TP-Upload-Request-ID" in request.headers:
+        return await _stage_correlated_portal_upload(request, upload_root)
+
     parsed_payload: Optional[_ParsedPortalUploadPayload] = None
     try:
         parsed_payload = await _parse_portal_upload_multipart(request)
@@ -9931,15 +10445,19 @@ async def stage_portal_uploads(request: Request) -> JSONResponse:
             parsed_payload.client_manifest_raw,
             expected_count=len(parsed_payload.uploads),
         )
-        result = await asyncio.to_thread(
-            stage_upload_batch,
-            upload_root=upload_root,
-            uploads=parsed_payload.uploads,
-            client_manifest_paths=client_manifest_paths,
-            capture_metadata_enabled=_env_bool("TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED", False),
-            capture_metadata_config_path=DEFAULT_CAPTURE_METADATA_CONFIG_PATH,
-            capture_metadata_schema_path=DEFAULT_CAPTURE_METADATA_SCHEMA_PATH,
-            now=_now(),
+        from transformation_portal.orchestrator.photographic_admission import drain_owned
+
+        result = await drain_owned(
+            asyncio.to_thread(
+                stage_upload_batch,
+                upload_root=upload_root,
+                uploads=parsed_payload.uploads,
+                client_manifest_paths=client_manifest_paths,
+                capture_metadata_enabled=_env_bool("TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED", False),
+                capture_metadata_config_path=DEFAULT_CAPTURE_METADATA_CONFIG_PATH,
+                capture_metadata_schema_path=DEFAULT_CAPTURE_METADATA_SCHEMA_PATH,
+                now=_now(),
+            )
         )
     except UploadStagingError as exc:
         return _error_response(
@@ -10484,7 +11002,17 @@ async def _create_job(
             return audit_response
         job = Job(id=jid, created_at=_now(), request=payload, effective_request=effective_request)
         try:
-            await repo.create(_record_from_job(job))
+            from transformation_portal.orchestrator.storage.postgres import PostgresJobRepository
+
+            if isinstance(repo, PostgresJobRepository):
+                read_paths: tuple[str, ...] = ()
+                if pipeline in ARCHIVE_GATE_PIPELINES:
+                    from transformation_portal.orchestrator.execution_dispatch import archive_command_read_paths
+
+                    read_paths = archive_command_read_paths(pipeline, argv)
+                await repo.create(_record_from_job(job), upload_read_paths=read_paths, upload_read_base=REPO_ROOT)
+            else:
+                await repo.create(_record_from_job(job))
         except Exception:  # noqa: BLE001 - create failures must fail closed and stay redacted
             LOGGER.exception("job repository create failed for %s", jid)
             if trusted_output_dir is not None and not output_dir_existed_pre_dispatch:
@@ -10763,7 +11291,7 @@ async def _get_job_artifact(
             # Fingerprint computation can do bounded synchronous IO; offload
             # the indexing pass to a worker thread to keep the event loop
             # responsive for SSE subscribers and concurrent API callers.
-            await asyncio.to_thread(_index_job_artifacts, job)
+            await asyncio.to_thread(_index_job_run_artifacts, job)
             await _persist_job_artifact_metadata(job, fail_closed=False)
         known_paths = _artifact_known_relative_paths(job)
     if requested_relative_path not in known_paths:
@@ -10936,7 +11464,7 @@ async def _delete_job_artifacts(
     tenant_access_error = await _pilot_enforce_job_tenant(tenant, job, action="artifact_delete", request=request)
     if tenant_access_error is not None:
         return tenant_access_error
-    if job.state not in _TERMINAL_JOB_STATES:
+    if not _job_artifacts_finalized(job):
         return _error_response(
             409,
             code="CONFLICT",
@@ -10962,6 +11490,13 @@ async def _delete_job_artifacts(
                 job,
                 reason="explicit_delete",
                 fail_closed_on_repository=True,
+            )
+        except _AmbiguousLegacyArtifactOwnership:
+            return _error_response(
+                409,
+                code="CONFLICT",
+                message="legacy artifact ownership is ambiguous",
+                details={"job_id": job_id, "reason": "ambiguous_artifact_ownership"},
             )
         except _JobRepositoryUnavailable:
             return _repository_unavailable_response()
@@ -11017,6 +11552,10 @@ async def _cancel_job(job_id: str, *, request: Optional[Request] = None) -> JSON
     tenant_access_error = await _pilot_enforce_job_tenant(tenant, job, action="job_cancel", request=request)
     if tenant_access_error is not None:
         return tenant_access_error
+    if not _uses_dispatch_authority():
+        # Reclaim and cancellation can select the same job after its expired
+        # lease is requeued. Both must publish through the same runtime lock.
+        job = JOBS.setdefault(job_id, job)
     audit_response = await _record_pilot_audit(
         action="job_cancel",
         decision="accepted",
@@ -11165,8 +11704,8 @@ async def _job_events(
     tenant_access_error = await _pilot_enforce_job_tenant(tenant, job, action="job_events", request=request)
     if tenant_access_error is not None:
         return tenant_access_error
-    if job.state not in ACTIVE_JOB_STATES and job.state != "canceled":
-        _refresh_job_run_summary(job)
+    # A synthesized ``done`` carries the persisted outcome; see _serialized_job_run_summary.
+    annotate_job_failure(job)
 
     try:
         replay_after_seq = _last_event_id_from_request(request)
@@ -11416,7 +11955,7 @@ def _job_execution_service() -> JobExecutionService[Job]:
             terminate_process=_terminate_process,
             redact_log=_redact_log_line,
             extract_progress=_extract_progress_percent,
-            index_artifacts=_index_job_artifacts,
+            index_artifacts=_index_job_run_artifacts,
             refresh_summary=_refresh_job_run_summary,
             artifact_store=_artifact_store,
             operational_records=get_operational_record_store,
@@ -11429,6 +11968,7 @@ def _job_execution_service() -> JobExecutionService[Job]:
             validate_paths=_revalidate_dispatch_paths,
             resolve_output_root=lambda value: _resolve_allowed_request_path(value, ALLOWED_OUTPUT_ROOTS),
             allow_legacy_commands=True,
+            legacy_terminal_guard=lambda job: job.terminal_lock,
         ),
         ExecutionSettings(
             log_tail_limit=LOG_TAIL_LIMIT,
@@ -11443,8 +11983,17 @@ def _job_execution_service() -> JobExecutionService[Job]:
 async def _orchestrator_job_executor(
     request: JobEnqueueRequest | DispatchLocator,
     cancellation_event: "asyncio.Event",
+    *,
+    pending_legacy_reclaims: Optional[Mapping[str, Optional[JobRecord]]] = None,
 ) -> int:
     """Compatibility entry point; execution belongs to JobExecutionService."""
+    if (
+        isinstance(request, JobEnqueueRequest)
+        and pending_legacy_reclaims is not None
+        and request.job_id in pending_legacy_reclaims
+    ):
+        LOGGER.info("worker released legacy job %s pending reclaim reconciliation", request.job_id)
+        return 0
     return await _job_execution_service().execute(request, cancellation_event, run_job=_run_job)
 
 
@@ -11458,29 +12007,33 @@ async def _publish_cancellation_terminal(job: "Job") -> None:
     worker has already leased, ``_run_job``'s finally-block remains
     the source of truth and this helper is a no-op.
     """
-    if job.finished_at is not None:
-        return
-    job.state = "canceled"
-    job.exit_code = job.exit_code if job.exit_code is not None else 0
-    now = _now()
-    await _publish_event(
-        job.id,
-        "done",
-        {
-            "id": job.id,
-            "state": job.state,
-            "exit_code": job.exit_code,
-            "error": job.error,
-            "artifacts": job.artifacts,
-            "run_summary": job.run_summary or None,
-        },
-    )
-    job.done_published_at = now
-    job.finished_at = now
-    await _persist_job_state(job)
+    async with job.terminal_lock:
+        if job.finished_at is not None or job.done_published_at is not None:
+            return
+        exit_code = job.exit_code if job.exit_code is not None else 0
+        await _publish_event(
+            job.id,
+            "done",
+            {
+                "id": job.id,
+                "state": "canceled",
+                "exit_code": exit_code,
+                "error": job.error,
+                "artifacts": job.artifacts,
+                "run_summary": job.run_summary or None,
+            },
+        )
+        now = _now()
+        job.state = "canceled"
+        job.exit_code = exit_code
+        job.done_published_at = now
+        job.finished_at = now
+        await _persist_job_state(job)
 
 
-async def _publish_worker_lost_terminal(job: "Job", *, reason_code: str) -> None:
+async def _publish_worker_lost_terminal(
+    job: "Job", *, reason_code: str, pending: Optional[Dict[str, Optional[JobRecord]]] = None
+) -> bool:
     """Publish the terminal ``worker_lost`` event for a reclaimed lease.
 
     Phase 2.D: the broker-reclaim reconciler calls this when
@@ -11494,59 +12047,46 @@ async def _publish_worker_lost_terminal(job: "Job", *, reason_code: str) -> None
     closed) collapses this to a no-op so the terminal event is not
     duplicated.
     """
-    if job.finished_at is not None:
-        return
-    job.state = "worker_lost"
-    if job.exit_code is None:
-        job.exit_code = None  # explicitly preserve "no exit" semantics
-    job.error = {
-        "code": reason_code,
-        "message": "Worker lease expired without heartbeat; job marked worker_lost.",
-        "retriable": True,
-    }
-    now = _now()
-    await _publish_event(
-        job.id,
-        "done",
-        {
-            "id": job.id,
-            "state": job.state,
-            "exit_code": job.exit_code,
-            "error": job.error,
-            "artifacts": job.artifacts,
-            "run_summary": job.run_summary or None,
-        },
-    )
-    job.done_published_at = now
-    job.finished_at = now
-    await _persist_job_state(job)
+    async with job.terminal_lock:
+        if job.finished_at is not None or job.done_published_at is not None:
+            if pending is not None:
+                pending[job.id] = _record_from_job(job).copy()
+            return False
+        error = {
+            "code": reason_code,
+            "message": "Worker lease expired without heartbeat; job marked worker_lost.",
+            "retriable": True,
+        }
+        await _publish_event(
+            job.id,
+            "done",
+            {
+                "id": job.id,
+                "state": "worker_lost",
+                "exit_code": job.exit_code,
+                "error": error,
+                "artifacts": job.artifacts,
+                "run_summary": job.run_summary or None,
+            },
+        )
+        now = _now()
+        job.state = "worker_lost"
+        job.error = error
+        job.last_event_at = now
+        job.done_published_at = now
+        job.finished_at = now
+        if pending is not None:
+            # The runtime projection can be hydrated while the store write
+            # awaits. Keep the exact already-published result for retries.
+            pending[job.id] = _record_from_job(job).copy()
+        await _persist_job_state(job)
+        return True
 
 
-async def _reclaim_sweep_once(broker: "QueueBroker", repository: Any) -> List[str]:
-    """One pass of the Phase 2.D broker-reclaim reconciler.
-
-    Calls ``broker.reclaim_expired_leases(now=server_time())`` and,
-    for each reclaimed ``job_id``, drives BOTH:
-
-    - the in-process ``Job`` (so SSE subscribers see the terminal
-      ``done`` event immediately), and
-    - the durable ``JobRepository`` row (so Postgres-backed state
-      reflects the same ``worker_lost`` + ``retriable=True``
-      payload — without this dual-write a restart could resurrect
-      the row as ``running``).
-
-    Returns the reclaimed ids so callers (lifespan loop, tests)
-    can log / metric the sweep. The broker's contract still
-    re-queues reclaimed dispatch payloads at the head of the ready
-    FIFO; the orchestrator's executor adapter has an explicit
-    terminal-state guard so a stale lease pickup of a reclaimed-
-    then-terminal job is a no-op.
-
-    ``repository`` may be ``None`` when broker construction
-    succeeded but the repository singleton did not; in that case
-    only the in-process Job is updated and a warning is logged so
-    the operator can see the missing persistence.
-    """
+async def _reclaim_sweep_once(
+    broker: "QueueBroker", repository: Optional[JobRepository], *, pending: Optional[Dict[str, Optional[JobRecord]]] = None
+) -> List[str]:
+    """Return newly reclaimed IDs and retry pending legacy reconciliation."""
     if isinstance(broker, RedisLocatorQueueBroker):
         records = get_operational_record_store()
         expired = await records.expire_dispatches()
@@ -11560,42 +12100,61 @@ async def _reclaim_sweep_once(broker: "QueueBroker", repository: Any) -> List[st
             except Exception:
                 LOGGER.exception("deferred attempt/staging cleanup failed for %s", job_id)
         return expired
+    if pending is None:
+        pending = {}
     try:
         now = await broker.server_time()
         reclaimed = await broker.reclaim_expired_leases(now=now)
     except Exception:  # noqa: BLE001 - sweep failures must not crash the loop
         LOGGER.exception("broker reclaim sweep failed")
-        return []
+        reclaimed = []
     for jid in reclaimed:
-        job = JOBS.get(jid)
-        if job is not None:
-            try:
-                await _publish_worker_lost_terminal(job, reason_code=WORKER_LOST_REASON_RECLAIMED)
-            except Exception:  # noqa: BLE001 - one job's failure must not block others
-                LOGGER.exception("publish worker_lost terminal failed for job %s", jid)
-        if repository is None:
-            LOGGER.warning("reclaim sweep skipped repository update for job %s (no repository configured)", jid)
-            continue
+        pending.setdefault(jid, None)
+    if repository is None:
+        if reclaimed:
+            LOGGER.warning("legacy reclaim is pending because the repository is unavailable")
+        return list(reclaimed)
+    for jid, completion in tuple(pending.items()):
         try:
-            now_ts = _now()
-            await repository.update(
-                jid,
-                state="worker_lost",
-                finished_at=now_ts,
-                done_published_at=now_ts,
-                last_event_at=now_ts,
-                error={
-                    "code": WORKER_LOST_REASON_RECLAIMED,
-                    "message": "Worker lease expired without heartbeat; job marked worker_lost.",
-                    "retriable": True,
-                },
-            )
-        except Exception:  # noqa: BLE001 - persistence failure must not block the loop
-            LOGGER.exception("repository update for reclaimed job %s failed", jid)
+            record = await repository.get(jid)
+            if record is not None and record.finished_at is None and record.done_published_at is None:
+                job = JOBS.get(jid)
+                if job is None:
+                    job = _job_from_record(completion if completion is not None else record)
+                    JOBS[jid] = job
+                if completion is not None:
+                    async with job.terminal_lock:
+                        # Retry only the final projection. Separate telemetry
+                        # and cancellation writes may have advanced meanwhile.
+                        await _persist_job_fields(
+                            job,
+                            state=completion.state,
+                            progress=completion.progress,
+                            started_at=completion.started_at,
+                            finished_at=completion.finished_at,
+                            done_published_at=completion.done_published_at,
+                            exit_code=completion.exit_code,
+                            run_summary=completion.run_summary,
+                            error=completion.error,
+                        )
+                elif not await _publish_worker_lost_terminal(job, reason_code=WORKER_LOST_REASON_RECLAIMED, pending=pending):
+                    # The local runner won publication. Check durable state
+                    # again before retrying its recorded result.
+                    continue
+            # Missing rows and durable completion markers need no write.
+            pending.pop(jid)
+        except Exception:  # noqa: BLE001 - one job's failure must not block others
+            LOGGER.exception("reclaim reconciliation pending for job %s", jid)
     return list(reclaimed)
 
 
-async def _reclaim_sweep_loop(broker: "QueueBroker", repository: Any, stop_event: "asyncio.Event") -> None:
+async def _reclaim_sweep_loop(
+    broker: "QueueBroker",
+    repository: Optional[JobRepository],
+    stop_event: "asyncio.Event",
+    *,
+    pending_legacy_reclaims: Dict[str, Optional[JobRecord]],
+) -> None:
     """Periodic reconciler driven by ``_orchestrator_lifespan``.
 
     Sleeps ``RECLAIM_SWEEP_INTERVAL_SECONDS`` between sweeps; the
@@ -11607,7 +12166,7 @@ async def _reclaim_sweep_loop(broker: "QueueBroker", repository: Any, stop_event
     """
     while not stop_event.is_set():
         try:
-            await _reclaim_sweep_once(broker, repository)
+            await _reclaim_sweep_once(broker, repository, pending=pending_legacy_reclaims)
         except Exception:  # noqa: BLE001 - defense in depth; never crash the loop
             LOGGER.exception("reclaim sweep loop iteration raised")
         try:
@@ -11618,7 +12177,17 @@ async def _reclaim_sweep_loop(broker: "QueueBroker", repository: Any, stop_event
 
 async def _run_job(job: Job, argv: List[str]) -> None:
     """Retain the legacy Python helper while sharing the production runner."""
-    await _job_execution_service().run(job, argv)
+    # Registered for the whole run, including the artifact finalisation that
+    # follows the terminal state (see ``_job_artifacts_finalized``).
+    _LOCAL_RUNNER_JOB_IDS[job.id] = _LOCAL_RUNNER_JOB_IDS.get(job.id, 0) + 1
+    try:
+        await _job_execution_service().run(job, argv)
+    finally:
+        remaining = _LOCAL_RUNNER_JOB_IDS.get(job.id, 0) - 1
+        if remaining > 0:
+            _LOCAL_RUNNER_JOB_IDS[job.id] = remaining
+        else:
+            _LOCAL_RUNNER_JOB_IDS.pop(job.id, None)
 
 
 async def _create_distributed_job(
@@ -11748,6 +12317,7 @@ async def _create_distributed_job(
             requested_output_root=str(trusted_output_dir),
             global_limit=MAX_CONCURRENT_JOBS,
             tenant_limit=PILOT_MAX_ACTIVE_JOBS_PER_TENANT,
+            upload_read_base=REPO_ROOT,
             **admission_options,
         )
         if submission is not None:

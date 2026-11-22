@@ -115,7 +115,10 @@ class WorldModel:
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.hidden_dim = hidden_dim
+        self.action_embed_dim = action_embed_dim
         self.num_metrics = num_metrics
+        self.dropout = dropout
+        self.training = True
 
         # Action embedding
         self.action_embed = nn.Embedding(action_dim, action_embed_dim)
@@ -184,6 +187,20 @@ class WorldModel:
 
         return next_state, metrics
 
+    def _modules(self) -> list[Any]:
+        return [self.action_embed, self.encoder, self.next_state_head, self.metrics_head]
+
+    def train(self, mode: bool = True) -> "WorldModel":
+        """Set training mode (enables dropout) on every sub-module."""
+        self.training = bool(mode)
+        for module in self._modules():
+            module.train(self.training)
+        return self
+
+    def eval(self) -> "WorldModel":
+        """Set inference mode (disables dropout) on every sub-module."""
+        return self.train(False)
+
     def predict(self, state: Any, action: int) -> PredictionResult:
         """Predict next state and metrics (inference mode).
 
@@ -196,8 +213,15 @@ class WorldModel:
         """
         torch, _, _ = _get_torch()
 
-        with torch.no_grad():
-            next_state, metrics = self.forward(state, action)
+        # Inference must be deterministic: run with dropout disabled and
+        # restore the caller's mode afterwards (training loops call forward()).
+        was_training = self.training
+        self.eval()
+        try:
+            with torch.no_grad():
+                next_state, metrics = self.forward(state, action)
+        finally:
+            self.train(was_training)
 
         # Extract scalar values
         metrics_np = metrics[0].cpu().numpy()
@@ -275,7 +299,9 @@ class WorldModel:
                     "state_dim": self.state_dim,
                     "action_dim": self.action_dim,
                     "hidden_dim": self.hidden_dim,
+                    "action_embed_dim": self.action_embed_dim,
                     "num_metrics": self.num_metrics,
+                    "dropout": self.dropout,
                 },
             },
             path,
@@ -314,9 +340,15 @@ class EnsembleWorldModel:
         """Initialize ensemble.
 
         Args:
-            n_models: Number of models in ensemble
+            n_models: Number of models in ensemble (at least 2: disagreement
+                between models is the uncertainty estimate)
             **model_kwargs: Arguments for WorldModel
+
+        Raises:
+            ValueError: If ``n_models`` is below 2.
         """
+        if isinstance(n_models, bool) or not isinstance(n_models, int) or n_models < 2:
+            raise ValueError(f"EnsembleWorldModel needs n_models >= 2 to estimate uncertainty, got {n_models!r}")
         self.n_models = n_models
         self.models = [WorldModel(**model_kwargs) for _ in range(n_models)]
 
@@ -362,13 +394,29 @@ class EnsembleWorldModel:
         """
         torch, _, _ = _get_torch()
 
-        with torch.no_grad():
-            _, mean_metrics, _, std_metrics = self.forward(state, action)
+        was_training = [model.training for model in self.models]
+        self.eval()
+        try:
+            with torch.no_grad():
+                _, mean_metrics, _, std_metrics = self.forward(state, action)
+        finally:
+            for model, mode in zip(self.models, was_training):
+                model.train(mode)
 
         mean_score = float(mean_metrics[0, 0].item())
         std_score = float(std_metrics[0, 0].item())
 
         return mean_score, std_score
+
+    def train(self, mode: bool = True) -> "EnsembleWorldModel":
+        """Set training mode on every member model."""
+        for model in self.models:
+            model.train(mode)
+        return self
+
+    def eval(self) -> "EnsembleWorldModel":
+        """Set inference mode on every member model."""
+        return self.train(False)
 
     def parameters(self):
         """Get all parameters."""

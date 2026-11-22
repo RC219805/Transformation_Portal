@@ -74,6 +74,9 @@ export async function createAnonymousSession() {
   const config = getConfig();
   const store = getSessionStore();
   const currentTime = nowMs();
+  // Sweep expired rows whenever a new one is minted: the browser drops the
+  // cookie at absolute expiry, so an expired row is otherwise never revisited.
+  await store.pruneExpiredSessions(currentTime);
   const record = {
     id: generateId(),
     created_at: currentTime,
@@ -132,6 +135,7 @@ export async function rotateAuthenticatedSession(existingSession, user) {
 
   const config = getConfig();
   const currentTime = nowMs();
+  await store.pruneExpiredSessions(currentTime);
   const record = {
     id: generateId(),
     created_at: currentTime,
@@ -200,10 +204,15 @@ export function clearSessionCookie(response) {
 export function validateCsrfToken(session, token) {
   const sessionToken = String(session?.csrfToken || "");
   const candidate = String(token || "");
-  if (!sessionToken || !candidate || sessionToken.length !== candidate.length) {
+  if (!sessionToken || !candidate) {
     return false;
   }
-  return timingSafeEqual(Buffer.from(sessionToken), Buffer.from(candidate));
+  // Compare UTF-8 byte lengths, not string lengths: a candidate with
+  // multi-byte characters can match the token's string length while
+  // differing in byte length, which makes timingSafeEqual() throw.
+  const expected = Buffer.from(sessionToken);
+  const actual = Buffer.from(candidate);
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
 async function pruneLoginAttempts(currentTime) {
@@ -235,6 +244,33 @@ export async function isLoginThrottled(throttleKey) {
     currentTime - getConfig().loginWindowMs
   );
   return failures >= getConfig().loginAttemptLimit;
+}
+
+/**
+ * Atomically check the throttle for every key and, when none is exhausted,
+ * record this attempt as a failure against all of them before the password
+ * is verified. Returns ``true`` when the attempt may proceed, ``false`` when
+ * it is throttled. Call ``clearLoginAttempts`` with the same keys once the
+ * credentials verify, so a successful login clears the reservation.
+ */
+export async function reserveLoginAttempt({ throttleKeys, remoteAddr }) {
+  const currentTime = nowMs();
+  await pruneLoginAttempts(currentTime);
+  return Boolean(
+    await getSessionStore().reserveLoginAttempt(throttleKeys, {
+      attemptedAt: currentTime,
+      sinceMs: currentTime - getConfig().loginWindowMs,
+      limit: getConfig().loginAttemptLimit,
+      remoteAddr: remoteAddr || null
+    })
+  );
+}
+
+export async function clearLoginAttempts(throttleKeys) {
+  const store = getSessionStore();
+  for (const throttleKey of throttleKeys) {
+    await store.resetLoginAttempts(throttleKey);
+  }
 }
 
 export async function recordLoginAttempt({ throttleKey, success, remoteAddr }) {

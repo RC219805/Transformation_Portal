@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from transformation_portal.vlm_captioning.parser import parse_fastvlm_caption
@@ -131,3 +133,37 @@ def test_empty_required_values_do_not_validate() -> None:
     assert parsed.validated is False
     assert parsed.missing_keys == []
     assert any("empty required fields" in warning for warning in parsed.warnings)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "Prompt: SCENE=<short>\nSCENE=Pool; MATERIALS=stone",
+        "\n\n   \tPrompt: describe\nSCENE=Pool; MATERIALS=stone",
+        "Files: 1\n\r\n \x0b\x0c Prompt: describe\nSCENE=Pool; MATERIALS=stone",
+    ],
+)
+def test_prompt_echo_line_still_suppresses_the_caption(raw: str) -> None:
+    parsed = parse_fastvlm_caption(raw)
+
+    assert parsed.caption == {}
+    assert parsed.validated is False
+
+
+def test_text_mentioning_prompt_mid_line_is_not_a_prompt_echo() -> None:
+    parsed = parse_fastvlm_caption("Note about the Prompt: none\nSCENE=Pool; MATERIALS=stone")
+
+    assert parsed.caption["scene"] == "Pool"
+
+
+def test_blank_line_flood_parses_in_linear_time() -> None:
+    # D-15: the prompt-echo search was quadratic in the number of blank lines
+    # (about 4 s for the 64 Ki characters the runtime keeps, 15 s for this input).
+    raw = "\n" * 131072 + "SCENE=Pool; MATERIALS=stone"
+
+    start = time.perf_counter()
+    parsed = parse_fastvlm_caption(raw)
+    elapsed = time.perf_counter() - start
+
+    assert parsed.caption["scene"] == "Pool"
+    assert elapsed < 2.0

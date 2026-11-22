@@ -133,14 +133,13 @@ run_flake8() {
     log "mode=$MODE"
     log "flake8 scope=src tests"
 
-    set +e
+    # Capture the status with "||" and never toggle errexit in here: "set -e" is global, so
+    # re-arming it before "return" made the caller abort on this function's non-zero status.
     "$PYTHON_BIN" -m flake8 src/ tests/ \
         --count \
         --select=E9,F63,F7,F82 \
         --show-source \
-        --statistics
-    flake8_exit=$?
-    set -e
+        --statistics || flake8_exit=$?
 
     if [ "$flake8_exit" -eq 0 ]; then
         log "flake8 passed"
@@ -213,10 +212,7 @@ run_pylint() {
 
     pylint_pythonpath="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
-    set +e
-    PYTHONPATH="$pylint_pythonpath" "$PYTHON_BIN" -m pylint --jobs=1 "${PYLINT_FILES[@]}"
-    pylint_exit=$?
-    set -e
+    PYTHONPATH="$pylint_pythonpath" "$PYTHON_BIN" -m pylint --jobs=1 "${PYLINT_FILES[@]}" || pylint_exit=$?
 
     # Pylint uses bitwise exit codes:
     # 1=fatal, 2=error, 4=warning, 8=refactor, 16=convention, 32=usage.
@@ -239,12 +235,9 @@ require_module pylint
 FLAKE8_EXIT=0
 PYLINT_BLOCKING_EXIT=0
 
-set +e
-run_flake8
-FLAKE8_EXIT=$?
-run_pylint
-PYLINT_BLOCKING_EXIT=$?
-set -e
+# Both linters always run; their statuses only decide the exit code below.
+run_flake8 || FLAKE8_EXIT=$?
+run_pylint || PYLINT_BLOCKING_EXIT=$?
 
 if [ "$MODE" = "advisory" ]; then
     exit 0

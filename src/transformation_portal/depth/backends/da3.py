@@ -49,6 +49,8 @@ from ...lux_depth_v3.model_resolution import (
     restore_stale_direct_model_selection,
     validate_authoritative_model_contract,
 )
+from ._array_contract import parse_worker_input_size, to_rgb_uint8, validate_worker_depth_map
+from ._worker_env import build_isolated_worker_env, resolve_worker_timeout_seconds
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
@@ -283,6 +285,9 @@ class DA3Backend:
         self._candidate_authority = candidate_authority
         self._canonical_plan_bytes = canonical_plan_bytes
         self._engine: Optional[DA3InferenceEngine] = None
+        # Device the in-process engine was loaded for; ``None`` means "the
+        # backend default device" (for example an engine injected by a caller).
+        self._engine_device: Optional[str] = None
         self._device = self._resolve_device(config, candidate_authority)
         # P0-1 (issue #2065): consume the authoritative single-resolution
         # contract when the invocation carries one, instead of re-resolving.
@@ -459,43 +464,17 @@ class DA3Backend:
         config: Optional["EnhanceConfig"],
     ) -> int:
         """Resolve subprocess timeout for DA3 worker execution."""
-        candidate: Any = None
-        if config is not None:
-            candidate = getattr(config, "da3_subprocess_timeout_seconds", None)
-
-        if candidate in (None, ""):
-            env_candidate = os.environ.get("TRANSFORMATION_PORTAL_DA3_TIMEOUT_SECONDS")
-            if env_candidate and env_candidate.strip():
-                candidate = env_candidate.strip()
-
-        if candidate in (None, ""):
-            return DEFAULT_DA3_SUBPROCESS_TIMEOUT_SECONDS
-
-        try:
-            timeout_seconds = int(candidate)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("DA3 subprocess timeout must be a positive integer number of seconds") from exc
-
-        if timeout_seconds <= 0:
-            raise ValueError("DA3 subprocess timeout must be greater than zero")
-        return timeout_seconds
+        return resolve_worker_timeout_seconds(
+            config,
+            config_attr="da3_subprocess_timeout_seconds",
+            env_var="TRANSFORMATION_PORTAL_DA3_TIMEOUT_SECONDS",
+            label="DA3",
+            default=DEFAULT_DA3_SUBPROCESS_TIMEOUT_SECONDS,
+        )
 
     def _build_worker_env(self) -> dict[str, str]:
         """Build a deterministic import environment for the subprocess worker."""
-        env = {
-            key: value
-            for key, value in os.environ.items()
-            if not key.upper().startswith("PYTHON") and key.upper() not in {"VIRTUAL_ENV", "__PYVENV_LAUNCHER__"}
-        }
-        env.update(
-            {
-                "PYTHONDONTWRITEBYTECODE": "1",
-                "PYTHONNOUSERSITE": "1",
-                "PYTHONSAFEPATH": "1",
-            }
-        )
-        if self._repo_src is not None and self._repo_src.exists():
-            env["PYTHONPATH"] = str(self._repo_src)
+        env = build_isolated_worker_env(self._repo_src)
         if "MPLCONFIGDIR" not in env:
             if self._repo_root is not None:
                 mpl_config_dir = self._repo_root / ".runtime" / "mplconfig"
@@ -1109,20 +1088,7 @@ class DA3Backend:
     ) -> tuple[Image.Image, np.ndarray]:
         """Normalize input image for both local and subprocess execution."""
         if isinstance(image, np.ndarray):
-            if image.dtype == np.uint8:
-                arr = image
-            elif np.issubdtype(image.dtype, np.floating):
-                image_max = image.max()
-                if image_max <= 1.0:
-                    image_min = image.min()
-                    if image_min >= 0.0:
-                        arr = (image * 255).astype(np.uint8)
-                    else:
-                        arr = image.astype(np.uint8, copy=False)
-                else:
-                    arr = image.astype(np.uint8, copy=False)
-            else:
-                arr = image.astype(np.uint8, copy=False)
+            arr = to_rgb_uint8(image)
             image_pil = Image.fromarray(arr)
             image_array = arr
         else:
@@ -1148,8 +1114,13 @@ class DA3Backend:
     ) -> DepthResult:
         """Run DA3 inference in the active Python process."""
         use_device = self._effective_device(device)
-        if self._engine is None or device is not None:
+        loaded_device = getattr(self, "_engine_device", None) or self._device
+        if self._engine is None or (device is not None and use_device != loaded_device):
+            # Reload only when there is no engine or the requested device
+            # differs from the one the engine was built for; reloading on every
+            # explicit (but unchanged) device re-instantiated the model per image.
             self._load_engine(use_device)
+            self._engine_device = use_device
 
         image_pil, image_array = self._prepare_image(image)
         if self._engine is None:
@@ -1339,13 +1310,20 @@ class DA3Backend:
                     with output_json_path.open("r", encoding="utf-8") as handle:
                         payload = json.load(handle)
                 verified_runtime_identity = self._verify_worker_authority_echo(payload)
+                if not isinstance(payload, dict):
+                    raise ValueError("DA3 worker result JSON is not an object")
                 if verified_runtime_identity is not None:
                     depth_map = _load_verified_worker_depth(output_depth_path, payload.get("depth_artifact"))
                 else:
-                    depth_map = np.load(output_depth_path, allow_pickle=False).astype(np.float32)
+                    depth_map = np.load(output_depth_path, allow_pickle=False)
+                depth_map = validate_worker_depth_map(depth_map, label="DA3 worker")
+                normalized_input_size = parse_worker_input_size(
+                    payload.get("input_size"),
+                    fallback=(image_array.shape[0], image_array.shape[1]),
+                )
             except LuxExecutionPlanAuthorityError:
                 raise
-            except (json.JSONDecodeError, OSError, ValueError) as exc:
+            except (OSError, ValueError, EOFError) as exc:
                 category, summary = _classify_subprocess_failure(
                     phase="inference",
                     stdout=result.stdout,
@@ -1363,11 +1341,6 @@ class DA3Backend:
                         stderr=f"{result.stderr}\n{exc}".strip(),
                     )
                 ) from exc
-
-        input_size = payload.get("input_size")
-        normalized_input_size = (image_array.shape[0], image_array.shape[1])
-        if isinstance(input_size, (list, tuple)) and len(input_size) == 2:
-            normalized_input_size = (int(input_size[0]), int(input_size[1]))
 
         result_metadata = dict(payload.get("metadata", {})) if isinstance(payload.get("metadata"), dict) else {}
         if verified_runtime_identity is not None:

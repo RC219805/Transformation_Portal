@@ -15,6 +15,7 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -37,6 +38,14 @@ class MetricType(Enum):
     MSE = "mse"  # Mean squared error (lower is better)
 
 
+class MetricUnavailableError(RuntimeError):
+    """Raised when a metric cannot be computed (e.g. its optional package is missing).
+
+    An unavailable metric is reported as unavailable, never as a substituted
+    value under the metric's key.
+    """
+
+
 @dataclass
 class PerceptualScore:
     """Result of perceptual quality assessment."""
@@ -51,6 +60,9 @@ class PerceptualScore:
         """Check if this score is better than another."""
         if self.metric_type != other.metric_type:
             raise ValueError("Cannot compare different metric types")
+        if self.higher_is_better != other.higher_is_better:
+            # e.g. a real BRISQUE score against the sharpness fallback proxy.
+            raise ValueError("Cannot compare scores with different directions")
 
         if self.higher_is_better:
             return self.score > other.score
@@ -100,7 +112,9 @@ class QualityMetrics:
             reference: Reference image for full-reference metrics
 
         Returns:
-            Dictionary of metric scores
+            Dictionary of metric scores. A metric that is unavailable in this
+            environment (e.g. LPIPS without the ``lpips`` package) is omitted
+            rather than substituted with another metric.
         """
         scores = {}
 
@@ -110,7 +124,10 @@ class QualityMetrics:
 
         # Full-reference metrics (need reference)
         if reference is not None:
-            scores[MetricType.LPIPS] = self.compute_lpips(image, reference)
+            try:
+                scores[MetricType.LPIPS] = self.compute_lpips(image, reference)
+            except MetricUnavailableError as exc:
+                logger.warning("LPIPS omitted from metrics: %s", exc)
             scores[MetricType.PSNR] = self.compute_psnr(image, reference)
             scores[MetricType.SSIM] = self.compute_ssim(image, reference)
             scores[MetricType.MSE] = self.compute_mse(image, reference)
@@ -128,6 +145,9 @@ class QualityMetrics:
 
         Returns:
             LPIPS score (lower is better, 0 = identical)
+
+        Raises:
+            MetricUnavailableError: if the ``lpips`` package is not installed.
         """
         image = self._ensure_device(image)
         reference = self._ensure_device(reference)
@@ -145,9 +165,8 @@ class QualityMetrics:
 
                 self._lpips_model = lpips.LPIPS(net=network).to(self.device)
                 self._lpips_model.eval()
-            except ImportError:
-                logger.warning("lpips package not installed, using MSE fallback")
-                return self.compute_mse(image, reference)
+            except ImportError as exc:
+                raise MetricUnavailableError("LPIPS unavailable: lpips package not installed") from exc
 
         # Compute LPIPS
         with torch.no_grad():
@@ -325,9 +344,17 @@ class QualityMetrics:
             # BRISQUE is an optional metric: be robust to missing optional deps,
             # missing model files, or OpenCV API changes.
             logger.warning("BRISQUE not available (%s), using simplified version", e)
-            # Fallback: use simple variance-based quality
+            # Fallback: gradient-magnitude sharpness proxy. Unlike BRISQUE it is
+            # higher-is-better, so the score is labelled accordingly and the
+            # normalized value is clamped to [0, 1].
             score = self._simple_sharpness_metric(image)
-            normalized = score
+            return PerceptualScore(
+                metric_type=MetricType.BRISQUE,
+                score=score,
+                higher_is_better=True,
+                normalized_score=min(max(score, 0.0), 1.0),
+                metadata={"fallback": "gradient_sharpness", "fallback_reason": str(e)},
+            )
 
         return PerceptualScore(
             metric_type=MetricType.BRISQUE,
@@ -473,12 +500,12 @@ class QualityMetrics:
 
 
 def compute_lpips(image: Tensor, reference: Tensor, device: torch.device) -> float:
-    """Compute LPIPS score."""
-    substrate = type(
-        "obj",
-        (object,),
-        {"get_device": lambda: device, "to_device": lambda x: x.to(device)},
-    )()
+    """Compute LPIPS score.
+
+    Raises:
+        MetricUnavailableError: if the ``lpips`` package is not installed.
+    """
+    substrate = SimpleNamespace(get_device=lambda: device, to_device=lambda x: x.to(device))
     metrics = QualityMetrics(substrate, cache_models=True)
     score = metrics.compute_lpips(image, reference)
     return score.score
@@ -495,7 +522,7 @@ def compute_psnr(image: Tensor, reference: Tensor) -> float:
 def compute_ssim(image: Tensor, reference: Tensor) -> float:
     """Compute SSIM score."""
     device = image.device
-    substrate = type("obj", (object,), {"get_device": lambda: device})()
+    substrate = SimpleNamespace(get_device=lambda: device)
     metrics = QualityMetrics(substrate)
     score = metrics.compute_ssim(image, reference)
     return score.score
@@ -504,7 +531,7 @@ def compute_ssim(image: Tensor, reference: Tensor) -> float:
 def compute_brisque(image: Tensor) -> float:
     """Compute BRISQUE score."""
     device = image.device
-    substrate = type("obj", (object,), {"get_device": lambda: device})()
+    substrate = SimpleNamespace(get_device=lambda: device)
     metrics = QualityMetrics(substrate)
     score = metrics.compute_brisque(image)
     return score.score
@@ -513,7 +540,7 @@ def compute_brisque(image: Tensor) -> float:
 def compute_niqe(image: Tensor) -> float:
     """Compute NIQE score."""
     device = image.device
-    substrate = type("obj", (object,), {"get_device": lambda: device})()
+    substrate = SimpleNamespace(get_device=lambda: device)
     metrics = QualityMetrics(substrate)
     score = metrics.compute_niqe(image)
     return score.score

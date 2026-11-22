@@ -6,7 +6,7 @@ Phase 5.A local Compose validation is complete at merge commit
 `07a3e8e847dee4a6e1ccf46d6dcd80b612fe3753`.
 
 Managed-provider validation is not yet complete. It is complete only after
-`make test-paid-pilot-services-contract` passes against provider-managed
+`make run-managed-paid-pilot-gate` passes against provider-managed
 Postgres, Redis queue storage, Redis frontdoor session storage, and
 S3-compatible artifact storage.
 
@@ -18,8 +18,8 @@ The local acceptance baseline is PR #1784, squash-merged as
 The historical local acceptance record is
 [`phase5a_paid_pilot_live_acceptance_2026-05-14.md`](phase5a_paid_pilot_live_acceptance_2026-05-14.md).
 It records the first live-gate failures, the stabilization fixes, and the
-passing local Compose gate. This runbook is the provider/staging repeat of that
-same gate.
+passing local Compose gate. This runbook repeats that gate on staging and adds
+the orchestrator authority contracts.
 
 ## Scope
 
@@ -31,6 +31,8 @@ This runbook validates the currently landed paid-pilot service composition:
 - S3-compatible `ArtifactStore`
 - Backend route contracts, artifact fetch/delete lifecycle, and
   `worker_lost` recovery
+- Managed dispatch authority, including a tenant job on an external worker,
+  and durable keyed job submissions
 
 ## Non-Goals
 
@@ -46,8 +48,8 @@ Use one staging deployment and separate disposable validation resources:
 
 | Surface | Staging resource | Disposable validation resource |
 | --- | --- | --- |
-| Job state | Managed Postgres database for `TP_DATABASE_URL` | Empty managed Postgres database for `TP_TEST_POSTGRES_URL` |
-| Queue broker | Managed Redis for `TP_REDIS_URL` | Disposable Redis DB or keyspace for `TP_TEST_REDIS_URL` |
+| Job state | Managed Postgres database for `TP_DATABASE_URL` | Disposable reset database for `TP_TEST_POSTGRES_URL` and separate dedicated `*_test` database for `TP_DISPATCH_TEST_DATABASE_URL` |
+| Queue broker | Managed Redis for `TP_REDIS_URL` | Disposable, non-staging Redis database or keyspace for `TP_TEST_REDIS_URL` |
 | Frontdoor sessions | Managed Redis for `TP_FRONTDOOR_REDIS_URL` | Same provider class; use staging-safe keys only |
 | Artifacts | S3-compatible bucket for `TP_ARTIFACT_BUCKET` | Disposable bucket for `TP_TEST_S3_BUCKET` |
 
@@ -64,6 +66,7 @@ manager, not in the repository.
 | `TP_ORCHESTRATOR_STATE_BACKEND` | `postgres` |
 | `TP_DATABASE_URL` | `postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>` |
 | `TP_TEST_POSTGRES_URL` | `postgresql+asyncpg://<user>:<password>@<test-host>:<port>/<test-database>` |
+| `TP_DISPATCH_TEST_DATABASE_URL` | `postgresql+asyncpg://<user>:<password>@<test-host>:<port>/<dispatch-test-database>_test` |
 | `TP_ORCHESTRATOR_QUEUE_BACKEND` | `redis` |
 | `TP_REDIS_URL` | `rediss://<host>:<port>/<db>` |
 | `TP_TEST_REDIS_URL` | `rediss://<test-host>:<port>/<db>` |
@@ -81,6 +84,11 @@ manager, not in the repository.
 Use `redis://` only when the provider endpoint is intentionally non-TLS inside
 a private network. Prefer `rediss://` for managed staging endpoints.
 
+For all three Postgres URLs, use the `postgresql+asyncpg` scheme, a host,
+an optional valid port, and a literal database name in the path. Connection
+parameters such as TLS settings are allowed. Provide the database and endpoint
+in the URL itself.
+
 The artifact store accepts an unset `TP_ARTIFACT_REGION`. The paid-pilot
 contract defaults live S3-compatible tests to `us-east-1` when the variable is
 absent.
@@ -94,21 +102,26 @@ export TP_ARTIFACT_REGION='<region>'
 
 ## Disposable Test Resource Requirements
 
-`TP_TEST_POSTGRES_URL`, `TP_TEST_REDIS_URL`, and `TP_TEST_S3_BUCKET` must point
-to disposable validation resources. They must never point at production
-databases, queues, buckets, or customer data.
+`TP_TEST_POSTGRES_URL`, `TP_DISPATCH_TEST_DATABASE_URL`, `TP_TEST_REDIS_URL`,
+and `TP_TEST_S3_BUCKET` must point to disposable validation resources. Keep
+them separate from staging, production, and customer data.
 
-The paid-pilot smoke resets the test Postgres schema, deletes Redis keys under
-isolated prefixes, and deletes S3 objects under isolated prefixes. Treat every
-`TP_TEST_*` target as destructive.
+The paid-pilot smoke resets the schema at `TP_TEST_POSTGRES_URL`. The service
+authority phase migrates `TP_DISPATCH_TEST_DATABASE_URL` and resets test data
+there. Use distinct database names for staging, reset, and dispatch even when
+the endpoints use different hosts or aliases. The dispatch database name must
+end in `_test`. Both phases reuse disposable `TP_TEST_REDIS_URL` and clean up
+only their own key prefixes. The integrated smoke deletes S3 objects under its
+own prefix.
 
 ## Preflight Checklist
 
 - The checkout is on the commit intended for staging validation.
 - The virtual environment is installed and active.
 - Managed Postgres, Redis, and S3-compatible services are provisioned.
-- The disposable Postgres database is empty or approved for reset.
-- The disposable Redis DB or keyspace contains no production data.
+- Both disposable Postgres databases are empty or approved for reset.
+- The disposable Redis endpoint is separate from the staging queue and
+  frontdoor session stores and contains only test data.
 - The disposable S3 bucket contains no production data.
 - Staging secrets are loaded from the provider secret manager into a private
   gate-only env file outside the repository.
@@ -118,12 +131,13 @@ isolated prefixes, and deletes S3 objects under isolated prefixes. Treat every
 
 1. Provision or select the managed Postgres, Redis, and S3-compatible
    resources.
-2. Create the disposable validation database, Redis namespace, and S3 bucket.
+2. Create the two disposable validation databases, Redis resource, and S3
+   bucket.
 3. Write a private env file outside the repository, usually
    `/tmp/tp-managed-staging.env`.
 4. Run the clean-process preflight.
-5. Run the clean-process gate, which applies migrations and then invokes
-   `make test-paid-pilot-services-contract`.
+5. Run the full clean-process gate to verify live Postgres identities, apply
+   migrations, and run the component, authority, and integrated gates.
 6. Capture validation evidence before opening paid-pilot admission.
 
 ## Clean Env File
@@ -140,8 +154,8 @@ ${EDITOR:-vi} /tmp/tp-managed-staging.env
 
 The file must contain real provider values only. The clean launcher rejects
 missing values, placeholder-like values, wrong selectors, local-development
-variables, and unsafe staging/test overlap for the destructive Postgres and S3
-resources.
+variables, invalid Postgres targets, and unsafe staging/test overlap for the
+destructive Postgres and S3 resources.
 
 Do not include local-development variables such as `TP_API_KEY`,
 `TP_BACKEND_API_KEY`, `TP_FASTAPI_ORIGIN`, `TP_ALLOW_LOCAL_ACCESS_BYPASS`,
@@ -160,18 +174,20 @@ MANAGED_PAID_PILOT_GATE_ARGS=--preflight-only \
 make run-managed-paid-pilot-gate
 ```
 
-The expected preflight output is:
+This mode validates configuration without contacting providers. The expected
+preflight output is:
 
 ```text
 missing: []
 placeholder-like: []
 wrong selectors: {}
 leaked local-dev vars: []
+invalid Postgres targets: {}
 unsafe managed/test overlap: {}
 Managed paid-pilot clean-env preflight passed.
 ```
 
-Any non-empty bucket is an environment setup blocker, not a product failure.
+Resolve any reported configuration issue before running the full gate.
 
 ## Component Gates
 
@@ -183,6 +199,7 @@ source .venv/bin/activate
 export TP_ORCHESTRATOR_STATE_BACKEND=postgres
 export TP_DATABASE_URL='postgresql+asyncpg://<redacted>'
 export TP_TEST_POSTGRES_URL='postgresql+asyncpg://<redacted-disposable-test-db>'
+export TP_DISPATCH_TEST_DATABASE_URL='postgresql+asyncpg://<user>:<password>@<test-host>:<port>/<dispatch-database>_test'
 
 export TP_ORCHESTRATOR_QUEUE_BACKEND=redis
 export TP_REDIS_URL='rediss://<redacted>'
@@ -199,7 +216,7 @@ export TP_TEST_S3_BUCKET='<redacted-disposable-test-bucket>'
 export AWS_ACCESS_KEY_ID='<redacted>'
 export AWS_SECRET_ACCESS_KEY='<redacted>'
 
-make test-orchestrator-postgres-contract
+python scripts/validation/run_orchestrator_service_contracts.py provider-plain
 make test-orchestrator-postgres-app-contract
 make test-worker-redis-contract
 make test-artifact-s3-contract
@@ -207,7 +224,9 @@ make test-frontdoor-redis-contract
 ```
 
 The component gates isolate failures to one service seam before the integrated
-gate runs.
+gate runs. The `provider-plain` phase limits the reset database to the legacy
+Postgres suites. Migrated-schema photographic review tests are outside the
+provider gate.
 
 ## Integrated Paid-Pilot Gate
 
@@ -218,10 +237,13 @@ TP_MANAGED_PAID_PILOT_ENV_FILE=/tmp/tp-managed-staging.env \
 make run-managed-paid-pilot-gate
 ```
 
-The launcher runs `make db-upgrade` against staging `TP_DATABASE_URL`, not
-`TP_TEST_POSTGRES_URL`, then runs each component gate before the integrated
-paid-pilot smoke. Do not point `TP_DATABASE_URL` at the disposable test
-database.
+The launcher first connects to all three Postgres targets and verifies the
+database identities with read-only queries. It also compares the disposable
+Redis target to both staging Redis targets. These checks must pass before any
+migration. The launcher then runs `make db-upgrade` against staging
+`TP_DATABASE_URL`, runs the component gates, and invokes the service authority
+contracts on the dedicated `TP_DISPATCH_TEST_DATABASE_URL` and disposable
+`TP_TEST_REDIS_URL`. The integrated paid-pilot smoke runs last.
 
 Add `--evidence-out /tmp/tp-managed-paid-pilot-acceptance.md` through
 `MANAGED_PAID_PILOT_GATE_ARGS` when a redacted acceptance note is needed. The
@@ -244,8 +266,10 @@ Record the following in the staging acceptance note or release record:
 - Provider names, regions, and service versions where available.
 - Redacted env selector summary.
 - Clean env preflight result.
+- Destructive-test database safety preflight result.
 - `make db-upgrade` result.
 - Each component gate result.
+- Orchestrator service authority contracts result.
 - Integrated paid-pilot smoke result.
 - Any skipped lane and the reason.
 - Artifact bucket, Redis, and Postgres validation resource cleanup result.
@@ -265,8 +289,7 @@ For a failed staging validation:
 4. Roll backend and frontdoor images back to the last validated release.
 5. Restore Postgres only when the failed deployment applied a bad migration or
    corrupted staging state.
-6. Re-run component gates and `make test-paid-pilot-services-contract` before
-   reopening admission.
+6. Re-run the full provider gate before reopening admission.
 
 ## Backup And Restore
 
@@ -289,7 +312,7 @@ Rotate secrets in this order:
 1. Add the new provider secret.
 2. Deploy backend and frontdoor processes with the new env values.
 3. Confirm `/ready`, frontdoor health, and component gates are green.
-4. Run `make test-paid-pilot-services-contract`.
+4. Run the full provider gate.
 5. Revoke the old provider secret.
 6. Restart processes that may have latched client construction failures.
 
@@ -328,5 +351,5 @@ After provider validation passes, record a separate managed-provider acceptance
 note with the exact commit, provider resource classes, redacted env selector
 summary, command results, skipped lanes, and remaining limits.
 
-Do not mark the managed paid pilot validated until the provider-backed
-`make test-paid-pilot-services-contract` result is captured.
+Record a passing provider-backed `make run-managed-paid-pilot-gate` result
+before marking the managed paid pilot validated.

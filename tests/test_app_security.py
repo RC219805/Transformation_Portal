@@ -368,3 +368,94 @@ def test_error_response_propagates_headers():
 
 def test_auth_mode_is_direct_debug():
     assert orchestrator_app._auth_mode() == "direct_debug"
+
+
+# ---------------------------------------------------------------------------
+# _has_valid_api_key: non-ASCII credentials must be a 401, never a 500
+# ---------------------------------------------------------------------------
+
+
+def _api_key_request(headers: list[tuple[bytes, bytes]]):
+    from starlette.requests import Request
+
+    return Request({"type": "http", "method": "GET", "path": "/v1/jobs", "query_string": b"", "headers": headers})
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        [(b"x-api-key", b"caf\xe9")],
+        [(b"authorization", b"Bearer caf\xe9")],
+        [(b"x-api-key", b"\xff")],
+    ],
+)
+def test_has_valid_api_key_rejects_non_ascii_credentials_without_raising(monkeypatch, headers):
+    monkeypatch.setattr(orchestrator_app, "API_KEY_SECRET", "contract-secret")
+    monkeypatch.setattr(orchestrator_app, "API_KEY_HEADER", "x-api-key")
+
+    assert orchestrator_app._has_valid_api_key(_api_key_request(headers)) is False
+
+
+def test_has_valid_api_key_handles_non_ascii_configured_secret(monkeypatch):
+    monkeypatch.setattr(orchestrator_app, "API_KEY_SECRET", "caf\u00e9-secret")
+    monkeypatch.setattr(orchestrator_app, "API_KEY_HEADER", "x-api-key")
+
+    assert orchestrator_app._has_valid_api_key(_api_key_request([(b"x-api-key", b"wrong")])) is False
+
+
+def test_non_ascii_api_key_header_returns_unauthorized_envelope(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(orchestrator_app, "API_KEY_SECRET", "contract-secret")
+    with TestClient(orchestrator_app.app, raise_server_exceptions=False) as client:
+        response = client.get("/v1/jobs", headers=[(b"x-api-key", b"caf\xe9")])
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "UNAUTHORIZED"
+
+
+# ---------------------------------------------------------------------------
+# /v1/readiness: host paths are for authenticated operators only
+# ---------------------------------------------------------------------------
+
+
+def _readiness_with_canary_runtime(monkeypatch, tmp_path, headers):
+    from fastapi.testclient import TestClient
+
+    canary_runtime = tmp_path / "da3-runtime" / "bin" / "python"
+    monkeypatch.setattr(orchestrator_app, "API_KEY_SECRET", "contract-secret")
+    monkeypatch.setattr(orchestrator_app, "_resolve_lux_depth_canary_runtime", lambda: canary_runtime)
+    with TestClient(orchestrator_app.app, raise_server_exceptions=False) as client:
+        response = client.get("/v1/readiness", headers=headers)
+    assert response.status_code == 200
+    return response, str(canary_runtime)
+
+
+@pytest.mark.parametrize("headers", [{}, {"x-api-key": "wrong-secret"}])
+def test_readiness_without_valid_key_redacts_host_paths(monkeypatch, tmp_path, headers):
+    import sys
+
+    response, canary_runtime = _readiness_with_canary_runtime(monkeypatch, tmp_path, headers)
+    pipelines = response.json()["data"]["pipelines"]
+
+    for name in ("lux-depth-v3", "archive-gate-a", "archive-gate-b", "archive-gate-c"):
+        runner_details = pipelines[name]["runner_details"]
+        assert not {"python_executable", "script_path", "command"} & set(runner_details), name
+        assert runner_details["available"] in {True, False}
+    assert pipelines["archive-gate-a"]["canonical_command"] == "fixity-scan"
+    assert "Repo-local DA3 canary runtime resolved." in pipelines["lux-depth-v3"]["notes"]
+    assert sys.executable not in response.text
+    assert str(orchestrator_app.ARCHIVE_GOVERNANCE_SCRIPT) not in response.text
+    assert canary_runtime not in response.text
+
+
+def test_readiness_with_valid_key_keeps_operator_runner_details(monkeypatch, tmp_path):
+    import sys
+
+    response, canary_runtime = _readiness_with_canary_runtime(monkeypatch, tmp_path, {"x-api-key": "contract-secret"})
+    pipelines = response.json()["data"]["pipelines"]
+
+    assert pipelines["lux-depth-v3"]["runner_details"]["python_executable"] == sys.executable
+    assert pipelines["archive-gate-a"]["runner_details"]["script_path"] == str(orchestrator_app.ARCHIVE_GOVERNANCE_SCRIPT)
+    assert pipelines["archive-gate-a"]["runner_details"]["command"][-1] == "fixity-scan"
+    assert f"Repo-local DA3 canary runtime resolved at {canary_runtime}." in pipelines["lux-depth-v3"]["notes"]

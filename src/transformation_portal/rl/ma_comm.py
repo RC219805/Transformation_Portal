@@ -37,7 +37,7 @@ class MessageBus:
 
     Example:
         >>> bus = MessageBus()
-        >>> bus.publish("sam2", {"intent": "increase_coverage"})
+        >>> bus.publish("sam2", {"intent": "increase_mask_coverage"})
         >>> messages = bus.read_all()
     """
 
@@ -133,13 +133,14 @@ class MessageBus:
             intent = msg.get("intent", "unknown")
             intent_counts[intent] = intent_counts.get(intent, 0) + 1
 
-        # Fixed set of known intents
+        # Fixed set of known intents: real action types from
+        # ma_action_space.NODE_ACTIONS (agents publish ``action.action_type``).
         known_intents = [
-            "increase_coverage",
+            "increase_mask_coverage",
             "increase_iterations",
-            "adjust_roughness",
-            "adjust_metalness",
-            "enable_blending",
+            "adjust_roughness_prior",
+            "adjust_metalness_prior",
+            "enable_seam_blending",
             "apply_denoising",
         ]
 
@@ -156,9 +157,9 @@ class CoordinationProtocol:
     # Action compatibility matrix
     # If agent A does action X, agent B should/shouldn't do Y
     COMPATIBILITY = {
-        ("increase_coverage", "increase_iterations"): 1.0,  # Compatible
-        ("increase_coverage", "adjust_roughness"): 0.5,  # Neutral
-        ("adjust_roughness", "adjust_metalness"): 0.3,  # Slightly conflicting
+        ("increase_mask_coverage", "increase_iterations"): 1.0,  # Compatible
+        ("increase_mask_coverage", "adjust_roughness_prior"): 0.5,  # Neutral
+        ("adjust_roughness_prior", "adjust_metalness_prior"): 0.3,  # Slightly conflicting
     }
 
     @staticmethod

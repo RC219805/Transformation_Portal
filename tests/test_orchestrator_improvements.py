@@ -20,6 +20,7 @@ pytestmark = [
     pytest.mark.unit,
 ]
 
+from tests.conftest import requires_enforced_posix_permissions
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.manifest import (
     BackendSelectionMetadata,
@@ -627,9 +628,18 @@ class TestFingerprintDrivenSkipInvalidation:
 
         assert orchestrator.should_skip_depth(depth_path, manifest_path, image_input) is False
 
+        from transformation_portal.lux_depth_v3.config_resolver import build_stage_a_inputs_sha256
+
+        # The rewrite carries the Stage A inputs digest the orchestrator records in depth stats.
         CombinedManifest(
             config_fingerprint=orchestrator.compute_config_fingerprint(),
-            depth=DepthMetadata(model="da3", depth_path=str(depth_path), runtime_seconds=0.1, scaling={}),
+            depth=DepthMetadata(
+                model="da3",
+                depth_path=str(depth_path),
+                runtime_seconds=0.1,
+                scaling={},
+                stats={"stage_a_inputs_sha256": build_stage_a_inputs_sha256(orchestrator.config)},
+            ),
             backend_selection=orchestrator._capture_backend_metadata(),
         ).save(manifest_path)
 
@@ -1271,6 +1281,298 @@ class TestCachedRunFidelity:
         assert loaded.v2 is not None
         assert loaded.v2.status == "ok"
 
+    @staticmethod
+    def _run_materials_v2_batch(input_root: Path, output_root: Path, **overrides):
+        """Run a real batch with stub depth, Materials V3 and V2 collaborators."""
+        import numpy as np
+
+        from transformation_portal.depth.backends.protocol import DepthResult
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        class _License:
+            value = "commercial"
+
+        class _StubDepth:
+            name = "da3"
+            license_type = _License()
+
+            def __init__(self):
+                self.calls = 0
+
+            def ensure_available(self):
+                return None
+
+            def compute(self, pil_image):
+                self.calls += 1
+                width, height = pil_image.size
+                ramp = np.linspace(0.0, 1.0, width * height, dtype=np.float32).reshape(height, width)
+                return DepthResult(
+                    depth_map=ramp,
+                    original_image=np.asarray(pil_image.convert("RGB")),
+                    metadata={},
+                    depth_units="relative",
+                    backend_id="da3",
+                    device="cpu",
+                )
+
+        class _Registry:
+            def __init__(self, backend):
+                self.backend = backend
+
+            def get_backend(self, backend_id, config, **kwargs):
+                return self.backend
+
+        class _InvertingMaterials:
+            def __init__(self):
+                self.calls = 0
+
+            def process(self, image, segmentation_result, depth_map):
+                self.calls += 1
+                return {
+                    "enhanced_image": np.clip(1.0 - np.asarray(image, dtype=np.float32), 0.0, 1.0),
+                    "material_masks": {},
+                    "materials_v3_pixel_ops": {
+                        "enabled": True,
+                        "applied": [{"material": "sky", "ops": ["sky_gradient"]}],
+                        "blocked": [],
+                    },
+                    "materials_v3_response_plan": {"per_class": {}},
+                    "materials_v3_metadata": {"version": "3.1", "segmentation_metadata": {}},
+                }
+
+        class _RecordingV2:
+            def __init__(self):
+                self.input_bytes: list[bytes] = []
+
+            def run(self, *, input_path, output_dir, asset_key, **kwargs):
+                payload = Path(input_path).read_bytes()
+                self.input_bytes.append(payload)
+                output_dir.mkdir(parents=True, exist_ok=True)
+                output = output_dir / f"{asset_key}_enhanced.png"
+                output.write_bytes(payload)
+                report = output_dir / f"{asset_key}_report.json"
+                report.write_text('{"depth_consumed": true}', encoding="utf-8")
+                return {
+                    "status": "ok",
+                    "output": str(output),
+                    "report_path": str(report),
+                    "runtime_s": 0.01,
+                    "depth_consumed": True,
+                }
+
+        config_values = {
+            "depth_backend": "da3",
+            "enable_v2": True,
+            "v2_preset": "default",
+            "enable_materials_v3": True,
+            "quality_tier": "premium",
+            "v2_input_color": "srgb",
+            "emit_run_card": False,
+            "enable_parallel_processing": False,
+        }
+        config_values.update(overrides)
+        depth = _StubDepth()
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=_Registry(depth)):
+            orchestrator = EnhanceOrchestrator(EnhanceConfig(**config_values), output_root)
+
+        class _PassThrough:
+            @staticmethod
+            def process(result):
+                return result
+
+        orchestrator.postprocessor = _PassThrough()
+        materials = _InvertingMaterials()
+        v2 = _RecordingV2()
+        orchestrator.materials_v3_engine = materials
+        orchestrator.v2_runner = v2
+        results = orchestrator.enhance_batch(input_root)
+        assert [result["status"] for result in results] == ["ok"]
+        return depth, materials, v2
+
+    @staticmethod
+    def _write_gradient_png(path: Path) -> Path:
+        import numpy as np
+        from PIL import Image
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        pixels = np.zeros((24, 32, 3), dtype=np.uint8)
+        pixels[..., 0] = np.linspace(0, 255, 32, dtype=np.uint8)[None, :]
+        pixels[..., 1] = 60
+        Image.fromarray(pixels).save(path)
+        return path
+
+    def test_depth_reuse_v2_rerun_recomputes_missing_materials_handoff(self, tmp_path):
+        """A cached-depth rerun that re-executes V2 must feed V2 the Materials V3 hand-off, not the raw source."""
+        input_root = tmp_path / "in"
+        source = self._write_gradient_png(input_root / "villa.png")
+        output_root = tmp_path / "out"
+
+        _depth1, materials1, v2_first = self._run_materials_v2_batch(input_root, output_root)
+        assert materials1.calls == 1
+        assert not list((output_root / "temp").glob("*_materials_v3_enhanced*"))
+
+        # Only the V2 preset changes: depth is reused, V2 must rerun.
+        depth2, materials2, v2_second = self._run_materials_v2_batch(input_root, output_root, v2_preset="luxury")
+
+        assert depth2.calls == 0
+        assert materials2.calls == 1
+        assert v2_second.input_bytes[0] != source.read_bytes()
+        assert v2_second.input_bytes == v2_first.input_bytes
+
+    def test_depth_reuse_v2_skip_does_not_recompute_materials(self, tmp_path):
+        """When V2 is skipped on a cached-depth rerun, Materials V3 is restored without recomputation."""
+        input_root = tmp_path / "in"
+        self._write_gradient_png(input_root / "villa.png")
+        output_root = tmp_path / "out"
+
+        self._run_materials_v2_batch(input_root, output_root)
+        depth2, materials2, v2_second = self._run_materials_v2_batch(input_root, output_root)
+
+        assert depth2.calls == 0
+        assert materials2.calls == 0
+        assert v2_second.input_bytes == []
+
+    def test_depth_reuse_takes_the_v2_skip_decision_once_per_image(self, tmp_path):
+        """The hand-off choice and the V2 stage act on one skip decision, not two evaluations."""
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        input_root = tmp_path / "in"
+        self._write_gradient_png(input_root / "villa.png")
+        output_root = tmp_path / "out"
+        self._run_materials_v2_batch(input_root, output_root)
+
+        decisions: list[bool] = []
+        real_should_skip_v2 = EnhanceOrchestrator.should_skip_v2
+
+        def counting_should_skip_v2(self, *args, **kwargs):
+            decision = real_should_skip_v2(self, *args, **kwargs)
+            decisions.append(decision)
+            return decision
+
+        with patch.object(EnhanceOrchestrator, "should_skip_v2", counting_should_skip_v2):
+            _depth, materials_skip, v2_skip = self._run_materials_v2_batch(input_root, output_root)
+            assert decisions == [True]
+            assert (materials_skip.calls, v2_skip.input_bytes) == (0, [])
+
+            decisions.clear()
+            _depth, materials_rerun, v2_rerun = self._run_materials_v2_batch(input_root, output_root, v2_preset="luxury")
+            assert decisions == [False]
+            assert materials_rerun.calls == 1
+            assert len(v2_rerun.input_bytes) == 1
+
+    def test_prepared_forced_v2_rerun_binds_the_recomputed_materials_masks(self, tmp_path):
+        """A prepared depth-reuse rerun that re-executes V2 feeds it the hand-off and attests the masks it used."""
+        import hashlib
+        import json
+
+        import numpy as np
+
+        from transformation_portal.lux_depth_v3.execution_evidence import (
+            require_required_artifacts,
+            verify_execution_evidence_file,
+        )
+        from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        input_root = tmp_path / "inputs"
+        source = self._write_gradient_png(input_root / "villa.png")
+        prepared = prepare_lux_execution(
+            EnhanceConfig(
+                depth_backend="synthetic",
+                enable_v2=True,
+                force_v2=True,
+                enable_materials_v3=True,
+                quality_tier="premium",
+                v2_input_color="srgb",
+                emit_run_card=False,
+            ),
+            input_root,
+            [source],
+        )
+        output_root = tmp_path / "output"
+        orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
+
+        class _VaryingMasksMaterials:
+            calls = 0
+
+            def process(self, image, segmentation_result, depth_map):
+                self.calls += 1
+                pixels = np.asarray(image, dtype=np.float32)
+                return {
+                    "enhanced_image": np.clip(1.0 - pixels, 0.0, 1.0),
+                    # Different mask bytes on every call: a reused record of the
+                    # first run can never describe a later recomputation.
+                    "material_masks": {"sky": np.full(pixels.shape[:2], 1.0 / self.calls, dtype=np.float32)},
+                    "materials_v3_pixel_ops": {
+                        "enabled": True,
+                        "applied": [{"material": "sky", "ops": ["sky_gradient"]}],
+                        "blocked": [],
+                    },
+                    "materials_v3_response_plan": {"per_class": {}},
+                    "materials_v3_metadata": {"version": "3.1", "segmentation_metadata": {}},
+                }
+
+        materials = _VaryingMasksMaterials()
+        orchestrator.materials_v3_engine = materials
+        v2_inputs: list[bytes] = []
+
+        def fake_v2_stage(**kwargs):
+            v2_input = Path(kwargs["image_input"].path)
+            v2_inputs.append(v2_input.read_bytes())
+            output_key = Path(kwargs["output_key"])
+            output_path = output_root / "v2" / output_key.parent / f"{output_key.name}_v2_enhanced.png"
+            report_path = output_root / "v2" / output_key.parent / f"{output_key.name}_v2_report.json"
+            log_path = Path(kwargs["v2_log_path"])
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(v2_inputs[-1])
+            log_path.write_text("v2 run\n", encoding="utf-8")
+            report_path.write_text('{"depth_consumed": true, "status": "ok"}', encoding="utf-8")
+            result = {
+                "status": "ok",
+                "output": str(output_path),
+                "output_paths": [str(output_path)],
+                "report_path": str(report_path),
+                "depth_map": str(kwargs["depth_path"]),
+                "depth_consumed": True,
+                "runtime_s": 0.01,
+            }
+            return result, 0.01, report_path
+
+        orchestrator._run_v2_stage = fake_v2_stage
+
+        def run_and_read_mask_record() -> tuple[dict, bytes]:
+            known = set((output_root / "manifests").glob("execution_evidence_*.json"))
+            results = orchestrator.enhance_batch(input_root, input_files=[source])
+            assert [result["status"] for result in results] == ["ok"]
+            (evidence_path,) = set((output_root / "manifests").glob("execution_evidence_*.json")) - known
+            evidence = verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan)
+            require_required_artifacts(evidence)
+            (record,) = next(
+                outcome["artifacts"]
+                for outcome in evidence["produced_artifacts"]
+                if outcome["artifact_kind"] == "materials_v3_masks"
+            )
+            manifest = json.loads(Path(results[0]["manifest"]).read_bytes())
+            assert manifest["materials_v3"]["pixel_ops"]["applied"] == [{"material": "sky", "ops": ["sky_gradient"]}]
+            (stable_masks,) = (output_root / "segmentation").glob("*_materials_v3_masks.npz")
+            return record, stable_masks.read_bytes()
+
+        first_record, first_mask_bytes = run_and_read_mask_record()
+        assert first_record["sha256"] == hashlib.sha256(first_mask_bytes).hexdigest()
+
+        second_record, second_mask_bytes = run_and_read_mask_record()
+
+        # Depth was reused, V2 re-executed on the rebuilt hand-off.
+        assert materials.calls == 2
+        assert len(v2_inputs) == 2
+        assert v2_inputs[1] != source.read_bytes()
+        assert v2_inputs[1] == v2_inputs[0]
+        # The evidence of the second run attests the masks that run produced.
+        assert second_mask_bytes != first_mask_bytes
+        assert second_record["sha256"] == hashlib.sha256(second_mask_bytes).hexdigest()
+        assert second_record["path"] != first_record["path"]
+
 
 def _completed_prepared_depth_run(tmp_path: Path, **config_overrides):
     from PIL import Image
@@ -1665,6 +1967,7 @@ class TestPreparedManifestReuseEvidence:
         evidence_path = next((output_root / "manifests").glob("execution_evidence_*.json"))
         verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan)
 
+    @requires_enforced_posix_permissions
     def test_prepared_consumer_cannot_replace_and_restore_private_snapshot_path(self, tmp_path: Path) -> None:
         import stat
 
@@ -1728,6 +2031,78 @@ class TestPreparedManifestReuseEvidence:
         assert mutation_denied == [True]
         assert not consumed_bytes
         assert observed_directory_modes == [(0o500, 0o500)]
+        assert len(observed_snapshot_roots) == 1
+        assert not observed_snapshot_roots[0].exists()
+        assert not held_path.exists()
+
+    def test_prepared_consumer_bypassing_snapshot_seal_fails_closed(
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """The sealed directory modes are cooperative; inode rebinding is the backstop.
+
+        A same-privilege consumer can chmod the private snapshot directories
+        writable again (root and CAP_DAC_OVERRIDE processes are never denied in
+        the first place). Swapping the snapshot out and restoring the original
+        inode must still be detected by ``_validate_prepared_input_snapshot`` so
+        the item fails closed instead of publishing evidence for tampered input.
+        """
+        import logging
+        import os
+
+        from PIL import Image
+
+        from transformation_portal.lux_depth_v3.execution_evidence import ExecutionEvidenceError
+        from transformation_portal.lux_depth_v3.execution_lifecycle import prepare_lux_execution
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        input_root = tmp_path / "inputs"
+        image_dir = input_root / "nested"
+        image_dir.mkdir(parents=True)
+        image_path = image_dir / "prepared.png"
+        Image.new("RGB", (8, 8), color=(1, 2, 3)).save(image_path)
+        prepared = prepare_lux_execution(
+            EnhanceConfig(depth_backend="synthetic", enable_v2=False, emit_run_card=False),
+            input_root,
+            [image_path],
+        )
+        output_root = tmp_path / "output"
+        orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
+        replacement_path = tmp_path / "replacement.png"
+        Image.new("RGB", (8, 8), color=(9, 8, 7)).save(replacement_path)
+        replacement_bytes = replacement_path.read_bytes()
+        held_path = tmp_path / "held-snapshot.png"
+        tampered: list[bool] = []
+        observed_snapshot_roots: list[Path] = []
+
+        def tamper_with_snapshot(*, image_input, **_kwargs):
+            snapshot_path = Path(image_input.path)
+            snapshot_root = orchestrator._active_prepared_input_snapshot_root
+            assert snapshot_root is not None
+            observed_snapshot_roots.append(snapshot_root)
+            current = snapshot_path.parent
+            while True:
+                os.chmod(current, 0o700)
+                if current == snapshot_root:
+                    break
+                current = current.parent
+            snapshot_path.replace(held_path)
+            snapshot_path.write_bytes(replacement_bytes)
+            snapshot_path.unlink()
+            held_path.replace(snapshot_path)
+            tampered.append(True)
+            return {"status": "skipped"}, 0.0, None
+
+        with (
+            patch.object(orchestrator, "_run_v2_stage", side_effect=tamper_with_snapshot),
+            caplog.at_level(logging.ERROR, logger="transformation_portal.lux_depth_v3.orchestrator"),
+            pytest.raises(ExecutionEvidenceError, match="upstream_failed"),
+        ):
+            orchestrator.enhance_batch(input_root, input_files=[image_path])
+
+        assert tampered == [True]
+        assert "Prepared input snapshot changed during execution" in caplog.text
         assert len(observed_snapshot_roots) == 1
         assert not observed_snapshot_roots[0].exists()
         assert not held_path.exists()
@@ -2678,6 +3053,42 @@ class TestV2SkipIndependentOfGeneratePBR:
                     )
 
                     assert skip_changed is False, "Changed V2 config should invalidate skip"
+
+    @pytest.mark.parametrize("deliverable_present", [True, False])
+    def test_v2_skip_requires_v2_deliverable_when_verifying_outputs(self, temp_workspace, deliverable_present):
+        """F13: with verify_outputs, a missing V2 output image must force V2 to rerun."""
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        tmpdir = Path(temp_workspace["root"])
+        test_image = tmpdir / "villa.jpg"
+        test_image.write_bytes(b"fake image")
+        v2_report = tmpdir / "villa_report.json"
+        v2_report.write_text('{"status": "ok"}', encoding="utf-8")
+        v2_output = tmpdir / "villa_enhanced.png"
+        v2_output.write_bytes(b"enhanced")
+        manifest_path = tmpdir / "villa_manifest.json"
+
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
+            orchestrator = EnhanceOrchestrator(EnhanceConfig(v2_preset="default"), tmpdir / "output", verify_outputs=True)
+            CombinedManifest(
+                config_fingerprint=orchestrator.compute_config_fingerprint(),
+                v2=V2Metadata(
+                    preset="default",
+                    status="ok",
+                    strict_depth=True,
+                    output_dir="v2/",
+                    report_path=str(v2_report),
+                    output_paths=[str(v2_output)],
+                ),
+            ).save(manifest_path)
+
+        if not deliverable_present:
+            v2_output.unlink()
+
+        skip = orchestrator.should_skip_v2(v2_report, manifest_path, ImageInput(test_image), depth_was_skipped=True)
+
+        assert skip is deliverable_present
 
 
 if __name__ == "__main__":

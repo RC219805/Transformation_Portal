@@ -168,12 +168,64 @@ app = typer.Typer(
 )
 
 
-def _parse_bool_flag(value: str) -> bool:
-    """Parse string boolean flags (on/off, true/false, yes/no, 1/0)."""
+_TRUE_FLAG_VALUES = frozenset({"on", "true", "yes", "1"})
+_FALSE_FLAG_VALUES = frozenset({"off", "false", "no", "0"})
+_VALID_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+# Standard ``logging`` level names that resolved before the level was validated;
+# they keep working and select the same numeric level as before.
+_LOG_LEVEL_ALIASES = {"WARN": "WARNING", "FATAL": "CRITICAL"}
+_ACCEPTED_LOG_LEVELS = frozenset(_VALID_LOG_LEVELS) | {"NOTSET"}
+
+
+def _parse_bool_flag(value: str, option_name: Optional[str] = None) -> bool:
+    """Parse string boolean flags (on/off, true/false, yes/no, 1/0).
+
+    Any other value is a usage error (exit code 2): silently reading an
+    unrecognised spelling such as ``enabled`` as off would drop a requested
+    stage or deliverable from an otherwise successful run.
+    """
     if isinstance(value, bool):
         return value
     normalized = value.lower().strip()
-    return normalized in ("on", "true", "yes", "1")
+    if normalized in _TRUE_FLAG_VALUES:
+        return True
+    if normalized in _FALSE_FLAG_VALUES:
+        return False
+    raise typer.BadParameter(
+        f"{value!r} is not a recognised boolean. Use one of: on, off, true, false, yes, no, 1, 0.",
+        param_hint=option_name,
+    )
+
+
+def _normalize_log_level(log_level: Optional[str]) -> Optional[str]:
+    """Return the upper-case logging level name, rejecting unknown names.
+
+    An empty value keeps meaning "not set" (``--verbose``/default apply), and
+    the standard ``logging`` aliases ``WARN``, ``FATAL`` and ``NOTSET`` keep
+    resolving to the level they always selected.
+    """
+    if log_level is None:
+        return None
+    normalized = log_level.strip().upper()
+    if not normalized:
+        return None
+    normalized = _LOG_LEVEL_ALIASES.get(normalized, normalized)
+    if normalized not in _ACCEPTED_LOG_LEVELS:
+        raise typer.BadParameter(
+            f"{log_level!r} is not a log level. Use one of: {', '.join(_VALID_LOG_LEVELS)}.",
+            param_hint="--log-level",
+        )
+    return normalized
+
+
+def _normalize_depth_device(depth_device: str) -> str:
+    """Validate ``--depth-device`` with the shared device-spec allowlist."""
+    from .security import validate_device_spec
+
+    try:
+        return validate_device_spec(depth_device)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--depth-device") from exc
 
 
 def _raw_preview_escape_enabled() -> bool:
@@ -786,20 +838,21 @@ def main(
     Use --strict-inputs to fail on excluded
     files (validation mode).
     """
-    _configure_logging(verbose, quiet, log_level)
+    _configure_logging(verbose, quiet, _normalize_log_level(log_level))
+    depth_device = _normalize_depth_device(depth_device)
 
     # Parse boolean flags
-    enable_materials_v3 = _parse_bool_flag(materials_v3)
-    enable_pbr = _parse_bool_flag(pbr)
-    enable_cache_depth = _parse_bool_flag(cache_depth)
-    enable_v2_bool = _parse_bool_flag(enable_v2)
+    enable_materials_v3 = _parse_bool_flag(materials_v3, "--materials-v3")
+    enable_pbr = _parse_bool_flag(pbr, "--pbr")
+    enable_cache_depth = _parse_bool_flag(cache_depth, "--cache-depth")
+    enable_v2_bool = _parse_bool_flag(enable_v2, "--enable-v2")
     if output_bit_depth is not None and output_bit_depth not in {8, 16}:
         error_msg = "Invalid --output-bit-depth. Must be one of: 8, 16"
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)
         raise typer.Exit(code=1)
-    enable_emit_master16 = None if emit_master16 is None else _parse_bool_flag(emit_master16)
-    enable_emit_upscaled16 = None if emit_upscaled16 is None else _parse_bool_flag(emit_upscaled16)
+    enable_emit_master16 = None if emit_master16 is None else _parse_bool_flag(emit_master16, "--emit-master16")
+    enable_emit_upscaled16 = None if emit_upscaled16 is None else _parse_bool_flag(emit_upscaled16, "--emit-upscaled16")
     if output_bit_depth == 8 and (enable_emit_master16 or enable_emit_upscaled16):
         error_msg = "--output-bit-depth 8 conflicts with a truthy deprecated " "--emit-master16/--emit-upscaled16 alias"
         logger.error(error_msg)
@@ -810,31 +863,35 @@ def main(
         Literal[8, 16],
         output_bit_depth if output_bit_depth is not None else (16 if enable_emit_master16 or enable_emit_upscaled16 else 8),
     )
-    enable_emit_marketing = False if emit_marketing is None else _parse_bool_flag(emit_marketing)
-    enable_emit_report = True if emit_report is None else _parse_bool_flag(emit_report)
-    enable_emit_run_card = _parse_bool_flag(emit_run_card)
-    enable_run_card_include_proofs = _parse_bool_flag(run_card_include_proofs)
-    enable_vlm_captioning = _parse_bool_flag(vlm_captioning)
+    enable_emit_marketing = False if emit_marketing is None else _parse_bool_flag(emit_marketing, "--emit-marketing")
+    enable_emit_report = True if emit_report is None else _parse_bool_flag(emit_report, "--emit-report")
+    enable_emit_run_card = _parse_bool_flag(emit_run_card, "--emit-run-card")
+    enable_run_card_include_proofs = _parse_bool_flag(run_card_include_proofs, "--run-card-include-proofs")
+    enable_vlm_captioning = _parse_bool_flag(vlm_captioning, "--vlm-captioning")
     normalized_run_card_version = str(run_card_version or "v1").strip().lower()
     if normalized_run_card_version not in {"v1", "v2"}:
         error_msg = f"Invalid --run-card-version '{run_card_version}'. " "Must be one of: v1, v2"
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)
         raise typer.Exit(code=1)
-    enable_non_commercial = _parse_bool_flag(non_commercial_ok)
+    enable_non_commercial = _parse_bool_flag(non_commercial_ok, "--non-commercial-ok")
     enable_apple_license = _parse_bool_flag(
         accept_apple_depth_pro_research_license,
+        "--accept-apple-depth-pro-research-license",
     )
     enable_research_tools_license = _parse_bool_flag(
         accept_research_tools_license,
+        "--accept-research-tools-license",
     )
-    enable_material_segmentation = _parse_bool_flag(enable_segmentation)
-    enable_save_float_depth = _parse_bool_flag(save_float_depth)
+    enable_material_segmentation = _parse_bool_flag(enable_segmentation, "--enable-segmentation")
+    enable_save_float_depth = _parse_bool_flag(save_float_depth, "--save-float-depth")
     enable_reconstruction_bool = _parse_bool_flag(
         enable_reconstruction,
+        "--enable-reconstruction",
     )
     enable_emit_scene_debug_bundle = _parse_bool_flag(
         emit_scene_debug_bundle,
+        "--emit-scene-debug-bundle",
     )
 
     # Parse V2 preset (convert "none" string to None for skipping V2)
@@ -877,6 +934,9 @@ def main(
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
+    # Tier checks downstream compare against the lower-case names, so an
+    # upper-case spelling must not reach the config (or the plan) verbatim.
+    quality_tier = quality_tier.lower()
 
     # Validate scene grouping mode
     grouping_mode_normalized = grouping_mode.strip().lower()
@@ -1070,75 +1130,80 @@ def main(
     if preset_enum is None and preset != "premium":
         logger.warning(f"Preset '{preset}' does not map" " to a known Preset enum." " Continuing with string value.")
 
-    config = EnhanceConfig(
-        model_key=model_key,
-        preset=preset_enum,
-        preset_requested=preset,
-        depth_device=depth_device,
-        depth_backend=depth_backend,
-        non_commercial_ok=enable_non_commercial,
-        accept_apple_depth_pro_research_license=enable_apple_license,
-        accept_research_tools_license=enable_research_tools_license,
-        depth_pro_python_executable=depth_pro_python,
-        raw_python_executable=raw_python,
-        da3_python_executable=da3_python,
-        force_depth=force_depth or overwrite,
-        enable_depth_cache=enable_cache_depth,
-        enable_v2=enable_v2_bool,
-        v2_preset=v2_preset_value,
-        v2_input_color=v2_input_color,
-        geometry_recipe=geometry_recipe,
-        native_materials_manifest=native_materials_manifest,
-        native_materials_policy=native_materials_policy,
-        generate_pbr=enable_pbr,
-        save_float_depth=enable_save_float_depth,
-        quality_tier=quality_tier,
-        enable_materials_v3=enable_materials_v3,
-        enable_material_segmentation=enable_material_segmentation,
-        material_segmentation_backend=segmentation_backend.lower(),
-        sam2_model_size=sam2_model_size.lower(),
-        sam2_checkpoint_path=(str(sam2_checkpoint_path) if sam2_checkpoint_path else None),
-        sam2_tiling_enabled=sam2_tiling_enabled,
-        sam2_tile_size_px=sam2_tile_size_px,
-        sam2_overlap_px=sam2_overlap_px,
-        sam2_global_pass_longest_side=sam2_global_pass_longest_side,
-        sam2_max_concurrency=sam2_max_concurrency,
-        sam2_points_per_side=sam2_points_per_side,
-        sam2_points_per_batch=sam2_points_per_batch,
-        sam2_pred_iou_thresh=sam2_pred_iou_thresh,
-        sam2_stability_score_thresh=sam2_stability_score_thresh,
-        sam2_crop_n_layers=sam2_crop_n_layers,
-        strict_backend=strict_segmentation,
-        material_segmentation_cache_policy=normalized_segmentation_cache,
-        output_bit_depth=normalized_output_bit_depth,
-        emit_master16=enable_emit_master16,
-        emit_upscaled16=enable_emit_upscaled16,
-        emit_marketing=(enable_emit_marketing if emit_marketing is not None else None),
-        emit_report=(enable_emit_report if emit_report is not None else None),
-        emit_run_card=enable_emit_run_card,
-        run_card_version=normalized_run_card_version,
-        run_card_include_proofs=enable_run_card_include_proofs,
-        vlm_captioning_enabled=enable_vlm_captioning,
-        vlm_captioning_backend=normalized_captioning_backend,
-        vlm_captioning_model=normalized_captioning_model,
-        vlm_captioning_proxy_format=normalized_captioning_proxy_format,
-        vlm_captioning_max_side_px=vlm_captioning_max_side_px,
-        fastvlm_python_executable=fastvlm_python,
-        fastvlm_mlx_vlm_dir=fastvlm_mlx_vlm_dir,
-        fastvlm_timeout_seconds=fastvlm_timeout_seconds,
-        enable_reconstruction=enable_reconstruction_bool,
-        grouping_mode=grouping_mode_normalized,
-        cameras_sidecar_path=(str(cameras_sidecar_path) if cameras_sidecar_path else None),
-        reconstruction_iterations=reconstruction_iterations,
-        reconstruction_tier=reconstruction_tier_value,
-        emit_scene_debug_bundle=enable_emit_scene_debug_bundle,
-        strict_inputs=strict_inputs,
-        raw_ingest_mode=raw_ingest_mode,
-        raw_wb_mode=raw_wb_mode_normalized,
-        raw_demosaic=raw_demosaic_normalized,
-        allow_semantic_fallback=allow_semantic_fallback,
-        keep_intermediates=keep_intermediates,
-    )
+    try:
+        config = EnhanceConfig(
+            model_key=model_key,
+            preset=preset_enum,
+            preset_requested=preset,
+            depth_device=depth_device,
+            depth_backend=depth_backend,
+            non_commercial_ok=enable_non_commercial,
+            accept_apple_depth_pro_research_license=enable_apple_license,
+            accept_research_tools_license=enable_research_tools_license,
+            depth_pro_python_executable=depth_pro_python,
+            raw_python_executable=raw_python,
+            da3_python_executable=da3_python,
+            force_depth=force_depth or overwrite,
+            enable_depth_cache=enable_cache_depth,
+            enable_v2=enable_v2_bool,
+            v2_preset=v2_preset_value,
+            v2_input_color=v2_input_color,
+            geometry_recipe=geometry_recipe,
+            native_materials_manifest=native_materials_manifest,
+            native_materials_policy=native_materials_policy,
+            generate_pbr=enable_pbr,
+            save_float_depth=enable_save_float_depth,
+            quality_tier=quality_tier,
+            enable_materials_v3=enable_materials_v3,
+            enable_material_segmentation=enable_material_segmentation,
+            material_segmentation_backend=segmentation_backend.lower(),
+            sam2_model_size=sam2_model_size.lower(),
+            sam2_checkpoint_path=(str(sam2_checkpoint_path) if sam2_checkpoint_path else None),
+            sam2_tiling_enabled=sam2_tiling_enabled,
+            sam2_tile_size_px=sam2_tile_size_px,
+            sam2_overlap_px=sam2_overlap_px,
+            sam2_global_pass_longest_side=sam2_global_pass_longest_side,
+            sam2_max_concurrency=sam2_max_concurrency,
+            sam2_points_per_side=sam2_points_per_side,
+            sam2_points_per_batch=sam2_points_per_batch,
+            sam2_pred_iou_thresh=sam2_pred_iou_thresh,
+            sam2_stability_score_thresh=sam2_stability_score_thresh,
+            sam2_crop_n_layers=sam2_crop_n_layers,
+            strict_backend=strict_segmentation,
+            material_segmentation_cache_policy=normalized_segmentation_cache,
+            output_bit_depth=normalized_output_bit_depth,
+            emit_master16=enable_emit_master16,
+            emit_upscaled16=enable_emit_upscaled16,
+            emit_marketing=(enable_emit_marketing if emit_marketing is not None else None),
+            emit_report=(enable_emit_report if emit_report is not None else None),
+            emit_run_card=enable_emit_run_card,
+            run_card_version=normalized_run_card_version,
+            run_card_include_proofs=enable_run_card_include_proofs,
+            vlm_captioning_enabled=enable_vlm_captioning,
+            vlm_captioning_backend=normalized_captioning_backend,
+            vlm_captioning_model=normalized_captioning_model,
+            vlm_captioning_proxy_format=normalized_captioning_proxy_format,
+            vlm_captioning_max_side_px=vlm_captioning_max_side_px,
+            fastvlm_python_executable=fastvlm_python,
+            fastvlm_mlx_vlm_dir=fastvlm_mlx_vlm_dir,
+            fastvlm_timeout_seconds=fastvlm_timeout_seconds,
+            enable_reconstruction=enable_reconstruction_bool,
+            grouping_mode=grouping_mode_normalized,
+            cameras_sidecar_path=(str(cameras_sidecar_path) if cameras_sidecar_path else None),
+            reconstruction_iterations=reconstruction_iterations,
+            reconstruction_tier=reconstruction_tier_value,
+            emit_scene_debug_bundle=enable_emit_scene_debug_bundle,
+            strict_inputs=strict_inputs,
+            raw_ingest_mode=raw_ingest_mode,
+            raw_wb_mode=raw_wb_mode_normalized,
+            raw_demosaic=raw_demosaic_normalized,
+            allow_semantic_fallback=allow_semantic_fallback,
+            keep_intermediates=keep_intermediates,
+        )
+    except ValueError as exc:
+        # EnhanceConfig validates option values (geometry recipe, V2 colour
+        # policy, ...); report them as a usage error, not a traceback.
+        raise typer.BadParameter(str(exc)) from exc
     apply_effective_raw_runtime_config(config)
     # Model/license resolution happens exactly once, in
     # build_resolved_invocation below (P0-1, issue #2065). The former

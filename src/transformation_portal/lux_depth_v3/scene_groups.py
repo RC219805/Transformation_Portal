@@ -20,9 +20,8 @@ import hashlib
 import math
 import os
 from dataclasses import dataclass
-from itertools import groupby
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 
 @dataclass(frozen=True)
@@ -325,9 +324,16 @@ def build_scene_groups(
     if mode == "parent_dir":
         # Stable ordering regardless of caller order.
         sorted_images = sorted(image_list, key=lambda p: normalize_relative_path(p, dataset_root))
+        # Collect every image of a parent directory into one group, even when a
+        # sub-directory sorts between its files (``itertools.groupby`` only merges
+        # adjacent keys and would split the directory into several scenes).
+        # Groups keep first-appearance order of the full-path sort.
+        members_by_parent: Dict[str, List[Path]] = {}
+        for img in sorted_images:
+            members_by_parent.setdefault(_group_key(img, dataset_root), []).append(img)
         parent_groups: List[SceneGroup] = []
-        for _, grouped_iter in groupby(sorted_images, key=lambda p: _group_key(p, dataset_root)):
-            grouped_images = tuple(grouped_iter)
+        for members in members_by_parent.values():
+            grouped_images = tuple(members)
             group_cameras = _get_cameras_for_group(grouped_images)
             parent_groups.append(
                 SceneGroup(

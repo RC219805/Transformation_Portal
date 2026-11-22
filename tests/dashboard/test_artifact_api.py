@@ -215,3 +215,49 @@ def test_create_router_requires_fastapi(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(artifact_api, "FASTAPI_AVAILABLE", False)
     with pytest.raises(ImportError, match="FastAPI is required"):
         artifact_api.create_artifact_router()
+
+
+# --------------------------------------------------------------------------- #
+# D7 regressions: bounded reads, multi-byte boundary, no server paths
+# --------------------------------------------------------------------------- #
+
+
+def test_preview_text_with_multibyte_char_split_by_read_boundary(restore_globals, cas: _FakeCAS) -> None:
+    # Byte 1024 falls inside the two-byte "é": valid UTF-8 must not be reported as binary.
+    data = ("a" * 1023 + "é" + " tail\n" * 50).encode("utf-8")
+    cas.put("u" * 64, data)
+    artifact_api.set_artifact_store(cas)  # type: ignore[arg-type]
+    body = _client().get(f"/api/artifacts/{'u' * 64}/preview").json()
+    assert body["type"] == "text"
+    assert body["preview"] == "a" * 1023
+    assert body["truncated"] is True
+
+
+def test_preview_truncated_multibyte_at_end_of_object_is_binary(restore_globals, cas: _FakeCAS) -> None:
+    # A whole object that ends inside a multi-byte sequence is not valid UTF-8.
+    cas.put("e" * 64, b"abc\xc3")
+    artifact_api.set_artifact_store(cas)  # type: ignore[arg-type]
+    assert _client().get(f"/api/artifacts/{'e' * 64}/preview").json()["type"] == "binary"
+
+
+@pytest.mark.parametrize("max_bytes", [-1, 0, 65537])
+def test_preview_rejects_unbounded_max_bytes(restore_globals, cas: _FakeCAS, max_bytes: int) -> None:
+    cas.put("t" * 64, b"hello world")
+    artifact_api.set_artifact_store(cas)  # type: ignore[arg-type]
+    resp = _client().get(f"/api/artifacts/{'t' * 64}/preview", params={"max_bytes": max_bytes})
+    assert resp.status_code == 422
+
+
+@pytest.mark.parametrize("params", [{"limit": -1}, {"limit": 0}, {"offset": -1}])
+def test_list_rejects_out_of_range_pagination(restore_globals, cas: _FakeCAS, params: dict) -> None:
+    cas.put("aa" + "0" * 62, b"x")
+    artifact_api.set_artifact_store(cas)  # type: ignore[arg-type]
+    assert _client().get("/api/artifacts/", params=params).status_code == 422
+
+
+def test_list_does_not_expose_server_paths(restore_globals, cas: _FakeCAS) -> None:
+    cas.put("aa" + "0" * 62, b"x")
+    artifact_api.set_artifact_store(cas)  # type: ignore[arg-type]
+    item = _client().get("/api/artifacts/").json()["artifacts"][0]
+    assert "path" not in item
+    assert item["hash"] == "aa" + "0" * 62

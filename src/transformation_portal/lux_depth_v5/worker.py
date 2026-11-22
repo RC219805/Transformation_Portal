@@ -22,7 +22,7 @@ from transformation_portal.core.execution_plan_v3 import PhotographyPlan
 from transformation_portal.core.execution_plan_v4 import ExecutionPlanV4, parse_plan_v4
 from transformation_portal.ingest.canonical_json import canonicalize_json, dumps_json
 from transformation_portal.lux_depth_v4.worker import NativeDepthWorker as GovernedNativeDepthWorker
-from transformation_portal.lux_depth_v4.worker import device_probe
+from transformation_portal.lux_depth_v4.worker import device_probe, error_reply
 
 from .backend import INFERENCE_RECIPE, SKY_MASK_POLICY
 
@@ -174,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
                     raise ValueError("Unsupported worker command or lifecycle transition")
             print(dumps_json({"ok": True, "result": result}, allow_nan=False), flush=True)
         except Exception as exc:
-            print(dumps_json({"ok": False, "error": str(exc)}), flush=True)
+            print(error_reply(exc), flush=True)
             return 1
     return 0
 

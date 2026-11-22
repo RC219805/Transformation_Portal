@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -216,6 +217,28 @@ class TestRateLimitRejection:
         assert "rate limit exceeded" in error.get("message", "").lower()
         assert "client_ip" in (error.get("details") or {})
 
+    def test_failed_api_key_attempts_are_rate_limited(self, anon_client):
+        """Wrong-key guesses must consume the per-client budget (fail closed):
+        once it is spent, further guesses get the documented 429 envelope with
+        Retry-After instead of an unlimited stream of 401s.
+        """
+        orchestrator_app.RATE_LIMIT_PER_MINUTE = 3
+        statuses = [anon_client.get("/v1/jobs", headers={"x-api-key": f"guess-{index}"}).status_code for index in range(3)]
+        assert statuses == [401, 401, 401]
+
+        response = anon_client.get("/v1/jobs", headers={"x-api-key": "guess-final"})
+        assert response.status_code == 429
+        body = response.json()
+        assert body.get("schema") == "tp.orchestrator.error.v1"
+        assert (body.get("error") or {}).get("code") == "RATE_LIMITED"
+        assert int(response.headers["Retry-After"]) >= 1
+        assert int(response.headers["X-RateLimit-Limit"]) == 3
+
+        # The budget is per client, so a valid key from the same client is
+        # throttled too until the window frees a slot.
+        valid = anon_client.get("/v1/jobs", headers={"x-api-key": "rejection-secret"})
+        assert valid.status_code == 429
+
     def test_non_429_responses_do_not_emit_ratelimit_headers(self, auth_client):
         """The contract is additive only on rejection. Successful liveness
         responses must not advertise rate-limit headers, since that would
@@ -228,6 +251,192 @@ class TestRateLimitRejection:
         assert response.headers.get("X-RateLimit-Limit") is None
         assert response.headers.get("X-RateLimit-Remaining") is None
         assert response.headers.get("X-RateLimit-Reset") is None
+
+
+class TestNonJsonCompliantPayloadRejection:
+    """Valid-JSON literals that the strict response encoder cannot echo
+    (``NaN``, ``Infinity``, ``1e400``, unpaired ``\\ud800`` escapes) and
+    integers too large for ``float`` must never produce a bare 500: the config
+    preview flags the arg as a field error and echoes it as ``null`` (the
+    managed photography preview contract), and job creation is refused with
+    the 400 INVALID_ARGUMENT envelope.
+    """
+
+    _ARGS = '"input_dir": "/nonexistent/in", "output_dir": "/nonexistent/out"'
+    _NESTED_CASES = [("NaN", "non_finite_number"), ('"\\ud800"', "invalid_unicode_string")]
+    _CASES = [
+        ("lux-depth-v3", '"max_workers": 1e400', "max_workers"),
+        ("lux-depth-v3", '"reconstruction_iterations": Infinity', "reconstruction_iterations"),
+        ("lux-depth-v3", '"v2_preset": "\\ud800"', "v2_preset"),
+        ("lux-depth-v3", '"\\udc00": 1', "args"),
+        ("archive-gate-b", '"note": NaN', "note"),
+        ("archive-gate-b", '"nested": [{"value": -1e400}]', "nested"),
+        ("archive-gate-b", '"note": "\\ud800"', "note"),
+        ("archive-gate-a", '"archive_command": "fixity-verify", "workers": 1e400', "workers"),
+    ]
+
+    @staticmethod
+    def _post(client, path, raw):
+        return client.post(path, headers={"content-type": "application/json"}, content=raw.encode("utf-8"))
+
+    @staticmethod
+    def _valid_archive_args(tmp_path):
+        input_dir = tmp_path / "in"
+        output_dir = tmp_path / "out"
+        input_dir.mkdir()
+        output_dir.mkdir()
+        manifest = output_dir / "m.jsonl"
+        manifest.write_text("{}\n", encoding="utf-8")
+        return json.dumps({"input_dir": str(input_dir), "output_dir": str(output_dir), "manifest_jsonl": str(manifest)})
+
+    @pytest.mark.parametrize(("pipeline", "extra", "field"), _CASES)
+    def test_preview_flags_unechoable_args_and_echoes_null(self, auth_client, pipeline, extra, field):
+        raw = '{"pipeline": "%s", "args": {%s, %s}}' % (pipeline, self._ARGS, extra)
+        response = self._post(auth_client, "/v1/config-preview", raw)
+
+        assert response.status_code == 200
+        preview = response.json()["data"]
+        assert field in [issue.get("field") for issue in preview["field_errors"]]
+        assert preview["argv_preview"] == ""
+        # The echo must be strict JSON: no NaN/Infinity literal, no lone surrogate.
+        json.dumps(preview, allow_nan=False).encode("utf-8")
+
+    @pytest.mark.parametrize("path", ["/v1/jobs", "/v2/jobs"])
+    @pytest.mark.parametrize(("pipeline", "extra", "field"), _CASES)
+    def test_job_create_refuses_unechoable_args(self, auth_client, path, pipeline, extra, field):
+        raw = '{"pipeline": "%s", "args": {%s, %s}}' % (pipeline, self._ARGS, extra)
+        response = self._post(auth_client, path, raw)
+
+        assert response.status_code == 400
+        body = response.json()
+        assert body.get("schema") == "tp.orchestrator.error.v1"
+        assert (body.get("error") or {}).get("code") == "INVALID_ARGUMENT"
+        assert orchestrator_app.JOBS == {}
+
+    @pytest.mark.parametrize("path", ["/v1/jobs", "/v2/jobs"])
+    def test_otherwise_valid_archive_job_with_nan_arg_is_not_accepted(self, auth_client, tmp_path, path):
+        args = self._valid_archive_args(tmp_path)
+        valid = self._post(auth_client, "/v1/config-preview", '{"pipeline": "archive-gate-b", "args": %s}' % args)
+        assert valid.status_code == 200
+        assert valid.json()["data"]["field_errors"] == []
+
+        raw = '{"pipeline": "archive-gate-b", "args": %s, "note": NaN}}' % args[:-1]
+        response = self._post(auth_client, path, raw)
+
+        assert response.status_code == 400
+        error = response.json().get("error") or {}
+        assert error.get("code") == "INVALID_ARGUMENT"
+        assert error.get("details") == {"field": "note", "reason": "non_finite_number"}
+        assert orchestrator_app.JOBS == {}
+
+    @pytest.mark.parametrize(("leaf", "reason"), _NESTED_CASES)
+    def test_nested_unechoable_arg_is_a_field_error_not_500(self, auth_client, tmp_path, leaf, reason):
+        # Keep the HTTP fixture inside CPython 3.11's JSON decoder stack limit.
+        depth = 256
+        args = self._valid_archive_args(tmp_path)
+        raw = '{"pipeline": "archive-gate-b", "args": %s, "note": %s%s%s}}' % (
+            args[:-1],
+            "[" * depth,
+            leaf,
+            "]" * depth,
+        )
+
+        preview_response = self._post(auth_client, "/v1/config-preview", raw)
+
+        assert preview_response.status_code == 200
+        preview = preview_response.json()["data"]
+        assert ("note", reason) in [(issue["field"], issue["code"]) for issue in preview["field_errors"]]
+        node = preview["normalized_args"]["note"]
+        for _ in range(depth):
+            node = node[0]
+        assert node is None
+
+        job_response = self._post(auth_client, "/v1/jobs", raw)
+        assert job_response.status_code == 400
+        error = job_response.json()["error"]
+        assert error["code"] == "INVALID_ARGUMENT"
+        assert error["details"] == {"field": "note", "reason": reason}
+        assert orchestrator_app.JOBS == {}
+
+    @pytest.mark.parametrize(("leaf", "reason"), _NESTED_CASES)
+    def test_preview_sanitizes_unechoable_values_beyond_the_decoder_stack_limit(self, leaf, reason):
+        depth = 2000
+        args = json.loads("{" + self._ARGS + "}")
+        nested_value = json.loads(leaf)
+        for _ in range(depth):
+            nested_value = [nested_value]
+        args["note"] = nested_value
+
+        preview = orchestrator_app._build_config_preview({"pipeline": "archive-gate-b", "args": args})
+
+        assert ("note", reason) in [(issue["field"], issue["code"]) for issue in preview["field_errors"]]
+        assert preview["argv_preview"] == ""
+        for field in ("normalized_args", "execution_args"):
+            node = preview[field]["note"]
+            for _ in range(depth):
+                assert isinstance(node, list) and len(node) == 1
+                node = node[0]
+            assert node is None
+
+    def test_unechoable_arg_is_the_reported_error_when_otherwise_valid(self):
+        preview = orchestrator_app._reject_unechoable_preview_args(
+            "archive-gate-b",
+            {"note": float("nan"), "label": "ok"},
+            {
+                "pipeline": "archive-gate-b",
+                "normalized_args": {"note": float("nan"), "label": "ok"},
+                "execution_args": {"note": float("nan"), "label": "ok"},
+                "argv_preview": "tp archive --note nan",
+                "field_errors": [],
+                "field_warnings": [],
+                "readiness": None,
+            },
+        )
+
+        assert preview["field_errors"] == [
+            {
+                "field": "note",
+                "code": "non_finite_number",
+                "message": orchestrator_app.PORTAL_SAFE_ERROR_MESSAGES["non_finite_number"],
+            }
+        ]
+        assert preview["normalized_args"] == {"note": None, "label": "ok"}
+        assert preview["execution_args"] == {"note": None, "label": "ok"}
+        assert preview["argv_preview"] == ""
+        assert preview["next_best_action"]
+
+    def test_huge_integer_probability_is_a_field_error_not_500(self, auth_client):
+        raw = '{"pipeline": "lux-depth-v3", "args": {%s, "sam2_pred_iou_thresh": 1%s}}' % (self._ARGS, "0" * 400)
+        response = self._post(auth_client, "/v1/config-preview", raw)
+
+        assert response.status_code == 200
+        codes = [issue.get("code") for issue in response.json()["data"]["field_errors"]]
+        assert "invalid_sam2_pred_iou_thresh" in codes
+
+    def test_huge_integer_rum_value_returns_400(self, auth_client, monkeypatch):
+        monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+        monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+        raw = (
+            '{"event_type": "core_web_vital", "route": "/portal", "view": "overview", "unit": "ms",'
+            ' "metric": "lcp", "value": 1%s}' % ("0" * 400)
+        )
+        response = self._post(auth_client, "/v1/portal/rum", raw)
+
+        assert response.status_code == 400
+        error = response.json().get("error") or {}
+        assert error.get("details") == {"field": "payload", "reason": "invalid_value"}
+
+    @pytest.mark.parametrize("value", [float("inf"), float("-inf")])
+    def test_integer_normalisers_record_errors_for_overflowing_values(self, value):
+        errors: list = []
+        assert orchestrator_app._normalize_optional_positive_int(value, "max_workers", errors) is None
+        assert orchestrator_app._normalize_optional_non_negative_int(value, "verify_sample", errors) is None
+        assert [issue.get("field") for issue in errors] == ["max_workers", "verify_sample"]
+
+    def test_probability_normaliser_records_error_for_huge_integer(self):
+        errors: list = []
+        assert orchestrator_app._normalize_optional_probability(10**400, "sam2_pred_iou_thresh", errors) is None
+        assert [issue.get("field") for issue in errors] == ["sam2_pred_iou_thresh"]
 
 
 class TestArtifactDeletionRejection:

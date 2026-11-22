@@ -6,17 +6,35 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from transformation_portal.core.execution_plan import decode_bounded_json_object
 from transformation_portal.ingest.canonical_json import canonicalize_json
-from transformation_portal.lux_depth_v4.evidence import _inventory
+from transformation_portal.lux_depth_v4.evidence import MAX_EVIDENCE_BYTES, _decode_evidence, _inventory
 from transformation_portal.lux_depth_v4.io import directory_path, pinned_directory, snapshot
 
 from .color import GradeRecipe, RenderRecipe
 from .plan import MAX_PLAN_BYTES, GradePlan, depth_recipe, digest, processing_identity, source_binding, validate_resources
 from .products import image_products
-from .source import SourceLimits, VerifiedV5Source, prepare_source, validate_source
+from .source import SourceLimits, VerifiedV5Source, preflight_source, prepare_source, validate_source
 
 EVIDENCE_SCHEMA = "tp.lux.grade.evidence.v1"
+# One byte bound shared by every V6 completion writer and verifier (grade and
+# native Depth Pro). The 1 MiB plan decoder must not read completion evidence:
+# a GradePlan admits batches whose inventory alone exceeds 1 MiB.
+MAX_COMPLETION_BYTES = MAX_EVIDENCE_BYTES
+
+
+def encode_completion(payload: dict[str, Any]) -> bytes:
+    """Canonical completion bytes, refused before writing if unverifiable."""
+    data = canonicalize_json(payload)
+    if len(data) > MAX_COMPLETION_BYTES:
+        raise ValueError("V6 completion evidence exceeds its byte limit")
+    return data
+
+
+def decode_completion(raw: bytes) -> dict[str, Any]:
+    """Strict bounded decode (duplicate members and non-finite numbers rejected)."""
+    if len(raw) > MAX_COMPLETION_BYTES:
+        raise ValueError("V6 completion evidence exceeds its byte limit")
+    return _decode_evidence(raw)
 
 
 @dataclass(frozen=True)
@@ -26,7 +44,7 @@ class VerifiedGradeEvidence:
     plan_sha256: str
 
     def to_payload(self) -> dict[str, Any]:
-        return decode_bounded_json_object(self.canonical_bytes)
+        return decode_completion(self.canonical_bytes)
 
 
 def verify_artifacts(
@@ -133,8 +151,8 @@ def verify_execution_evidence(
             raise ValueError("V6 plan differs from the expected exact bytes")
         payload = plan.to_payload()
         deadline = payload["limits"]["wall_time_seconds"]
-        raw, completion_snapshot = snapshot(root, root / "evidence.json", maximum_bytes=MAX_PLAN_BYTES)
-        evidence = decode_bounded_json_object(raw)
+        raw, completion_snapshot = snapshot(root, root / "evidence.json", maximum_bytes=MAX_COMPLETION_BYTES)
+        evidence = decode_completion(raw)
         keys = {"schema", "plan_sha256", "source_digest", "artifacts", "input_count", "production_acceptance"}
         if (
             set(evidence) != keys
@@ -164,7 +182,10 @@ def verify_execution_evidence(
             # replay as well as retained-parent admission. Keep exact frozen
             # plan bytes/source identity unchanged after this extra preflight.
             validate_resources({**payload, "source": {**payload["source"], "limits": constrained.to_payload()}})
-            prepare_source(source_root, limits=constrained, cancellation=lambda: _cancelled(checkpoint))
+            # Only admission depends on the limits; the full V5 semantic replay
+            # below does not, so run it once (never twice) per verification.
+            if constrained != admitted_limits:
+                preflight_source(source_root, limits=constrained, cancellation=lambda: _cancelled(checkpoint))
         source = prepare_source(source_root, limits=admitted_limits, cancellation=lambda: _cancelled(checkpoint))
         verify_artifacts(root, plan, source, evidence["artifacts"], checkpoint=checkpoint, completed=True)
         if sum(record["size_bytes"] for record in evidence["artifacts"]) + len(raw) > payload["limits"]["max_output_bytes"]:

@@ -308,6 +308,44 @@ def test_run_scene_reconstruction_rejects_case_only_manifest_image_divergence(tm
     builder.assert_not_called()
 
 
+def test_prepared_reconstruction_does_not_rescale_caller_context_cameras(tmp_path: Path) -> None:
+    context = _context_with_cameras(
+        tmp_path,
+        cameras=(_camera_with_provenance(0.0), _camera_with_provenance(0.1)),
+    )
+    manifest_context = SceneContext(
+        scene_id=context.scene_id,
+        dataset_root=context.dataset_root,
+        images=context.images,
+        cameras=(_camera_with_provenance(0.0), _camera_with_provenance(0.1)),
+        metadata=context.metadata,
+    )
+    extrinsics_before = [camera.params.extrinsics.copy() for camera in context.cameras]
+
+    class PassThroughSceneBuilder:
+        """Return a scene holding the cameras it was given, like the Gaussian backend."""
+
+        def build_from_images(self, **kwargs):  # noqa: ANN003
+            return _scene_from_cameras(cameras=kwargs["cameras"])
+
+    with patch(
+        "transformation_portal.lux_depth_v3.reconstruction_runner._build_scene_builder",
+        return_value=PassThroughSceneBuilder(),
+    ):
+        for _attempt in range(2):
+            report_path = run_scene_reconstruction(
+                context=context,
+                manifest_context=manifest_context,
+                image_sha256_overrides=("0" * 64, "1" * 64),
+                output_dir=tmp_path / "out",
+            )
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+            assert pytest.approx(payload["scene_scale"]["scale_factor"], rel=1e-6) == 10.0
+
+    for camera, before in zip(context.cameras, extrinsics_before):
+        np.testing.assert_array_equal(camera.params.extrinsics, before)
+
+
 def test_write_scene_debug_bundle_writes_manifest_cameras_and_inputs(tmp_path: Path):
     sidecar_path = tmp_path / "scene_cameras.json"
     sidecar_path.write_text("{}", encoding="utf-8")

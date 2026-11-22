@@ -45,7 +45,7 @@ class TestIngestStageMetadata:
         meta = stage.metadata
 
         assert meta.name == "linear_ingest"
-        assert meta.version == "1.0.0"
+        assert meta.version == "1.1.0"
         assert meta.description
         assert meta.resource_requirements.gpu_memory_mb == 0
         assert meta.resource_requirements.cpu_memory_mb > 0
@@ -86,6 +86,70 @@ class TestIngestStageCacheKey:
         key2 = stage.compute_cache_key({"input_path": file2}, context)
 
         assert key1 != key2
+
+    def test_sidecar_flags_are_part_of_key(self, tmp_path):
+        """A run that writes sidecars must not reuse the key of a run that does not (G-2)."""
+        stage = IngestStage()
+        src = tmp_path / "in.tif"
+        src.write_bytes(b"image-bytes")
+        out = tmp_path / "out"
+
+        def key(config, output_dir=out, path=src):
+            return stage.compute_cache_key({"input_path": path}, MockExecutionContext(config=config, output_dir=output_dir))
+
+        plain = key({})
+        assert plain == key({"emit_provenance": False, "emit_exr": False})
+        prov = key({"emit_provenance": True})
+        exr = key({"emit_exr": True})
+        assert len({plain, prov, exr, key({"emit_provenance": True, "emit_exr": True})}) == 4
+
+        # Sidecars land under output_dir with the input stem: both are identity when emitting.
+        assert prov != key({"emit_provenance": True}, output_dir=tmp_path / "other")
+        renamed = tmp_path / "renamed.tif"
+        renamed.write_bytes(b"image-bytes")
+        assert prov != key({"emit_provenance": True}, path=renamed)
+        # Without sidecars the output location does not change the stage outputs.
+        assert plain == key({}, output_dir=tmp_path / "other")
+        assert plain == key({}, path=renamed)
+
+    def test_cached_ingest_still_writes_requested_provenance(self, tmp_path):
+        """A second run asking for provenance must not be served by the no-provenance entry."""
+        np = pytest.importorskip("numpy")
+        tifffile = pytest.importorskip("tifffile")
+        from transformation_portal.spatial_ai.orchestration.graph import ArtifactStore, ExecutionGraph, Executor
+
+        src = tmp_path / "in.tif"
+        tifffile.imwrite(src, (np.random.default_rng(0).random((16, 16, 3)) * 65535).astype(np.uint16))
+        out = tmp_path / "out"
+        out.mkdir()
+        graph = ExecutionGraph()
+        graph.add_stage("ingest", IngestStage(), inputs={})
+        executor = Executor(artifact_store=ArtifactStore(tmp_path / "cache"), device="cpu")
+
+        executor.execute(graph, {"input_path": str(src)}, out, config={"emit_provenance": False})
+        assert not (out / "in_provenance.json").exists()
+        result = executor.execute(graph, {"input_path": str(src)}, out, config={"emit_provenance": True})
+
+        assert result.stage_results[0].cache_hit is False
+        assert (out / "in_provenance.json").exists()
+
+
+class TestSegmentationStageCacheKey:
+    """Tests for SegmentationStage cache key computation."""
+
+    def test_shape_and_dtype_are_part_of_key(self):
+        """Arrays with identical bytes but different shape or dtype must not collide (G-2)."""
+        np = pytest.importorskip("numpy")
+        stage = SegmentationStage()
+        context = MockExecutionContext()
+
+        def key(arr):
+            return stage.compute_cache_key({"linear_rgb": arr}, context)
+
+        base = key(np.zeros((4, 8, 3), np.float32))
+        assert base == key(np.zeros((4, 8, 3), np.float32))
+        assert base != key(np.zeros((8, 4, 3), np.float32))
+        assert base != key(np.zeros((4, 8, 3), np.int32))
 
 
 class TestSegmentationStageMetadata:

@@ -23,6 +23,7 @@ Example:
 
 from __future__ import annotations
 
+import copy
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -118,6 +119,20 @@ class NodeRegistry:
             raise ReplayError(f"Unknown node type: {name}")
         return cls
 
+    def find_by_class_path(self, class_path: str) -> Optional[Type]:
+        """Find a registered class by its ``module:qualname`` identifier.
+
+        Args:
+            class_path: Identifier recorded by the execution engine
+
+        Returns:
+            Node class or None if no registered class matches
+        """
+        for cls in self._registry.values():
+            if f"{cls.__module__}:{cls.__qualname__}" == class_path:
+                return cls
+        return None
+
     def list_types(self) -> list[str]:
         """List all registered node types."""
         return list(self._registry.keys())
@@ -208,13 +223,26 @@ class ReplayEngine:
         if node.node_type != "computation":
             raise ReplayError(f"Cannot replay non-computation node: {node.node_type}")
 
-        # Get node class
-        node_type_name = node.metadata.get("node_type", node.metadata.get("node_id", ""))
-        node_cls = self.registry.resolve(node_type_name)
+        # Get node class. The engine records the class as module:qualname, which
+        # is independent of the name the class was registered under.
+        class_path = node.metadata.get("node_class")
+        if class_path:
+            node_cls = self.registry.find_by_class_path(class_path)
+            if node_cls is None:
+                raise ReplayError(f"Unknown node type: {class_path} is not registered")
+        else:
+            node_type_name = node.metadata.get("node_type", node.metadata.get("node_id", ""))
+            node_cls = self.registry.resolve(node_type_name)
 
-        # Extract inputs from metadata/outputs
-        # The original inputs are stored in metadata
-        original_inputs = node.metadata.get("original_inputs", {})
+        # The original inputs and constructor kwargs are recorded in metadata.
+        # Replaying without them would silently run a different computation.
+        original_inputs = node.metadata.get("original_inputs")
+        if not isinstance(original_inputs, dict):
+            raise ReplayError(f"Node {node_hash[:8]} has no recorded inputs; it cannot be replayed")
+        node_kwargs = node.metadata.get("node_kwargs", {})
+        if not isinstance(node_kwargs, dict):
+            raise ReplayError(f"Node {node_hash[:8]} has no recorded constructor kwargs; it cannot be replayed")
+        use_gpu = bool(node.metadata.get("use_gpu", False))
 
         self._replay_count += 1
         replay_id = f"replay_{node_hash[:8]}_{self._replay_count}"
@@ -224,8 +252,10 @@ class ReplayEngine:
         try:
             replay_hash, outputs = self.engine.run_node(
                 node_cls,
-                inputs=original_inputs,
+                inputs=copy.deepcopy(original_inputs),
                 node_id=replay_id,
+                node_kwargs=copy.deepcopy(node_kwargs),
+                use_gpu=use_gpu,
             )
         except Exception as e:
             raise ReplayError(f"Replay execution failed: {e}")

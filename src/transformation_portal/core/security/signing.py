@@ -24,6 +24,7 @@ import base64
 import hashlib
 import json
 import logging
+import os
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -148,10 +149,17 @@ def save_keypair(
     Args:
         priv_bytes: Private key bytes
         pub_bytes: Public key bytes
-        priv_path: Path for private key
+        priv_path: Path for private key (readable by its owner only)
         pub_path: Path for public key
     """
-    priv_path.write_bytes(priv_bytes)
+    # The umask decides the mode of an ordinary new file, which would leave
+    # the signing key readable by every local user.
+    descriptor = os.open(priv_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "wb") as handle:
+        if hasattr(os, "fchmod"):
+            # A file that already existed keeps its old mode unless it is reset.
+            os.fchmod(handle.fileno(), 0o600)
+        handle.write(priv_bytes)
     pub_path.write_bytes(pub_bytes)
     logger.info("Saved keypair to %s and %s", priv_path, pub_path)
 

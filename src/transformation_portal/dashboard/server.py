@@ -23,6 +23,7 @@ import asyncio
 import json
 import logging
 import threading
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -32,7 +33,7 @@ logger = logging.getLogger(__name__)
 # Optional FastAPI import
 try:
     import uvicorn
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+    from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
     from fastapi.responses import HTMLResponse, JSONResponse
 
     FASTAPI_AVAILABLE = True
@@ -68,9 +69,58 @@ class DashboardEvent:
 
 
 # Global state for WebSocket connections
-_connected_clients: list[Any] = []
-_event_history: list[DashboardEvent] = []
 _max_history = 1000
+_connected_clients: list[Any] = []
+# Bounded on every append path (see ``_record_event``); ``maxlen`` is a hard backstop.
+_event_history: deque[DashboardEvent] = deque(maxlen=_max_history)
+_history_lock = threading.Lock()
+# Event loop that owns the connected WebSocket clients (the serving loop). Captured when
+# a client connects or an event is posted, so producers on other threads can hand
+# broadcasts to it with ``run_coroutine_threadsafe`` instead of silently dropping them.
+_serving_loop: Optional[asyncio.AbstractEventLoop] = None
+# Strong references to in-flight broadcast tasks so they are not garbage-collected.
+_pending_broadcasts: set[asyncio.Task[None]] = set()
+
+
+def _record_event(event: DashboardEvent) -> None:
+    """Append ``event`` to the history, keeping at most ``_max_history`` entries."""
+    with _history_lock:
+        _event_history.append(event)
+        while len(_event_history) > max(_max_history, 0):
+            _event_history.popleft()
+
+
+def _recent_events(limit: int) -> list[DashboardEvent]:
+    """Return a snapshot of the ``limit`` most recent events (oldest first)."""
+    with _history_lock:
+        snapshot = list(_event_history)
+    return snapshot[-limit:] if limit > 0 else []
+
+
+def _capture_serving_loop() -> None:
+    """Remember the running loop as the one that owns the WebSocket clients."""
+    global _serving_loop
+    _serving_loop = asyncio.get_running_loop()
+
+
+def _schedule_broadcast(event: DashboardEvent) -> None:
+    """Deliver ``event`` to live clients on the serving loop, from any thread."""
+    loop = _serving_loop
+    if loop is None or loop.is_closed():
+        # No client has ever connected to a running server: nothing to deliver.
+        return
+    try:
+        running: Optional[asyncio.AbstractEventLoop] = asyncio.get_running_loop()
+    except RuntimeError:
+        running = None
+    if running is loop:
+        task = loop.create_task(_broadcast_to_clients(event))
+        _pending_broadcasts.add(task)
+        task.add_done_callback(_pending_broadcasts.discard)
+    elif loop.is_running():
+        asyncio.run_coroutine_threadsafe(_broadcast_to_clients(event), loop)
+    else:
+        logger.debug("Dashboard serving loop is not running; event %s kept in history only", event.event_type)
 
 
 async def _broadcast_to_clients(event: DashboardEvent) -> None:
@@ -100,7 +150,9 @@ def broadcast_event(
 ) -> None:
     """Broadcast an event to all dashboard clients.
 
-    This is a synchronous wrapper that queues the event for async broadcast.
+    This is a synchronous wrapper that queues the event for async broadcast. It is
+    safe to call from any thread: the broadcast is scheduled on the loop that serves
+    the connected WebSocket clients.
 
     Args:
         event_type: Type of event
@@ -116,21 +168,8 @@ def broadcast_event(
         source=source,
     )
 
-    # Add to history
-    _event_history.append(event)
-    if len(_event_history) > _max_history:
-        _event_history.pop(0)
-
-    # Try to broadcast (may fail if no event loop)
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.create_task(_broadcast_to_clients(event))
-        else:
-            loop.run_until_complete(_broadcast_to_clients(event))
-    except RuntimeError:
-        # No event loop available
-        pass
+    _record_event(event)
+    _schedule_broadcast(event)
 
 
 def create_app() -> "FastAPI":
@@ -168,9 +207,9 @@ def create_app() -> "FastAPI":
         )
 
     @app.get("/api/history")
-    async def history(limit: int = 100):
+    async def history(limit: int = Query(100, ge=1, le=_max_history)):
         """Get recent event history."""
-        events = _event_history[-limit:]
+        events = _recent_events(limit)
         return JSONResponse(
             {
                 "count": len(events),
@@ -182,12 +221,13 @@ def create_app() -> "FastAPI":
     async def websocket_endpoint(websocket: WebSocket):
         """WebSocket endpoint for real-time streaming."""
         await websocket.accept()
+        _capture_serving_loop()
         _connected_clients.append(websocket)
         logger.info("WebSocket client connected (%d total)", len(_connected_clients))
 
         try:
             # Send recent history on connect
-            for event in _event_history[-10:]:
+            for event in _recent_events(10):
                 await websocket.send_text(json.dumps(event.to_dict()))
 
             # Keep connection alive
@@ -228,7 +268,8 @@ def create_app() -> "FastAPI":
             data=data or {},
             source=source,
         )
-        _event_history.append(event)
+        _capture_serving_loop()
+        _record_event(event)
         await _broadcast_to_clients(event)
         return JSONResponse({"status": "ok", "event": event.to_dict()})
 
@@ -389,15 +430,35 @@ def _get_index_html() -> str:
             const eventEl = document.createElement('div');
             eventEl.className = 'event';
 
+            // Event fields are client-supplied (POST /api/event): build the DOM with
+            // textContent only, never by parsing them as markup.
             const time = new Date(data.timestamp).toLocaleTimeString();
-            const typeClass = data.type.toLowerCase();
+            const typeText = String(data.type ?? '');
 
-            eventEl.innerHTML = `
-                <span class="time">${time}</span>
-                <span class="type ${typeClass}">${data.type}</span>
-                ${data.source ? `<span class="source">${data.source}</span>` : ''}
-                <div class="data">${JSON.stringify(data.data, null, 2)}</div>
-            `;
+            const timeEl = document.createElement('span');
+            timeEl.className = 'time';
+            timeEl.textContent = time;
+            eventEl.appendChild(timeEl);
+
+            const typeEl = document.createElement('span');
+            typeEl.className = 'type';
+            if (/^[a-z0-9_-]+$/i.test(typeText)) {
+                typeEl.classList.add(typeText.toLowerCase());
+            }
+            typeEl.textContent = typeText;
+            eventEl.appendChild(typeEl);
+
+            if (data.source) {
+                const sourceEl = document.createElement('span');
+                sourceEl.className = 'source';
+                sourceEl.textContent = String(data.source);
+                eventEl.appendChild(sourceEl);
+            }
+
+            const dataEl = document.createElement('div');
+            dataEl.className = 'data';
+            dataEl.textContent = JSON.stringify(data.data, null, 2);
+            eventEl.appendChild(dataEl);
 
             eventsEl.insertBefore(eventEl, eventsEl.firstChild);
 

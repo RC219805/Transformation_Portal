@@ -530,23 +530,26 @@ class TestPerformance:
         assert elapsed < 0.1  # Should complete in under 100ms
 
     def test_cache_improves_performance(self, temp_repo):
-        """Test that cache improves indexing performance."""
-        # First indexing (no cache)
+        """Test that a valid cache replaces re-chunking the repository."""
+        from unittest.mock import patch
+
+        # First indexing (no cache yet): every source file is chunked.
         indexer1 = RepositoryIndexer(str(temp_repo), use_cache=True)
-        start1 = time.time()
-        chunks1 = indexer1.index_repository()
-        time1 = time.time() - start1
+        with patch.object(indexer1, "_index_file", wraps=indexer1._index_file) as first_index:
+            chunks1 = indexer1.index_repository()
+        assert first_index.call_count > 0
+        assert indexer1.cache_file.exists()
 
-        # Second indexing (with cache)
+        # Second indexing is served from the cache without chunking any file.
+        # Comparing the wall-clock of two ~2ms operations measures scheduler
+        # noise (this test failed under load at 5.9ms vs 2.3ms), so assert on
+        # the work that is skipped rather than on elapsed time.
         indexer2 = RepositoryIndexer(str(temp_repo), use_cache=True)
-        start2 = time.time()
-        chunks2 = indexer2.index_repository()
-        time2 = time.time() - start2
+        with patch.object(indexer2, "_index_file", wraps=indexer2._index_file) as second_index:
+            chunks2 = indexer2.index_repository()
 
-        assert len(chunks1) == len(chunks2)
-        # Cache loading should be much faster than indexing
-        # But this might not always be true for tiny repos
-        assert time2 <= time1 * 2  # Allow some variance
+        assert second_index.call_count == 0
+        assert [chunk.to_dict() for chunk in chunks2] == [chunk.to_dict() for chunk in chunks1]
 
 
 class TestCurrentGuidanceInventory:

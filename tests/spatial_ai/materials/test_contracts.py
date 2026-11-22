@@ -4,11 +4,14 @@ import numpy as np
 import pytest
 
 from transformation_portal.spatial_ai.materials.contracts import (
+    VALID_MATERIAL_HINTS,
     MaterialGenerationConfig,
     MaterialInput,
     MaterialProperties,
     PBRTextures,
+    material_hint_from_label,
 )
+from transformation_portal.spatial_ai.segmentation.material_classifier import MaterialClassifier
 
 pytestmark = pytest.mark.unit
 
@@ -35,6 +38,12 @@ class TestMaterialInput:
                 image=image,
                 gamma=2.2,  # Invalid
             )
+
+    def test_nan_gamma_rejected(self):
+        """I-6: NaN gamma must not pass the gamma=1.0 contract."""
+        image = np.zeros((8, 8, 3), dtype=np.float32)
+        with pytest.raises(ValueError, match="gamma=1.0"):
+            MaterialInput(image=image, gamma=float("nan"))
 
     def test_dtype_enforcement(self):
         """Test float32 dtype enforcement."""
@@ -121,6 +130,53 @@ class TestMaterialInput:
                 material_hint=hint,
             )
             assert mat_input.material_hint == hint
+
+
+class TestMaterialHintFromLabel:
+    """Classifier labels are phrases; only an unambiguous category may become a hint."""
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        [
+            ("wood floor", "wood"),
+            ("granite stone", "stone"),
+            ("copper metal", "metal"),
+            ("frosted glass", "glass"),
+            ("linen fabric", "fabric"),
+            ("concrete wall", "concrete"),
+            ("leather furniture", "leather"),
+            ("ceramic tile", "ceramic"),
+            ("Wood Panel", "wood"),
+            ("metal", "metal"),
+        ],
+    )
+    def test_label_with_one_category_word_maps_to_that_category(self, label, expected):
+        assert material_hint_from_label(label) == expected
+
+    @pytest.mark.parametrize(
+        "label",
+        [
+            "brushed steel",
+            "marble surface",
+            "painted wall",
+            "limestone wall",  # "stone" is only a substring here
+            "stoneware vase",  # ... and would be the wrong category here
+            "wood and metal table",  # two categories: ambiguous
+            "",
+            None,
+        ],
+    )
+    def test_label_without_unambiguous_category_maps_to_no_hint(self, label):
+        assert material_hint_from_label(label) is None
+
+    def test_every_default_classifier_label_yields_an_accepted_hint(self):
+        image = np.zeros((4, 4, 3), dtype=np.float32)
+        hints = {label: material_hint_from_label(label) for label in MaterialClassifier.DEFAULT_MATERIAL_CLASSES}
+
+        for hint in hints.values():
+            assert hint is None or hint in VALID_MATERIAL_HINTS
+            assert MaterialInput(image=image, gamma=1.0, material_hint=hint).material_hint == hint
+        assert {hint for hint in hints.values() if hint is not None} == VALID_MATERIAL_HINTS
 
 
 class TestMaterialProperties:

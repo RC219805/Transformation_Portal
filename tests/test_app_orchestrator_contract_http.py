@@ -448,6 +448,80 @@ def test_staged_upload_route_rejects_invalid_client_manifest(
     assert body["error"]["details"]["field"] == "client_manifest"
 
 
+def _raw_multipart_body(part_headers: bytes, boundary: bytes = b"tp-boundary") -> bytes:
+    return b"--" + boundary + b"\r\n" + part_headers + b"\r\n\r\nhello\r\n--" + boundary + b"--\r\n"
+
+
+@pytest.mark.parametrize(
+    ("part_headers", "terminated", "message_fragment"),
+    [
+        pytest.param(
+            b'Content-Disposition: form-data; name="files"; filename=' + b"(a<b>@,;:" * 1000,
+            True,
+            "could not be parsed",
+            id="parser-recursion-error",
+        ),
+        pytest.param(
+            b'Content-Disposition: form-data; name="files"' + b"".join(b"; filename*%d*=a" % index for index in range(8000)),
+            True,
+            "exceed",
+            id="oversized-header-block",
+        ),
+        pytest.param(
+            b'Content-Disposition: form-data; name="files"; filename="a.png"' + b"\r\nX-Pad: " + b"a" * 400_000,
+            False,
+            "exceed",
+            id="unterminated-oversized-header-block",
+        ),
+    ],
+)
+def test_staged_upload_route_rejects_hostile_part_headers_with_typed_400(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    part_headers: bytes,
+    terminated: bool,
+    message_fragment: str,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    orchestrator_app.PORTAL_UPLOAD_ROOT = tmp_path / "uploads"
+    body_bytes = _raw_multipart_body(part_headers) if terminated else b"--tp-boundary\r\n" + part_headers
+
+    response = client.post(
+        "/v1/uploads/staging",
+        content=body_bytes,
+        headers={"content-type": "multipart/form-data; boundary=tp-boundary"},
+    )
+
+    body = response.json()
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "invalid_multipart_payload"
+    assert message_fragment in body["error"]["message"]
+
+
+def test_staged_upload_route_accepts_part_headers_within_the_header_limit(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_UPLOAD_STAGING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", "100")
+    orchestrator_app.PORTAL_UPLOAD_ROOT = tmp_path / "uploads"
+    part_headers = b'Content-Disposition: form-data; name="files"; filename="sample.txt"\r\nContent-Type: text/plain'
+
+    response = client.post(
+        "/v1/uploads/staging",
+        content=_raw_multipart_body(part_headers),
+        headers={"content-type": "multipart/form-data; boundary=tp-boundary"},
+    )
+
+    assert response.status_code == 200
+    input_dir = Path(response.json()["data"]["input_dir"])
+    assert (input_dir / "sample.txt").read_bytes() == b"hello"
+
+
 def test_staged_upload_route_returns_typed_413_for_oversized_parts(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -3543,6 +3617,101 @@ def test_jobs_list_and_detail_include_partial_run_summary(client: TestClient) ->
     assert detail_body["data"]["run_summary"]["error_count"] == 1
 
 
+def _seed_succeeded_job_with_persisted_summary(output_dir: Path, job_id: str) -> Any:
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id=job_id,
+        created_at=now - 50,
+        started_at=now - 49,
+        finished_at=now - 40,
+        done_published_at=now - 40,
+        state="succeeded",
+        progress=100,
+        exit_code=0,
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        run_summary={
+            "source": "run_card",
+            "batch_id": "2026-01-01_000000",
+            "total_images": 2,
+            "success_count": 2,
+            "error_count": 0,
+            "reviewable_outputs": True,
+            "partial": False,
+        },
+    )
+    return _seed_job(job)
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_finished_job_keeps_its_outcome_when_a_later_run_reuses_the_output_dir(
+    client: TestClient,
+    tmp_path: Path,
+    jobs_base: str,
+) -> None:
+    output_dir = tmp_path / "reused-out"
+    output_dir.mkdir()
+    job = _seed_succeeded_job_with_persisted_summary(output_dir, "job_outcome_survives_reuse")
+    # A later run into the same directory leaves a partial run card behind.
+    (output_dir / "run_card_2026-02-02_000000.json").write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-02-02_000000",
+                "run_card_version": "v1",
+                "total_images": 4,
+                "success_count": 3,
+                "error_count": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    detail = client.get(f"{jobs_base}/{job.id}").json()["data"]
+    listed = client.get(jobs_base).json()["data"]["jobs"][0]
+    with client.stream("GET", f"{jobs_base}/{job.id}/events") as stream_response:
+        assert stream_response.status_code == 200
+        done = next(payload for name, payload in _collect_sse_events(stream_response) if name == "done")
+
+    for payload in (detail, listed, done):
+        assert payload["state"] == "succeeded"
+        assert payload["error"] is None
+        assert payload["run_summary"]["batch_id"] == "2026-01-01_000000"
+        assert payload["run_summary"]["partial"] is False
+    assert job.state == "succeeded" and job.error is None
+    record = asyncio.run(orchestrator_app._job_repository().get(job.id))
+    assert record is not None and record.state == "succeeded"
+
+
+def test_job_reads_serve_the_persisted_summary_without_reading_the_output_dir(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    (output_dir / "run_card_2026-01-01_000000.json").write_text(
+        json.dumps({"batch_id": "2026-01-01_000000", "total_images": 2, "success_count": 2, "error_count": 0}),
+        encoding="utf-8",
+    )
+    job = _seed_succeeded_job_with_persisted_summary(output_dir, "job_reads_do_not_touch_disk")
+
+    def _fail_directory_read(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("job reads must not re-derive the run summary from the output directory")
+
+    monkeypatch.setattr(orchestrator_app._portal_job_artifacts, "_resolve_job_run_metadata", _fail_directory_read)
+
+    detail_response = client.get(f"/v1/jobs/{job.id}")
+    list_response = client.get("/v2/jobs")
+    with client.stream("GET", f"/v1/jobs/{job.id}/events") as stream_response:
+        assert stream_response.status_code == 200
+        done = next(payload for name, payload in _collect_sse_events(stream_response) if name == "done")
+
+    assert detail_response.status_code == 200
+    assert list_response.status_code == 200
+    assert detail_response.json()["data"]["run_summary"]["batch_id"] == "2026-01-01_000000"
+    assert list_response.json()["data"]["jobs"][0]["run_summary"]["success_count"] == 2
+    assert done["run_summary"]["batch_id"] == "2026-01-01_000000"
+
+
 @pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
 def test_job_artifact_endpoint_serves_indexed_binary_without_exposing_absolute_path(
     client: TestClient,
@@ -4251,6 +4420,264 @@ def test_delete_job_artifacts_removes_legacy_files_when_store_is_empty(
     assert fetch_response.json()["error"]["code"] == "ARTIFACT_DELETED"
 
 
+def _seed_job_with_shared_output_dir_inventory(tmp_path: Path, job_id: str) -> tuple[Any, Path, Path, Path]:
+    """Seed a finished job whose stored inventory lists files its run never produced.
+
+    The inventory mirrors what indexing a shared ``output_dir`` recorded before it
+    was bound to the job's run: an operator file that predates the run, the one
+    file the run produced, and a file a later run has rewritten since.
+    """
+
+    output_dir = tmp_path / "shared-output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    operator_file = output_dir / "archive_index_normalized.csv.gz"
+    operator_file.write_bytes(b"operator supplied index")
+    # The operator file keeps its real timestamps, which precede a run window
+    # that opens later; the other two are stamped explicitly, so no clock race.
+    started_at = operator_file.stat().st_ctime + 100.0
+    finished_at = started_at + 100.0
+    produced = output_dir / "bag_validate_report.json"
+    produced.write_text("{}", encoding="utf-8")
+    os.utime(produced, (started_at + 50.0, started_at + 50.0))
+    rewritten_later = output_dir / "hash_summary.json"
+    rewritten_later.write_text('{"owner": "a later run"}', encoding="utf-8")
+    os.utime(rewritten_later, (finished_at + 50.0, finished_at + 50.0))
+
+    job = orchestrator_app.Job(
+        id=job_id,
+        created_at=started_at - 1.0,
+        started_at=started_at,
+        finished_at=finished_at,
+        done_published_at=finished_at,
+        state="failed",
+        exit_code=4,
+        request={"pipeline": "archive-gate-b", "args": {"output_dir": str(output_dir)}},
+        artifacts={
+            "output_dir": str(output_dir),
+            "items": [{"path": path.name, "relative_path": path.name} for path in (operator_file, produced, rewritten_later)],
+            "indexed_count": 3,
+            "truncated": False,
+        },
+    )
+    _seed_job(job)
+    return job, operator_file, produced, rewritten_later
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_delete_job_artifacts_never_unlinks_files_the_jobs_run_did_not_produce(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    jobs_base: str,
+) -> None:
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+    job, operator_file, produced, rewritten_later = _seed_job_with_shared_output_dir_inventory(
+        tmp_path, "job_artifact_delete_shared_dir"
+    )
+
+    delete_response = client.delete(f"{jobs_base}/{job.id}/artifacts")
+
+    assert delete_response.status_code == 200
+    lifecycle = delete_response.json()["data"]["artifacts"]["lifecycle"]
+    assert lifecycle["deletion_status"] == "deleted"
+    assert lifecycle["legacy_deleted_count"] == 1
+    assert not produced.exists()
+    assert operator_file.read_bytes() == b"operator supplied index"
+    assert rewritten_later.read_text(encoding="utf-8") == '{"owner": "a later run"}'
+    # The job's artifacts are gone from the API either way.
+    fetch_response = client.get(f"{jobs_base}/{job.id}/artifacts/{operator_file.name}")
+    assert fetch_response.status_code == 410
+
+
+def test_artifact_retention_cleanup_never_unlinks_files_the_jobs_run_did_not_produce(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+    job, operator_file, produced, rewritten_later = _seed_job_with_shared_output_dir_inventory(
+        tmp_path, "job_artifact_retention_shared_dir"
+    )
+    assert job.finished_at is not None
+    expired_at = job.finished_at + orchestrator_app.ARTIFACT_RETENTION_SECONDS + 1.0
+
+    asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(expired_at))
+
+    assert job.artifacts["lifecycle"]["deletion_status"] == "deleted"
+    assert job.artifacts["lifecycle"]["deletion_reason"] == "retention_expired"
+    assert job.artifacts["lifecycle"]["legacy_deleted_count"] == 1
+    assert not produced.exists()
+    assert operator_file.exists()
+    assert rewritten_later.exists()
+
+
+@pytest.mark.parametrize("peer_state", ["overlapping", "running", "unknown_window", "looped_peer_root"])
+def test_overlapping_legacy_outputs_refuse_explicit_and_retention_deletion(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, peer_state: str
+) -> None:
+    job, _, own_file, _ = _seed_job_with_shared_output_dir_inventory(tmp_path, "job_artifact_overlap_a")
+    peer_file = own_file.with_name("peer-only.txt")
+    peer_file.write_bytes(b"second job output")
+    written_at = job.started_at + 50.0
+    os.utime(peer_file, (written_at, written_at))
+    job.artifacts["items"].append({"relative_path": peer_file.name})
+    _sync_seeded_job(job)
+    request = job.request
+    if peer_state == "looped_peer_root":
+        loop = tmp_path / "looped-peer"
+        try:
+            loop.symlink_to(loop.name)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink creation unavailable")
+        request = {**job.request, "args": {**job.request["args"], "output_dir": str(loop)}}
+    peer = orchestrator_app.Job(
+        id="job_artifact_overlap_b",
+        created_at=job.created_at,
+        started_at=None if peer_state == "unknown_window" else job.started_at + 10.0,
+        finished_at=job.finished_at + 10.0 if peer_state == "overlapping" else None,
+        state="running" if peer_state == "running" else "succeeded",
+        request=request,
+    )
+    _seed_job(peer)
+    # Only the repository knows about the second job.
+    orchestrator_app.JOBS.pop(peer.id)
+
+    def forbidden_store():
+        pytest.fail("ambiguous ownership must be rejected before storage deletion")
+
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", forbidden_store)
+    response = client.delete(f"/v1/jobs/{job.id}/artifacts")
+    assert response.status_code == 409
+    assert response.json()["error"]["details"]["reason"] == "ambiguous_artifact_ownership"
+    expired_at = job.finished_at + orchestrator_app.ARTIFACT_RETENTION_SECONDS + 1.0
+    asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(expired_at))
+
+    assert peer_file.read_bytes() == b"second job output"
+    assert own_file.exists()
+    assert not orchestrator_app._artifacts_deleted(job)
+
+
+def test_legacy_artifact_delete_fails_closed_when_job_scan_is_incomplete(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    job, _, own_file, _ = _seed_job_with_shared_output_dir_inventory(tmp_path, "job_artifact_scan_incomplete")
+    repository = orchestrator_app._job_repository()
+    list_records = repository.list
+
+    async def incomplete_inventory(*, limit=None):
+        records, total = await list_records(limit=limit)
+        return records, total + 1
+
+    def forbidden_store():
+        pytest.fail("incomplete inventory must be rejected before touching storage")
+
+    monkeypatch.setattr(repository, "list", incomplete_inventory)
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", forbidden_store)
+    response = client.delete(f"/v1/jobs/{job.id}/artifacts")
+
+    assert response.status_code == 503
+    assert own_file.exists()
+    assert not orchestrator_app._artifacts_deleted(job)
+
+
+def test_legacy_unlink_rechecks_jobs_started_during_mirror_deletion(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    job, _, own_file, _ = _seed_job_with_shared_output_dir_inventory(tmp_path, "job_artifact_delete_new_peer")
+
+    class Store:
+        backend = "local"
+
+        async def delete(self, _job_id):
+            peer = orchestrator_app.Job(
+                id="job_artifact_delete_late_peer",
+                created_at=job.finished_at + 1,
+                started_at=job.finished_at + 1,
+                state="running",
+                request=job.request,
+            )
+            orchestrator_app.JOBS[peer.id] = peer
+            return 0
+
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", Store)
+    response = client.delete(f"/v1/jobs/{job.id}/artifacts")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["details"]["reason"] == "ambiguous_artifact_ownership"
+    assert own_file.exists()
+
+
+@pytest.mark.parametrize("state", ["canceled", "worker_lost"])
+def test_delete_job_artifacts_unlinks_nothing_for_a_job_that_was_never_launched(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+) -> None:
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+    output_dir = tmp_path / "shared-output"
+    output_dir.mkdir()
+    operator_file = output_dir / "NOTES.txt"
+    operator_file.write_text("hand written operator notes", encoding="utf-8")
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id=f"job_artifact_delete_unlaunched_{state}",
+        created_at=now,
+        finished_at=now,
+        done_published_at=now,
+        state=state,
+        request={"pipeline": "archive-gate-b", "args": {"output_dir": str(output_dir)}},
+        artifacts={
+            "output_dir": str(output_dir),
+            "items": [{"path": "NOTES.txt", "relative_path": "NOTES.txt"}],
+            "indexed_count": 1,
+            "truncated": False,
+        },
+    )
+    _seed_job(job)
+
+    delete_response = client.delete(f"/v1/jobs/{job.id}/artifacts")
+
+    assert delete_response.status_code == 200
+    lifecycle = delete_response.json()["data"]["artifacts"]["lifecycle"]
+    assert lifecycle["deletion_status"] == "deleted"
+    assert lifecycle["legacy_deleted_count"] == 0
+    assert operator_file.read_text(encoding="utf-8") == "hand written operator notes"
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_artifact_fetch_for_a_queued_job_does_not_claim_files_already_in_its_output_dir(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    jobs_base: str,
+) -> None:
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+    output_dir = tmp_path / "shared-output"
+    output_dir.mkdir()
+    operator_file = output_dir / "NOTES.txt"
+    operator_file.write_text("hand written operator notes", encoding="utf-8")
+    job = orchestrator_app.Job(
+        id="job_artifact_fetch_queued",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "archive-gate-b", "args": {"output_dir": str(output_dir)}},
+    )
+    _seed_job(job)
+
+    response = client.get(f"{jobs_base}/{job.id}/artifacts/NOTES.txt")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "NOT_FOUND"
+    record = asyncio.run(orchestrator_app._job_repository().get(job.id))
+    assert record is not None
+    assert not record.artifacts.get("items")
+    assert record.artifact_lookup == {}
+    assert asyncio.run(store.delete(job.id)) == 0
+
+
 @pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
 def test_delete_job_artifacts_reports_partial_mirror_unique_count(
     client: TestClient,
@@ -4304,6 +4731,124 @@ def test_delete_job_artifacts_rejects_active_jobs(client: TestClient, tmp_path: 
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "CONFLICT"
+
+
+def _seed_terminal_job_without_finished_at(tmp_path: Path, job_id: str) -> tuple[Any, Path]:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    payload = output_dir / "payload.txt"
+    payload.write_text("payload", encoding="utf-8")
+    job = orchestrator_app.Job(
+        id=job_id,
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        state="failed",
+        finished_at=None,
+        artifacts={
+            "items": [{"path": "payload.txt", "relative_path": "payload.txt"}],
+            "indexed_count": 1,
+            "truncated": False,
+        },
+    )
+    _seed_job(job)
+    return job, payload
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_delete_job_artifacts_rejects_terminal_job_still_finalizing(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, jobs_base: str
+) -> None:
+    # The runner sets the terminal state before it indexes/mirrors artifacts and
+    # only stamps finished_at afterwards. A delete accepted in that window would
+    # report "deleted" while the finaliser mirrors every file afterwards.
+    job, payload = _seed_terminal_job_without_finished_at(tmp_path, "job_artifact_delete_finalizing")
+    monkeypatch.setitem(orchestrator_app._LOCAL_RUNNER_JOB_IDS, job.id, 1)
+
+    response = client.delete(f"{jobs_base}/{job.id}/artifacts")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "CONFLICT"
+    assert orchestrator_app._artifacts_deleted(job) is False
+    assert orchestrator_app._artifact_retention_due(job, orchestrator_app._now() + 10**9) is False
+    assert payload.exists()
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_delete_job_artifacts_accepts_terminal_job_orphaned_before_finished_at(
+    client: TestClient, tmp_path: Path, jobs_base: str
+) -> None:
+    # A process that dies between the persisted terminal state and finished_at
+    # leaves this row behind for good: restart recovery only sweeps active
+    # states. With no runner alive for it, its artifacts must stay deletable
+    # and subject to retention instead of answering 409 forever.
+    job, payload = _seed_terminal_job_without_finished_at(tmp_path, "job_artifact_delete_orphaned")
+    assert job.id not in orchestrator_app._LOCAL_RUNNER_JOB_IDS
+    assert orchestrator_app._artifact_retention_due(job, orchestrator_app._now() + 10**9) is True
+
+    response = client.delete(f"{jobs_base}/{job.id}/artifacts")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["artifacts"]["lifecycle"]["deletion_status"] == "deleted"
+    assert not payload.exists()
+
+
+def test_run_job_holds_artifact_deletion_until_the_runner_returns(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    job, payload = _seed_terminal_job_without_finished_at(tmp_path, "job_artifact_delete_runner_window")
+    job.state = "running"
+    _sync_seeded_job(job)
+    window: dict[str, Any] = {}
+
+    class _FinalizingExecutionService:
+        async def run(self, running_job: Any, _argv: list[str]) -> None:
+            # Same order as the production runner: terminal state first, then
+            # (here: the delete attempt) the finalisation, then finished_at.
+            running_job.state = "failed"
+            await orchestrator_app._persist_job_fields_best_effort(running_job, "runner_terminal", state="failed")
+            window["status"] = (await orchestrator_app._delete_job_artifacts(running_job.id)).status_code
+            window["retention_due"] = orchestrator_app._artifact_retention_due(running_job, orchestrator_app._now() + 10**9)
+            window["payload_exists"] = payload.exists()
+            running_job.finished_at = orchestrator_app._now()
+            await orchestrator_app._persist_job_state(running_job)
+
+    monkeypatch.setattr(orchestrator_app, "_job_execution_service", lambda: _FinalizingExecutionService())
+
+    async def scenario() -> int:
+        await orchestrator_app._run_job(job, [])
+        return (await orchestrator_app._delete_job_artifacts(job.id)).status_code
+
+    status_after_run = asyncio.run(scenario())
+
+    assert window == {"status": 409, "retention_due": False, "payload_exists": True}
+    assert orchestrator_app._LOCAL_RUNNER_JOB_IDS == {}
+    assert status_after_run == 200
+    assert not payload.exists()
+
+
+def test_run_job_releases_its_registration_when_the_runner_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    job = orchestrator_app.Job(
+        id="job_runner_registration_released",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3"},
+        state="failed",
+        finished_at=None,
+    )
+    seen: list[bool] = []
+
+    class _RaisingExecutionService:
+        async def run(self, running_job: Any, _argv: list[str]) -> None:
+            seen.append(orchestrator_app._job_artifacts_finalized(running_job))
+            raise RuntimeError("finalisation failed")
+
+    monkeypatch.setattr(orchestrator_app, "_job_execution_service", lambda: _RaisingExecutionService())
+
+    with pytest.raises(RuntimeError, match="finalisation failed"):
+        asyncio.run(orchestrator_app._run_job(job, []))
+
+    assert seen == [False]
+    assert orchestrator_app._LOCAL_RUNNER_JOB_IDS == {}
+    assert orchestrator_app._job_artifacts_finalized(job) is True
 
 
 @pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])

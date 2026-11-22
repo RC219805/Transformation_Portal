@@ -227,6 +227,12 @@ class MemoryJobEventStore(JobEventStore):
             if event.seq > threshold:
                 yield self._copy_event(event)
 
+    async def purge(self, job_id: str) -> None:
+        # Nothing else releases a deleted job's history: the repository and
+        # this store are independent objects.
+        self._events.pop(job_id, None)
+        self._next_seq.pop(job_id, None)
+
     async def reset(self) -> None:
         self._events.clear()
         self._next_seq.clear()

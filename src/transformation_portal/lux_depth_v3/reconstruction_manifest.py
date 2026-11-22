@@ -17,7 +17,7 @@ from .manifest import compute_file_sha256
 from .scene_context import CameraConfidence, CameraProvenance, CameraSource, CameraWithProvenance, SceneContext
 from .scene_groups import lexical_relative_path
 from .scene_integrity import validate_image_sha256_overrides
-from .security import sanitize_path_component_nonlossy
+from .security import bounded_file_name
 
 SCHEMA_RECONSTRUCTION_MANIFEST = "tp.reconstruction_manifest.v1"
 
@@ -81,8 +81,7 @@ class ReconstructionManifest:
 
 def reconstruction_manifest_path(*, scene_id: str, output_dir: Path) -> Path:
     """Compute deterministic reconstruction manifest path."""
-    safe_scene_id = sanitize_path_component_nonlossy(scene_id)
-    return output_dir / f"{safe_scene_id}_manifest.json"
+    return output_dir / bounded_file_name(scene_id, "_manifest.json")
 
 
 def _manifest_image_path(path: Path, dataset_root: Path) -> str:

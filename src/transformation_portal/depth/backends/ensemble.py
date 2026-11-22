@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from dataclasses import dataclass, field
+import math
+import numbers
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import numpy as np
@@ -277,7 +279,8 @@ class DepthEnsembleBackend:
         elif models is None:
             self._models = self._get_default_models(config)
         else:
-            self._models = models
+            # Private copies: weight normalisation must not mutate the caller's configs.
+            self._models = [replace(model) for model in models]
 
         # Lazy-loaded backends
         self._backends: Dict[str, Any] = {}
@@ -366,7 +369,15 @@ class DepthEnsembleBackend:
             )
 
         # Validate weights sum to 1.0
+        for model in enabled_models:
+            # A numeric string ("0.5") converts with float() but cannot be summed:
+            # only real numbers are weights.
+            finite = isinstance(model.weight, numbers.Real) and math.isfinite(float(model.weight))
+            if not finite:
+                raise ValueError(f"Ensemble model {model.name!r} weight must be a finite number (got {model.weight!r})")
         total_weight = sum(m.weight for m in enabled_models)
+        if enabled_models and total_weight == 0:
+            raise ValueError("Ensemble model weights sum to 0; at least one enabled model needs a non-zero weight")
         if abs(total_weight - 1.0) > 1e-6:
             if self._candidate_authority is not None:
                 raise ValueError(
@@ -852,11 +863,12 @@ class DepthEnsembleBackend:
         enabled_models = [m for m in self._models if m.enabled]
 
         available_count = 0
+        ready_count = 0
+        unavailable: Dict[str, str] = {}
         for model_config in enabled_models:
             try:
                 # Try to get backend (will raise if unavailable)
-                self._get_backend(model_config)
-                available_count += 1
+                backend = self._get_backend(model_config)
             except Exception as e:
                 if self._candidate_authority is not None:
                     raise LuxExecutionPlanAuthorityError(
@@ -864,15 +876,44 @@ class DepthEnsembleBackend:
                         "exact planned membership is required"
                     ) from e
                 logger.warning(f"Model {model_config.name} unavailable: {e}")
+                unavailable[model_config.name] = (str(e).splitlines() or [type(e).__name__])[0]
+                continue
+            available_count += 1
 
-        if self._candidate_authority is not None and available_count != len(enabled_models):
+            # Constructing a backend proves nothing about its runtime
+            # (checkpoint, packages, subprocess venv): ask the constituent.
+            try:
+                constituent_ensure = getattr(backend, "ensure_available", None)
+                if constituent_ensure is not None:
+                    constituent_ensure()
+            except Exception as e:
+                if self._candidate_authority is not None:
+                    raise LuxExecutionPlanAuthorityError(
+                        f"Canonical ensemble constituent {model_config.name!r} is unavailable; "
+                        "exact planned membership is required"
+                    ) from e
+                logger.warning(f"Model {model_config.name} runtime not ready: {e}")
+                unavailable[model_config.name] = (str(e).splitlines() or [type(e).__name__])[0]
+                continue
+            ready_count += 1
+
+        if self._candidate_authority is not None and ready_count != len(enabled_models):
             raise LuxExecutionPlanAuthorityError("Canonical ensemble availability did not preserve exact planned membership")
         if available_count < 2:
             raise RuntimeError(
                 f"Ensemble requires ≥2 models, but " f"only {available_count} available. " "Cannot initialize ensemble."
             )
+        if ready_count == 0:
+            raise RuntimeError(f"No ensemble constituent is ready; cannot initialize ensemble. Unavailable: {unavailable}")
+        if ready_count < available_count:
+            logger.warning(
+                "Ensemble degraded: only %d of %d constituents ready (unavailable: %s)",
+                ready_count,
+                available_count,
+                unavailable,
+            )
 
-        logger.info(f"Ensemble initialized with {available_count} models")
+        logger.info(f"Ensemble initialized with {ready_count} ready models")
 
     @classmethod
     def required_packages(cls) -> list[str]:

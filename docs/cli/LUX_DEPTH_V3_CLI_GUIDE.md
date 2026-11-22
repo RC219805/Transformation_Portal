@@ -209,7 +209,8 @@ lux-depth-v3 \
   - Curated examples: `premium`, `depth-anything-v3.1-research-m4`, `default`
   - Unmapped values are preserved as labels and do not become first-class typed presets
 - `--quality-tier TEXT`: Quality tier (default: `standard`)
-  - Options: `standard`, `premium`, `apex`
+  - Options: `standard`, `premium`, `apex` (case-insensitive; normalized to lower case
+    before the config and plan are built, so `APEX` and `apex` produce the same plan)
 
 ### Depth Backend Configuration
 
@@ -227,7 +228,9 @@ lux-depth-v3 \
     `Preset.ARCHITECTURAL_EXTERIOR` selects `da3-base`. With no typed preset
     or model selector, the default remains `da3-metric`.
 - `--depth-device TEXT`: Device for depth inference (default: `cpu`)
-  - Options: `cpu`, `cuda`, `mps`
+  - Options: `cpu`, `cuda`, `mps` (the shared device-spec validator also accepts
+    `cuda:N` and `auto`); values are normalized to lower case and anything else is
+    a usage error (exit code `2`)
 - `--da3-python PATH`: Override the isolated DA3 subprocess interpreter.
 - `--depth-pro-python PATH`: Override the isolated Depth Pro subprocess interpreter.
 - `--raw-python PATH`: Override the isolated RAW subprocess interpreter.
@@ -236,6 +239,9 @@ lux-depth-v3 \
 
 - `--materials-v3 TEXT`: Enable Materials V3 surface-aware finishing (default: `off`)
   - Options: `on`, `off`, `true`, `false`, `yes`, `no`, `1`, `0`
+  - Every on/off flag accepts exactly these spellings (case-insensitive,
+    surrounding whitespace ignored). Any other value, such as `enabled` or `y`,
+    is a usage error (exit code `2`) rather than a silent `off`.
 - `--pbr TEXT`: Enable PBR map generation (normal, roughness, AO) (default: `off`)
   - Options: Same as above
 - `--save-float-depth TEXT`: Persist canonical `.npy` float depth (default: `off`).
@@ -281,7 +287,8 @@ FastVLM captioning is advisory only. Its output is not quality-gate evidence.
   - The same source policy color-manages an enabled Materials V3 proxy before
     its operations. Its internal sRGB output is validated separately by V2;
     depth/segmentation model preprocessing remains unchanged.
-  - Options: `auto`, `auto_assume_srgb`, `srgb`, `linear_srgb`
+  - Options: `auto`, `auto_assume_srgb`, `srgb`, `linear_srgb`; any other value
+    (like an unknown `--geometry-recipe`) is a usage error (exit code `2`)
   - Automatic metadata-aware conversion blocks ambiguous untagged PNG/TIFF.
     Choose `auto_assume_srgb` only when the untagged source is known to be sRGB;
     invalid/conflicting profiles still fail. Explicit encodings assert actual
@@ -327,7 +334,8 @@ These three options, `--strict-segmentation`, `--sam2-tiling-enabled`,
 `--overwrite`, `--force-depth`, and `--keep-intermediates` are boolean switches:
 pass the flag alone. Text toggles such as `--pbr on` require a value.
 - `--max-workers INTEGER`: Bound CPU/I/O worker threads.
-- `--max-gpu-workers INTEGER`: Bound GPU/MPS inference workers.
+- `--max-gpu-workers INTEGER`: Bound GPU/MPS inference workers (0-8). When omitted on
+  `cuda`/`mps` it defaults to `--max-workers`, capped at 8.
 
 ### RAW Ingest
 
@@ -396,7 +404,10 @@ sidecar to verify.
 
 - `--verbose` / `-v`: Enable verbose logging
 - `--quiet` / `-q`: Suppress all output except errors
-- `--log-level TEXT`: Set log level (DEBUG, INFO, WARNING, ERROR)
+- `--log-level TEXT`: Set log level (DEBUG, INFO, WARNING, ERROR, CRITICAL;
+  case-insensitive). The standard `logging` aliases `WARN`, `FATAL` and `NOTSET`
+  are also accepted, and an empty value means "not set". Unknown names are a
+  usage error (exit code `2`).
 
 ## Quality Tiers
 
@@ -508,6 +519,21 @@ reported by the verified signature. Logical labels such as `release-signer`
 that are not GPG-resolvable now fail closed. Verification also compares the
 GPG-extracted cleartext with the exact canonical attestation preimage; a valid
 signature over unrelated content is rejected.
+
+`verify_run_card_attestation.py` prints one line per attestation it examined
+and says what was checked. Without `--gpg` it only checks that the sidecar is
+bound to the run card and reports `signature NOT verified (--gpg not set)`;
+that is not evidence of who signed. When neither a native nor a DSSE sidecar
+exists it exits `5`, because nothing was verified. Exit codes: `0` verified,
+`2` unreadable or invalid run card, `5` attestation verification failed.
+
+GPG verification of the DSSE envelope applies the same signer binding to
+`signatures[0].keyid`: a good signature made by any other key in the keyring is
+rejected, so record a GPG-resolvable `--key-id` for every format. Both paths
+decide on GnuPG's machine-readable signature verdict, not on its exit code alone.
+A signature made by a revoked or expired key, an expired signature, and any
+verdict the verifier does not recognise are rejected (GnuPG itself exits 0 for
+revoked and expired keys).
 
 When you need policy-based release gating instead of low-level integrity checks, use:
 

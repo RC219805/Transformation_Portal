@@ -383,3 +383,116 @@ def test_process_batch_wraps_unexpected_exceptions_in_failure_work_item(monkeypa
         assert pipeline.metrics.items_failed == 1
 
     asyncio.run(runner())
+
+
+class _FailFirstStage(AsyncStage[int, int]):
+    """Records every item it sees and fails on item 0 (finding L-08)."""
+
+    def __init__(self) -> None:
+        super().__init__(name="fail_first", required=True)
+        self.seen: list[int] = []
+
+    async def process(self, item: int) -> int:
+        self.seen.append(item)
+        if item == 0:
+            raise RuntimeError("first item fails")
+        return item
+
+
+def test_process_batch_stop_on_error_stops_scheduling_after_first_failure() -> None:
+    async def runner() -> None:
+        stage = _FailFirstStage()
+        pipeline = AsyncPipeline(stop_on_error=True).add_stage(stage)
+        async with pipeline:
+            results = await _collect_process_batch(pipeline, list(range(8)), max_concurrent=1)
+
+        assert stage.seen == [0]
+        assert len(results) == 1
+        assert results[0].stage_results[0].failed
+
+    asyncio.run(runner())
+
+
+def test_process_batch_stop_on_error_drains_in_flight_items() -> None:
+    async def runner() -> None:
+        release_event = asyncio.Event()
+        release_event.set()
+        stage = _BarrierStage(release_event=release_event, ready_count=1, fail_items={0})
+        pipeline = AsyncPipeline(stop_on_error=True).add_stage(stage)
+
+        results = await _collect_process_batch(pipeline, list(range(8)), max_concurrent=2)
+
+        # Items 0 and 1 were already in flight when item 0 failed: both are
+        # yielded, nothing later is started.
+        assert stage.started == 2
+        assert sorted(result.data for result in results) == [0, 11]
+
+    asyncio.run(runner())
+
+
+def test_process_batch_without_stop_on_error_runs_every_item() -> None:
+    async def runner() -> None:
+        stage = _FailFirstStage()
+        pipeline = AsyncPipeline(stop_on_error=False).add_stage(stage)
+        async with pipeline:
+            results = await _collect_process_batch(pipeline, list(range(8)), max_concurrent=1)
+
+        assert stage.seen == list(range(8))
+        assert len(results) == 8
+
+    asyncio.run(runner())
+
+
+def test_process_streaming_stop_on_error_stops_after_first_failure() -> None:
+    async def source() -> Any:
+        for value in range(5):
+            yield value
+
+    async def runner() -> None:
+        stage = _FailFirstStage()
+        pipeline = AsyncPipeline(stop_on_error=True).add_stage(stage)
+        async with pipeline:
+            results = [result async for result in pipeline.process_streaming(source())]
+
+        assert stage.seen == [0]
+        assert len(results) == 1
+
+    asyncio.run(runner())
+
+
+def test_streaming_image_loader_tracks_loaded_memory_and_triggers_gc(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Finding L-10: _current_memory_mb was never incremented, so max_memory_mb
+    # never triggered the garbage-collection pass.
+    np = pytest.importorskip("numpy")
+    image_module = pytest.importorskip("PIL.Image")
+
+    paths = []
+    for index in range(10):
+        path = tmp_path / f"frame_{index}.png"
+        image_module.fromarray(np.full((256, 256, 3), index, dtype=np.uint8)).save(path)
+        paths.append(path)
+
+    collections: list[int] = []
+
+    class _FakeGc:
+        @staticmethod
+        def collect() -> int:
+            collections.append(1)
+            return 0
+
+    monkeypatch.setattr(async_pipeline_module, "gc", _FakeGc)
+
+    async def runner() -> list[Any]:
+        loader = async_pipeline_module.StreamingImageLoader(prefetch_size=2, max_memory_mb=1)
+        await loader.startup()
+        try:
+            return [item async for item in loader.load_batch(paths)]
+        finally:
+            await loader.shutdown()
+
+    results = asyncio.run(runner())
+
+    assert [error for _, _, error in results] == [None] * 10
+    # Each 256x256x3 uint8 frame is 0.1875 MB; the 0.9 MB trigger fires after
+    # frames 5 and 10.
+    assert len(collections) == 2

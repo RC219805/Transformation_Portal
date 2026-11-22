@@ -21,6 +21,8 @@ import pytest
 
 from transformation_portal.evals.metrics import (
     _to_numpy,
+    _to_numpy_pair,
+    _to_torch_pair,
     dice_coefficient,
     lpips_score,
     lpips_to_score,
@@ -87,6 +89,88 @@ class TestToNumpy:
         result = _to_numpy(arr)
 
         assert result.max() <= 1.0
+
+    @pytest.mark.parametrize("dtype", [np.uint16, np.dtype(">u2")])
+    def test_uint16_normalised_by_dtype_not_by_255(self, dtype):
+        """uint16 data is scaled by 65535, so the PSNR matches the same pixels as floats (M-02)."""
+        rng = np.random.default_rng(0)
+        ref = rng.random((32, 32, 3)).astype(np.float32)
+        noisy = np.clip(ref + rng.normal(0, 0.1, ref.shape).astype(np.float32), 0, 1)
+        ref16 = np.round(ref * 65535).astype(dtype)
+        noisy16 = np.round(noisy * 65535).astype(dtype)
+
+        result = _to_numpy(ref16)
+
+        np.testing.assert_allclose(result, ref16.astype(np.float32) / 65535.0)
+        assert result.max() <= 1.0
+        assert psnr(noisy16, ref16) == pytest.approx(psnr(noisy, ref), abs=1e-3)
+        assert ssim(noisy16, ref16) == pytest.approx(ssim(noisy, ref), abs=1e-3)
+
+    def test_dark_uint16_image_is_not_read_as_unit_range(self):
+        """A uint16 image whose values are all <= 1 is still near black, not white (M-02)."""
+        dark = np.ones((4, 4), dtype=np.uint16)
+
+        assert _to_numpy(dark).max() == pytest.approx(1.0 / 65535.0)
+
+    def test_pair_scaled_identically_when_only_prediction_overshoots(self):
+        """One overshooting sample must not put the prediction on a 1/255 scale (M-02)."""
+        rng = np.random.default_rng(0)
+        ref = rng.random((64, 64, 3)).astype(np.float32)
+        pred = np.clip(ref + rng.normal(0, 0.1, ref.shape).astype(np.float32), 0, 1)
+        pred_overshoot = pred.copy()
+        pred_overshoot[0, 0, 0] = 1.0001  # un-clipped sharpening
+
+        arr_pred, arr_ref = _to_numpy_pair(pred_overshoot, ref)
+
+        np.testing.assert_array_equal(arr_pred, pred_overshoot)
+        np.testing.assert_array_equal(arr_ref, ref)
+        # The overshoot changes one sample; before the fix the PSNR collapsed to ~4.8 dB.
+        assert psnr(pred_overshoot, ref) == pytest.approx(psnr(pred, ref), abs=0.05)
+        assert psnr(ref, pred_overshoot) == pytest.approx(psnr(ref, pred), abs=0.05)
+        assert ssim(pred_overshoot, ref) == pytest.approx(ssim(pred, ref), abs=0.01)
+
+    def test_pair_of_0_255_floats_keeps_the_255_convention(self):
+        """Two 0-255 float images are still both read as 0-255 data."""
+        rng = np.random.default_rng(1)
+        ref = rng.random((32, 32, 3)).astype(np.float32)
+        pred = np.clip(ref + rng.normal(0, 0.05, ref.shape).astype(np.float32), 0, 1)
+
+        arr_pred, arr_ref = _to_numpy_pair(pred * 255, ref * 255)
+
+        np.testing.assert_allclose(arr_pred, pred, atol=1e-6)
+        np.testing.assert_allclose(arr_ref, ref, atol=1e-6)
+        assert psnr(pred * 255, ref * 255) == pytest.approx(psnr(pred, ref), abs=1e-3)
+
+    def test_bit_depth_member_does_not_rescale_the_float_member(self):
+        """With a uint8 target, a 0-255 float prediction is still decided on its own values."""
+        rng = np.random.default_rng(2)
+        ref8 = rng.integers(0, 256, (16, 16, 3), dtype=np.uint8)
+        pred = ref8.astype(np.float32)
+
+        arr_pred, arr_ref = _to_numpy_pair(pred, ref8)
+
+        np.testing.assert_allclose(arr_pred, arr_ref)
+        assert psnr(pred, ref8) == float("inf")
+
+    def test_torch_pair_normalises_by_dtype_and_scales_identically(self):
+        """The LPIPS tensor conversion follows the same pair rules as the numpy path (M-02)."""
+        torch = pytest.importorskip("torch")
+
+        dark = torch.tensor([[0, 1], [1, 0]], dtype=torch.uint8)
+        dark_t, _ = _to_torch_pair(dark, dark)
+        assert float(dark_t.max()) == pytest.approx(1.0 / 255.0)
+
+        ref = torch.rand(8, 8, 3, generator=torch.Generator().manual_seed(0))
+        overshoot = ref.clone()
+        overshoot[0, 0, 0] = 1.0001
+        over_t, ref_t = _to_torch_pair(overshoot, ref)
+        assert over_t.shape == (3, 8, 8)
+        assert float(over_t.max()) == pytest.approx(1.0001)
+        assert torch.allclose(ref_t, ref.permute(2, 0, 1))
+
+        tensor_t, array_t = _to_torch_pair(ref * 255, (ref * 255).numpy())
+        assert torch.allclose(tensor_t, ref.permute(2, 0, 1), atol=1e-6)
+        assert torch.allclose(array_t, ref.permute(2, 0, 1), atol=1e-6)
 
     def test_path_loading_pil(self, tmp_path):
         """Test loading from path using PIL."""
@@ -248,8 +332,86 @@ class TestSSIM:
         assert -1 <= result <= 1
 
 
+def _global_window_ssim(a: np.ndarray, b: np.ndarray, data_range: float = 1.0) -> float:
+    """The single-global-window formula the fallback used to apply (not SSIM)."""
+    c1, c2 = (0.01 * data_range) ** 2, (0.03 * data_range) ** 2
+    mu_a, mu_b = a.mean(), b.mean()
+    cov = np.mean((a - mu_a) * (b - mu_b))
+    return float(((2 * mu_a * mu_b + c1) * (2 * cov + c2)) / ((mu_a**2 + mu_b**2 + c1) * (a.var() + b.var() + c2)))
+
+
+class TestSSIMWindowedFallback:
+    """M-30: without scikit-image, ``ssim`` must still be the windowed SSIM, not one global window."""
+
+    @pytest.fixture(autouse=True)
+    def _no_skimage(self, monkeypatch):
+        import sys
+
+        monkeypatch.setitem(sys.modules, "skimage", None)
+        monkeypatch.setitem(sys.modules, "skimage.metrics", None)
+
+    @pytest.fixture
+    def detail(self):
+        rng = np.random.default_rng(0)
+        base = np.tile(np.linspace(0, 1, 96, dtype=np.float32)[None, :], (96, 1))
+        return np.clip(base + (rng.random((96, 96)).astype(np.float32) - 0.5) * 0.3, 0, 1)
+
+    def test_identical_images_score_one(self, identical_images):
+        img1, img2 = identical_images
+        assert ssim(img1, img2) == pytest.approx(1.0, abs=1e-9)
+
+    def test_heavy_blur_scores_far_below_global_window(self, detail):
+        import cv2
+
+        blurred = cv2.GaussianBlur(detail, (0, 0), 6)
+        assert _global_window_ssim(detail, blurred) > 0.9
+        assert ssim(detail, blurred) < 0.3
+
+    def test_row_shuffle_scores_far_below_global_window(self, detail):
+        shuffled = detail.copy()
+        np.random.default_rng(1).shuffle(shuffled, axis=0)
+        assert _global_window_ssim(detail, shuffled) > 0.9
+        assert ssim(detail, shuffled) < 0.3
+
+    def test_matches_brute_force_window_definition(self):
+        rng = np.random.default_rng(2)
+        a = rng.random((9, 11))
+        b = np.clip(a + rng.normal(0, 0.1, a.shape), 0, 1)
+        win = 3
+        c1, c2 = 0.01**2, 0.03**2
+        values = []
+        for i in range(a.shape[0] - win + 1):
+            for j in range(a.shape[1] - win + 1):
+                wa, wb = a[i : i + win, j : j + win], b[i : i + win, j : j + win]
+                mu_a, mu_b = wa.mean(), wb.mean()
+                cov = np.cov(wa.ravel(), wb.ravel(), ddof=1)
+                values.append(
+                    ((2 * mu_a * mu_b + c1) * (2 * cov[0, 1] + c2)) / ((mu_a**2 + mu_b**2 + c1) * (cov[0, 0] + cov[1, 1] + c2))
+                )
+        assert ssim(a, b, win_size=win) == pytest.approx(float(np.mean(values)), abs=1e-9)
+
+    def test_rgb_is_mean_of_channel_scores(self, different_images):
+        img1, img2 = different_images
+        per_channel = [ssim(img1[..., c], img2[..., c]) for c in range(3)]
+        assert ssim(img1, img2) == pytest.approx(float(np.mean(per_channel)), abs=1e-9)
+
+    def test_window_larger_than_image_raises(self):
+        tiny = np.zeros((4, 4, 3), dtype=np.float32)
+        with pytest.raises(ValueError, match="win_size"):
+            ssim(tiny, tiny)
+
+
 class TestLPIPS:
     """Test LPIPS computation (mocked)."""
+
+    def test_lpips_available_false_without_packages(self, monkeypatch):
+        """M-05: callers can tell an unmeasured LPIPS from a real 0.0 distance."""
+        import sys
+
+        from transformation_portal.evals.metrics import lpips_available
+
+        monkeypatch.setitem(sys.modules, "lpips", None)
+        assert lpips_available() is False
 
     def test_lpips_score_mocked(self, different_images):
         """Test LPIPS with mocked backend."""
@@ -348,6 +510,60 @@ class TestSegmentationIoU:
 
         assert result == pytest.approx(1.0)
 
+    @pytest.mark.parametrize("dtype", [np.uint8, np.uint16, np.int32, np.int64])
+    @pytest.mark.parametrize("label", [1, 2, 255])
+    def test_integer_label_masks_binarised_by_nonzero(self, dtype, label):
+        """Disjoint integer label masks score 0.0 instead of a perfect 1.0 (M-03)."""
+        top = np.zeros((64, 64), dtype=dtype)
+        top[:32] = label
+        bottom = np.zeros((64, 64), dtype=dtype)
+        bottom[32:] = label
+        middle = np.zeros((64, 64), dtype=dtype)
+        middle[16:48] = label
+
+        assert segmentation_iou(top, bottom) == 0.0
+        assert segmentation_iou(top, middle) == pytest.approx(16 / 48)
+        assert segmentation_iou(top, top.copy()) == pytest.approx(1.0)
+
+    def test_class_id_map_counts_every_class_as_foreground(self):
+        """Every non-zero class id is foreground, whatever its value (M-03)."""
+        pred = np.zeros((8, 8), dtype=np.int32)
+        pred[:4] = 3
+        gt = np.zeros((8, 8), dtype=np.int32)
+        gt[:4, :4] = 3
+        gt[:4, 4:] = 7
+
+        assert segmentation_iou(pred, gt) == pytest.approx(1.0)
+        assert segmentation_iou(pred, np.zeros_like(gt)) == 0.0
+
+    def test_mask_files_holding_zero_one_labels(self, tmp_path):
+        """A {0, 1} mask PNG is read as labels, not as an almost-black image (M-03)."""
+        from PIL import Image
+
+        top = np.zeros((32, 32), dtype=np.uint8)
+        top[:16] = 1
+        top_path = tmp_path / "top.png"
+        bottom_path = tmp_path / "bottom.png"
+        Image.fromarray(top).save(top_path)
+        Image.fromarray(1 - top).save(bottom_path)
+
+        assert segmentation_iou(top_path, bottom_path) == 0.0
+        assert segmentation_iou(top_path, top_path) == pytest.approx(1.0)
+
+    def test_torch_integer_masks(self):
+        """torch integer/bool masks follow the same non-zero rule, with or without the NumPy bridge (M-03)."""
+        torch = pytest.importorskip("torch")
+
+        top = torch.zeros((16, 16), dtype=torch.uint8)
+        top[:8] = 1
+        bottom = 1 - top
+
+        assert segmentation_iou(top, bottom) == 0.0
+        assert segmentation_iou(top.to(torch.int64) * 2, top.to(torch.int64) * 2) == pytest.approx(1.0)
+        with patch.object(torch.Tensor, "numpy", side_effect=RuntimeError("Numpy is not available")):
+            assert segmentation_iou(top.to(torch.int64) * 2, bottom.to(torch.int64) * 2) == 0.0
+            assert dice_coefficient(top, top.bool()) == pytest.approx(1.0)
+
 
 class TestDiceCoefficient:
     """Test Dice coefficient computation."""
@@ -404,6 +620,32 @@ class TestDiceCoefficient:
 
         assert result == pytest.approx(1.0)
 
+    @pytest.mark.parametrize("dtype", [np.uint8, np.uint16, np.int32, np.int64])
+    @pytest.mark.parametrize("label", [1, 2, 255])
+    def test_integer_label_masks_binarised_by_nonzero(self, dtype, label):
+        """Disjoint integer label masks score 0.0 instead of a perfect 1.0 (M-03)."""
+        top = np.zeros((64, 64), dtype=dtype)
+        top[:32] = label
+        bottom = np.zeros((64, 64), dtype=dtype)
+        bottom[32:] = label
+        middle = np.zeros((64, 64), dtype=dtype)
+        middle[16:48] = label
+
+        assert dice_coefficient(top, bottom) == 0.0
+        assert dice_coefficient(top, middle) == pytest.approx(2 * 16 / 64)
+        assert dice_coefficient(top, top.copy()) == pytest.approx(1.0)
+
+    def test_soft_masks_keep_threshold(self):
+        """Float masks remain soft masks compared against the threshold."""
+        soft = np.zeros((8, 8), dtype=np.float32)
+        soft[:4] = 0.4
+        soft[4:] = 0.6
+        upper = np.zeros((8, 8), dtype=bool)
+        upper[:4] = True
+
+        assert dice_coefficient(soft, upper) == 0.0
+        assert dice_coefficient(soft, upper, threshold=0.3) == pytest.approx(2 * 32 / (64 + 32))
+
 
 class TestNormalizeScore:
     """Test normalize_score utility."""
@@ -438,6 +680,18 @@ class TestNormalizeScore:
         result = normalize_score(5.0, min_val=5.0, max_val=5.0)
         assert result == 0.5
 
+    @pytest.mark.regression
+    @pytest.mark.parametrize(("min_val", "max_val"), [(20.0, 40.0), (5.0, 5.0)])
+    def test_nan_value_fails_closed(self, min_val, max_val):
+        """NaN must normalise to 0.0, not to the 1.0 that ``min(1.0, nan)`` yields (M-01)."""
+        assert normalize_score(float("nan"), min_val=min_val, max_val=max_val) == 0.0
+        assert normalize_score(np.float32("nan"), min_val=min_val, max_val=max_val) == 0.0
+
+    def test_infinite_values_keep_their_order(self):
+        """+inf saturates high and -inf saturates low."""
+        assert normalize_score(float("inf"), min_val=20.0, max_val=40.0) == 1.0
+        assert normalize_score(float("-inf"), min_val=20.0, max_val=40.0) == 0.0
+
 
 class TestPSNRToScore:
     """Test psnr_to_score conversion."""
@@ -456,6 +710,23 @@ class TestPSNRToScore:
         """Test poor PSNR gives low score."""
         result = psnr_to_score(15.0)
         assert result == 0.0
+
+    @pytest.mark.regression
+    def test_nan_psnr_scores_zero(self):
+        """One NaN sample makes PSNR NaN; that must score 0.0, not 1.0 (M-01)."""
+        a = np.random.default_rng(0).random((16, 16, 3)).astype(np.float32)
+        b = a.copy()
+        b[0, 0, 0] = np.nan
+
+        assert np.isnan(psnr(a, b))
+        assert psnr_to_score(psnr(a, b)) == 0.0
+
+    def test_identical_images_score_one(self):
+        """Identical images have infinite PSNR, which is a perfect score."""
+        a = np.random.default_rng(0).random((16, 16, 3)).astype(np.float32)
+
+        assert psnr(a, a.copy()) == float("inf")
+        assert psnr_to_score(psnr(a, a.copy())) == 1.0
 
 
 class TestLPIPSToScore:

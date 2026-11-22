@@ -266,8 +266,15 @@ def _parse_decimal(value: Any) -> Decimal:
         stripped = value.strip()
         if "/" in stripped and stripped.count("/") == 1:
             numerator, denominator = stripped.split("/", 1)
-            return Decimal(numerator) / Decimal(denominator)
-        return Decimal(stripped)
+            parsed = Decimal(numerator) / Decimal(denominator)
+        else:
+            parsed = Decimal(stripped)
+        # Decimal() accepts "NaN"/"inf"; a non-finite tag value must surface as
+        # a governed WARN_* code, not leak into the record (where allow_nan=False
+        # serialization or int() conversion would raise).
+        if not parsed.is_finite():
+            raise InvalidOperation("non-finite numeric tag value")
+        return parsed
     raise InvalidOperation(f"unsupported numeric type: {type(value).__name__}")
 
 
@@ -299,13 +306,28 @@ def _parse_gps_time(value: Any) -> tuple[int, int, int] | None:
         return hour, minute, min(second, 59)
     if isinstance(value, (list, tuple)) and len(value) >= 3:
         try:
-            hour = int(_parse_decimal(value[0]))
-            minute = int(_parse_decimal(value[1]))
+            hour = _bounded_int(_parse_decimal(value[0]))
+            minute = _bounded_int(_parse_decimal(value[1]))
             second = int(_parse_decimal(value[2]).quantize(Decimal("1"), rounding=ROUND_HALF_EVEN))
-        except (InvalidOperation, ValueError):
+        except (ArithmeticError, ValueError):
             return None
         return hour, minute, min(second, 59)
     return None
+
+
+def _bounded_int(value: Decimal, limit: int = 1_000_000) -> int:
+    """Truncate a finite Decimal to int without materialising a huge integer.
+
+    ``int(Decimal("1e999999999"))`` allocates a billion-digit integer and hangs
+    the extractor. Every integer tag component handled here is far below
+    ``limit``, so a larger magnitude is clamped to ``+/-limit``: it stays out of
+    range for the caller, which reports its usual WARN_* code.
+    """
+    if value >= limit:
+        return limit
+    if value <= -limit:
+        return -limit
+    return int(value)
 
 
 def _parse_datetime_original(value: Any) -> datetime | None:
@@ -331,6 +353,10 @@ def _parse_offset(value: Any) -> timezone | None:
     hours = int(match.group(2))
     minutes = int(match.group(3))
     total_minutes = sign * (hours * 60 + minutes)
+    if abs(total_minutes) >= 24 * 60:
+        # datetime.timezone cannot represent offsets of 24h or more; treat the
+        # tag as unusable (falls through to WARN_DATETIME_NO_TZ) instead of raising.
+        return None
     return timezone(timedelta(minutes=total_minutes))
 
 
@@ -387,7 +413,7 @@ def _parse_rounded_optional(
         return None
     try:
         rounded = _round_half_even(value, places)
-    except (InvalidOperation, ValueError, ZeroDivisionError):
+    except (ArithmeticError, ValueError):
         if warning_code:
             warnings.add(warning_code)
         return None
@@ -407,8 +433,13 @@ def _map_orientation(raw_tags: dict[str, Any], mapping: dict[str, str], warnings
     if value is None:
         return None
     try:
-        numeric = int(_parse_decimal(value))
-    except (InvalidOperation, ValueError):
+        parsed = _parse_decimal(value)
+        # Bound before int(): a hostile "1e999999999" would otherwise allocate a
+        # billion-digit integer. Valid EXIF orientations are 1..8.
+        if abs(parsed) >= 1_000_000:
+            raise InvalidOperation("orientation out of range")
+        numeric = int(parsed)
+    except (ArithmeticError, ValueError):
         warnings.add("WARN_INVALID_ORIENTATION")
         return None
     key = str(numeric)

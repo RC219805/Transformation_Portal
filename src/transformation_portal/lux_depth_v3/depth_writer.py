@@ -66,8 +66,32 @@ def _finite_float_array(depth_map: np.ndarray) -> np.ndarray:
     return np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32, copy=False)
 
 
-def normalize_depth_for_u16_png(depth_map: np.ndarray) -> tuple[np.ndarray, dict[str, Any]]:
-    """Build the deterministic normalized preview encoded into depth_u16 PNG."""
+DEPTH_UNITS = frozenset({"relative", "meters"})
+
+
+def _validated_depth_units(depth_units: Optional[str]) -> Optional[str]:
+    if depth_units is None:
+        return None
+    if not isinstance(depth_units, str) or depth_units not in DEPTH_UNITS:
+        raise ValueError(f"Unsupported depth units {depth_units!r}; expected one of {sorted(DEPTH_UNITS)} or None")
+    return depth_units
+
+
+def normalize_depth_for_u16_png(
+    depth_map: np.ndarray,
+    *,
+    depth_units: Optional[str] = None,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """Build the deterministic normalized preview encoded into depth_u16 PNG.
+
+    ``depth_units`` names the units of ``depth_map``: ``"relative"`` (0-1
+    normalized) or ``"meters"`` (absolute metric depth). ``None`` keeps the
+    legacy value-range behaviour for callers that do not know the units.
+    Metric depth is never clipped to ``[0, 1]``: a range inside ``[0, 1]`` is
+    encoded losslessly (identity) and any other range is percentile-stretched,
+    so a close-up scene spanning e.g. 0.4-1.4 m is not saturated at 1 m.
+    """
+    units = _validated_depth_units(depth_units)
     arr = _finite_float_array(depth_map)
     finite = np.isfinite(np.asarray(depth_map))
     finite_values = np.asarray(depth_map, dtype=np.float32)[finite]
@@ -93,7 +117,7 @@ def normalize_depth_for_u16_png(depth_map: np.ndarray) -> tuple[np.ndarray, dict
             "encoded_max": float(np.max(normalized)),
         }
 
-    if source_min >= -0.5 and source_max <= 1.5:
+    if units != "meters" and source_min >= -0.5 and source_max <= 1.5:
         normalized = np.clip(arr, 0.0, 1.0)
         return normalized.astype(np.float32, copy=False), {
             "mode": "clip_0_1",
@@ -142,6 +166,7 @@ def atomic_write_depth_u16_png_with_stats(
     debug_verify: bool = False,
     compute_encoded_unique_values: bool = False,
     support_mask: np.ndarray | None = None,
+    depth_units: Optional[str] = None,
     **kwargs: Any,
 ) -> tuple[Path, Optional[Path], DepthWriteStats]:
     """Atomically write depth map as 16-bit PNG with statistics.
@@ -158,6 +183,9 @@ def atomic_write_depth_u16_png_with_stats(
             This scans the encoded image and is intended for APEX audit paths.
         support_mask: Optional exact boolean HW photographic support. Excluded
             samples do not affect normalization and encode as the zero sentinel.
+        depth_units: Units of ``depth_map`` (``"relative"`` or ``"meters"``);
+            ``None`` keeps the legacy value-range normalization. See
+            :func:`normalize_depth_for_u16_png`.
         **kwargs: Additional arguments (reserved for future use)
 
     Returns:
@@ -184,6 +212,7 @@ def atomic_write_depth_u16_png_with_stats(
     # Validate method
     if method != "u16":
         raise ValueError("Unsupported depth quantization" f" method: {method!r}." " Only 'u16' is supported.")
+    depth_units = _validated_depth_units(depth_units)
 
     normalization_input = depth_map
     if support_mask is not None:
@@ -209,7 +238,7 @@ def atomic_write_depth_u16_png_with_stats(
     )
 
     # 2. Normalize to 16-bit (0-65535)
-    depth_normalized, normalization_stats = normalize_depth_for_u16_png(normalization_input)
+    depth_normalized, normalization_stats = normalize_depth_for_u16_png(normalization_input, depth_units=depth_units)
     depth_u16 = np.rint(depth_normalized * 65535.0).astype(np.uint16)
     if support_mask is not None:
         depth_u16[~support_mask] = 0
@@ -354,10 +383,26 @@ def read_depth_u16_png(depth_path: Path) -> np.ndarray:
     # Prefer opencv for performance, fallback to PIL for CI compatibility
     if HAS_CV2:
         # Read raw 16-bit with opencv
-        img_u16 = opencv.imread(str(depth_path), opencv.IMREAD_UNCHANGED)
-        if img_u16 is None:
+        img_raw = opencv.imread(str(depth_path), opencv.IMREAD_UNCHANGED)
+        if img_raw is None:
             raise IOError(f"Failed to read depth map: {depth_path}")
-        img_f32 = img_u16.astype(np.float32) / 65535.0
+        if img_raw.ndim == 3 and img_raw.shape[2] in (3, 4):
+            # OpenCV decodes colour as BGR(A); match the PIL fallback's RGB(A) order.
+            img_raw = opencv.cvtColor(
+                img_raw,
+                opencv.COLOR_BGR2RGB if img_raw.shape[2] == 3 else opencv.COLOR_BGRA2RGBA,
+            )
+        # Scale by the decoded bit depth exactly like the PIL fallback, so the
+        # same file yields the same values whichever decoder is installed.
+        if img_raw.dtype == np.uint16:
+            img_f32 = img_raw.astype(np.float32) / 65535.0
+        elif img_raw.dtype == np.uint8:
+            img_f32 = img_raw.astype(np.float32) / 255.0
+        else:
+            img_f32 = img_raw.astype(np.float32)
+            maxv = float(np.nanmax(img_f32)) if img_f32.size else 1.0
+            if maxv > 1.0:
+                img_f32 /= maxv
     else:
         # Fallback to PIL (CI-compatible)
         from PIL import Image

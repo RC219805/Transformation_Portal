@@ -164,6 +164,57 @@ class TestExcludedPaths:
         assert scanner_module._is_excluded_path(Path("web/secure-landing/.next-build-verify/server/a.js")) is True
         assert scanner_module._is_excluded_path(Path("web/secure-landing/.next-smoke-123/server/a.js")) is True
 
+    def test_exclusions_match_whole_repo_relative_components(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A checkout under a ``docs`` directory or a package named ``apidocs`` is still scanned (T-06)."""
+        project_root = tmp_path / "docs" / "checkout"
+        monkeypatch.setattr(scanner_module, "PROJECT_ROOT", project_root)
+
+        assert scanner_module._is_excluded_path(project_root / "src" / "pkg" / "a.py") is False
+        assert scanner_module._is_excluded_path(project_root / "src" / "apidocs" / "b.py") is False
+        assert scanner_module._is_excluded_path(project_root / "src" / "my.venv" / "c.py") is False
+        assert scanner_module._is_excluded_path(project_root / "src" / "docs" / "d.py") is True
+        assert scanner_module._is_excluded_path(project_root / "pkg.egg-info" / "e.py") is True
+        assert scanner_module._is_excluded_path(project_root / "scripts" / "validation" / "scan_todo_inventory.py") is True
+
+    def test_scan_under_docs_checkout_reports_ungoverned_markers(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The gate must not pass vacuously because the checkout path contains ``docs/`` (T-06)."""
+        project_root = tmp_path / "docs" / "checkout"
+        src_root = project_root / "src" / "apidocs"
+        src_root.mkdir(parents=True)
+        (src_root / "a.py").write_text("x = 1  # TODO: ungoverned marker\n", encoding="utf-8")
+        monkeypatch.setattr(scanner_module, "PROJECT_ROOT", project_root)
+        monkeypatch.setattr(scanner_module, "PYTHON_SCAN_ROOTS", (project_root / "src",))
+        monkeypatch.setattr(scanner_module, "JS_TS_SCAN_ROOT", project_root / "web")
+
+        result = scanner_module.scan_repository()
+
+        assert result.files_scanned == 1
+        assert result.errors == []
+        assert result.ungoverned_count == 1
+
+    def test_scan_with_zero_files_fails_closed(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A scan that inspected nothing is a scan error, so --check-governance exits 2 (T-06)."""
+        monkeypatch.setattr(scanner_module, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(scanner_module, "PYTHON_SCAN_ROOTS", (tmp_path / "src",))
+        monkeypatch.setattr(scanner_module, "JS_TS_SCAN_ROOT", tmp_path / "web")
+
+        class MockArgs:
+            json = False
+            check_governance = True
+
+        monkeypatch.setattr(scanner_module, "_parse_args", lambda: MockArgs())
+
+        result = scanner_module.scan_repository()
+        assert result.files_scanned == 0
+        assert any("no source files scanned" in error for error in result.errors)
+        assert scanner_module.main() == 2
+
 
 # ============================================================================
 # TEST: Abstract NotImplementedError Patterns
@@ -229,6 +280,36 @@ class TestAbstractMethodPatterns:
         assert items[0].todo_type.value == "NotImplementedError"
         assert items[0].has_governance_ref is False  # Not auto-governed (actionable message)
         assert "Need to implement this feature" in items[0].message
+
+    def test_non_literal_message_is_not_auto_governed(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """f-string / concatenated messages are messages, not bare abstract stubs (T-06)."""
+        monkeypatch.setattr(scanner_module, "PROJECT_ROOT", tmp_path)
+
+        test_file = tmp_path / "test_non_literal.py"
+        test_file.write_text(dedent("""
+            def feature(kind):
+                raise NotImplementedError(f"export for {kind} is not implemented yet")
+
+            def other(msg):
+                raise NotImplementedError("pending " + msg)
+
+            def tracked(kind):
+                raise NotImplementedError(f"(ADR-044) export for {kind}")
+
+            class Base:
+                def run(self, name):
+                    raise NotImplementedError(f"Subclasses must implement {name}")
+        """).strip())
+
+        items, errors = scanner_module._scan_python_file(test_file)
+
+        assert errors == []
+        governed = {item.lineno: item.has_governance_ref for item in items}
+        assert governed == {2: False, 5: False, 8: True, 12: True}
+        assert "export for {kind} is not implemented yet" in items[0].message
+        assert "pending" in items[1].message
 
 
 # ============================================================================

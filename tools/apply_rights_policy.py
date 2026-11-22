@@ -10,7 +10,7 @@ import re
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, TextIO
 from uuid import uuid4
 
 import yaml
@@ -38,19 +38,28 @@ def _normalize_relpath(value: str) -> str:
     return value.replace("\\", "/")
 
 
-def _iter_manifest_entries(path: Path) -> Iterable[dict[str, Any]]:
-    with path.open("r", encoding="utf-8") as handle:
-        for line_number, line in enumerate(handle, start=1):
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                payload = json.loads(stripped)
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"Invalid JSONL at line {line_number}: {exc}") from exc
-            if not isinstance(payload, dict):
-                raise ValueError(f"Manifest JSONL line {line_number} must be an object")
-            yield payload
+def _iter_manifest_entries(handle: TextIO) -> Iterable[dict[str, Any]]:
+    line_number = 0
+    lines = iter(handle)
+    while True:
+        try:
+            line = next(lines)
+        except StopIteration:
+            return
+        except OSError as exc:
+            # A read failure is an input error, not an output error.
+            raise ValueError(f"Unable to read manifest after line {line_number}: {exc}") from exc
+        line_number += 1
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSONL at line {line_number}: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise ValueError(f"Manifest JSONL line {line_number} must be an object")
+        yield payload
 
 
 def _normalize_flags(raw_flags: Any, *, context: str) -> list[str]:
@@ -193,10 +202,19 @@ def main(argv: list[str] | None = None) -> int:
     rule_hits: Counter[str] = Counter()
     processed_count = 0
 
+    # Open the input before touching any output path so that a missing or
+    # unreadable manifest is reported as an input error (exit 2) and leaves
+    # no output directory or temp file behind.
+    try:
+        manifest_handle = manifest_path.open("r", encoding="utf-8")
+    except OSError as exc:
+        print(f"Input error: unable to read manifest {manifest_path}: {exc}", file=sys.stderr)
+        return EXIT_INPUT_ERROR
+
     try:
         out_jsonl_path.parent.mkdir(parents=True, exist_ok=True)
-        with tmp_out_path.open("w", encoding="utf-8", newline="\n") as output_handle:
-            for entry in _iter_manifest_entries(manifest_path):
+        with manifest_handle, tmp_out_path.open("w", encoding="utf-8", newline="\n") as output_handle:
+            for entry in _iter_manifest_entries(manifest_handle):
                 chosen_rule = "default"
                 rights_flags = list(policy["default_flags"])
                 owner = str(entry.get("owner") or policy["default_owner"])
@@ -224,6 +242,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Output error: {exc}", file=sys.stderr)
         return EXIT_POLICY_ERROR
     finally:
+        manifest_handle.close()
         if tmp_out_path.exists():
             tmp_out_path.unlink()
 

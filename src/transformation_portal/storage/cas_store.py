@@ -56,6 +56,7 @@ import hashlib
 import logging
 import os
 import platform as _platform
+import re
 import shutil
 import stat
 import tempfile
@@ -76,6 +77,11 @@ QUARANTINE_MAX_SIZE_BYTES = 10 * 1024 * 1024 * 1024  # 10 GB
 # Cache platform check at module load time for efficiency
 _IS_WINDOWS = _platform.system() == "Windows"
 _HAS_O_DIRECTORY = hasattr(os, "O_DIRECTORY")
+
+# Object files are named by their lowercase SHA-256. Anything else under a
+# shard directory (notably the ``.cas_write_*.tmp`` files of in-flight writers)
+# is not a CAS object and must never be collected as one.
+_OBJECT_NAME_RE = re.compile(r"[0-9a-f]{64}")
 
 
 def _fsync_parent_directory(path: Path) -> None:
@@ -107,6 +113,41 @@ def _fsync_parent_directory(path: Path) -> None:
         # Directory fsync may fail on some filesystems (e.g., network drives)
         # but the atomic rename itself provides consistency guarantees
         pass
+
+
+def _publish_exclusive(staged: Path, dest: Path) -> None:
+    """Publish the regular file ``staged`` at ``dest`` without replacing ``dest``.
+
+    A hard link publishes the complete file in one step and fails if ``dest``
+    exists. Filesystems without hard links (FAT/exFAT volumes, some network
+    mounts) refuse ``os.link``; there ``dest`` is created exclusively and then
+    filled. That keeps the no-replace guarantee, at the price of a destination
+    that is visible while it is being written, and a destination left
+    incomplete by a failed copy is removed again.
+
+    Raises:
+        FileExistsError: If ``dest`` exists or appears before it is published.
+    """
+    try:
+        os.link(staged, dest)
+        return
+    except FileExistsError:
+        raise
+    except OSError:
+        # No hard-link support here; fall back to an exclusive create.
+        pass
+
+    out = open(dest, "xb")  # FileExistsError: someone else owns dest, leave it alone
+    try:
+        with out, staged.open("rb") as source:
+            shutil.copyfileobj(source, out)
+        shutil.copystat(staged, dest)
+    except BaseException:
+        try:
+            os.unlink(dest)
+        except OSError:
+            pass
+        raise
 
 
 class CASError(RuntimeError):
@@ -319,19 +360,23 @@ class ArtifactStore:
             raise ValueError("max_bytes must be a positive integer")
         if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
             raise CASError("Verified CAS reads require no-follow directory descriptors")
-        descriptors = []
+        # The snapshot is produced (and every descriptor closed) before the
+        # caller's ``with`` body runs, so an OSError raised by that body is
+        # never relabelled as a CAS failure.
+        snapshot = tempfile.SpooledTemporaryFile(max_size=8 * 1024**2, mode="w+b")
         try:
-            directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-            root_fd = os.open(self.objects_dir, directory_flags)
-            descriptors.append(root_fd)
-            prefix_fd = os.open(sha256[:2], directory_flags, dir_fd=root_fd)
-            descriptors.append(prefix_fd)
-            object_fd = os.open(sha256, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=prefix_fd)
-            descriptors.append(object_fd)
-            before = os.fstat(object_fd)
-            if not stat.S_ISREG(before.st_mode) or before.st_size > max_bytes:
-                raise CASError("CAS object is not a bounded regular file")
-            with tempfile.SpooledTemporaryFile(max_size=8 * 1024**2, mode="w+b") as snapshot:
+            descriptors = []
+            try:
+                directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+                root_fd = os.open(self.objects_dir, directory_flags)
+                descriptors.append(root_fd)
+                prefix_fd = os.open(sha256[:2], directory_flags, dir_fd=root_fd)
+                descriptors.append(prefix_fd)
+                object_fd = os.open(sha256, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=prefix_fd)
+                descriptors.append(object_fd)
+                before = os.fstat(object_fd)
+                if not stat.S_ISREG(before.st_mode) or before.st_size > max_bytes:
+                    raise CASError("CAS object is not a bounded regular file")
                 digest = hashlib.sha256()
                 total = 0
                 while chunk := os.read(object_fd, 1024**2):
@@ -349,12 +394,18 @@ class ArtifactStore:
                 ):
                     raise CASError("CAS object integrity verification failed")
                 snapshot.seek(0)
-                yield snapshot
-        except OSError as exc:
-            raise CASError("CAS object cannot be opened safely") from exc
+            except OSError as exc:
+                raise CASError("CAS object cannot be opened safely") from exc
+            finally:
+                for descriptor in reversed(descriptors):
+                    os.close(descriptor)
+        except BaseException:
+            snapshot.close()
+            raise
+        try:
+            yield snapshot
         finally:
-            for descriptor in reversed(descriptors):
-                os.close(descriptor)
+            snapshot.close()
 
     def _atomic_write_file(
         self,
@@ -735,17 +786,43 @@ class ArtifactStore:
 
         dest.parent.mkdir(parents=True, exist_ok=True)
 
-        if dest.exists() or dest.is_symlink():
-            if not overwrite:
-                raise CASError(f"Destination exists and overwrite=False: {dest}")
-            dest.unlink()
+        if not overwrite and (dest.exists() or dest.is_symlink()):
+            raise CASError(f"Destination exists and overwrite=False: {dest}")
+
+        # Build the link or copy in a private staging directory next to
+        # ``dest`` and publish it with a single rename (or exclusively, see
+        # _publish_exclusive, when overwrite=False). Unlinking ``dest`` and then recreating it
+        # raced with concurrent materializations of the same destination
+        # (FileExistsError / FileNotFoundError) and could expose a partially
+        # copied file.
+        staging_dir = Path(tempfile.mkdtemp(prefix=".cas_materialize_", dir=dest.parent))
+        staged = staging_dir / "object"
+        try:
+            # Use absolute path for symlink
+            target = src.resolve()
+            if overwrite:
+                if use_symlink:
+                    staged.symlink_to(target)
+                else:
+                    shutil.copy2(src, staged)
+                os.replace(staged, dest)
+            else:
+                # Exclusive publish: a destination created after the check
+                # above is still refused instead of being replaced.
+                try:
+                    if use_symlink:
+                        dest.symlink_to(target)
+                    else:
+                        shutil.copy2(src, staged)
+                        _publish_exclusive(staged, dest)
+                except FileExistsError as exc:
+                    raise CASError(f"Destination exists and overwrite=False: {dest}") from exc
+        finally:
+            shutil.rmtree(staging_dir, ignore_errors=True)
 
         if use_symlink:
-            # Use absolute path for symlink
-            dest.symlink_to(src.resolve())
             logger.debug("CAS symlink: %s -> %s", dest, sha256[:8])
         else:
-            shutil.copy2(src, dest)
             logger.debug("CAS copy: %s -> %s", dest, sha256[:8])
 
         return dest
@@ -773,7 +850,12 @@ class ArtifactStore:
                 continue
 
             for obj_path in prefix_dir.iterdir():
-                sha = obj_path.name.lower()
+                sha = obj_path.name
+                # Only collect real objects: a writer's temp file in the same
+                # shard is about to be renamed into place by another thread or
+                # process, and deleting it would break that write.
+                if not _OBJECT_NAME_RE.fullmatch(sha) or sha[:2] != prefix_dir.name:
+                    continue
                 if sha not in referenced:
                     to_delete.append(sha)
                     if not dry_run:

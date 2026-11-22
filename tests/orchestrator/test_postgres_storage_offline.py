@@ -172,6 +172,23 @@ async def test_postgres_events_since_yields_payload_copies() -> None:
     assert row.payload == {"nested": {"percent": 50}}
 
 
+async def test_postgres_event_purge_deletes_only_that_jobs_counter_and_history() -> None:
+    """Parity with the memory store: one job's replay state goes, in one transaction."""
+    store = PostgresJobEventStore(database_url="postgresql+asyncpg://user:pw@host/db")
+    session = _FakePostgresSession()
+    _install_fake_session(store, session)
+
+    await store.purge("job-pg-purged")
+
+    assert all(getattr(query, "is_delete", False) for query in session.executed)
+    # Counter before events: the lock order repository delete and terminal publication use.
+    assert [query.table.name for query in session.executed] == ["job_event_sequences", "job_events"]
+    for query in session.executed:
+        assert "WHERE" in str(query)
+        assert list(query.compile().params.values()) == ["job-pg-purged"]
+    assert session.commits == 1
+
+
 async def test_postgres_operational_audit_append_snapshots_record_fields() -> None:
     store = PostgresOperationalAuditStore(database_url="postgresql+asyncpg://user:pw@host/db")
     session = _FakePostgresSession()

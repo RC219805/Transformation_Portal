@@ -13,6 +13,7 @@ pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "validation" / "run_managed_paid_pilot_gate.sh"
+SERVICE_COMMAND = "python scripts/validation/run_orchestrator_service_contracts.py"
 
 
 def _write_env_file(path: Path, *, extra: str = "") -> Path:
@@ -22,6 +23,7 @@ def _write_env_file(path: Path, *, extra: str = "") -> Path:
                 "TP_ORCHESTRATOR_STATE_BACKEND=postgres",
                 "TP_DATABASE_URL=postgresql+asyncpg://staging_user:secret@staging-db.example.test:5432/tp_staging",
                 "TP_TEST_POSTGRES_URL=postgresql+asyncpg://test_user:secret@test-db.example.test:5432/tp_validation",
+                "TP_DISPATCH_TEST_DATABASE_URL=postgresql+asyncpg://dispatch_user:secret%40test@dispatch-db.example.test/tp_dispatch_test?ssl=require",
                 "TP_ORCHESTRATOR_QUEUE_BACKEND=redis",
                 "TP_REDIS_URL=rediss://queue.example.test:6380/0",
                 "TP_TEST_REDIS_URL=rediss://queue-validation.example.test:6380/0",
@@ -208,6 +210,15 @@ def _write_fake_gate_repo(tmp_path: Path) -> tuple[Path, Path, Path]:
         "\n".join(
             [
                 "#!/bin/sh",
+                'if [ "$1" = "scripts/validation/run_orchestrator_service_contracts.py" ]; then',
+                '    printf "%s\\n" "service:$2" >> "$GATE_TEST_LOG"',
+                '    case "$2" in',
+                '        provider-preflight) exit "${GATE_PROVIDER_PREFLIGHT_EXIT:-0}" ;;',
+                "        provider-plain) exit 0 ;;",
+                '        provider) exit "${GATE_PROVIDER_EXIT:-0}" ;;',
+                "        *) exit 91 ;;",
+                "    esac",
+                "fi",
                 'if [ "$1" = "-m" ] && [ "$2" = "pytest" ] && [ "$4" = "tests/orchestrator/test_paid_pilot_services_contract.py" ]; then',
                 '    printf "%s\\n" "integrated:$*" >> "$GATE_TEST_LOG"',
                 '    exit "${GATE_INTEGRATED_EXIT:-0}"',
@@ -242,7 +253,10 @@ def _run_fake_full_gate(
     tmp_path: Path,
     *,
     make_fail_target: str = "",
+    provider_preflight_exit: int = 0,
+    provider_exit: int = 0,
     integrated_exit: int = 0,
+    preflight_only: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
     gate_script, fake_bin, step_log = _write_fake_gate_repo(tmp_path)
     env_file = _write_env_file(
@@ -252,6 +266,8 @@ def _run_fake_full_gate(
                 f"GATE_TEST_LOG={shlex.quote(str(step_log))}",
                 f"GATE_FAIL_TARGET={shlex.quote(make_fail_target)}",
                 "GATE_FAIL_EXIT=42",
+                f"GATE_PROVIDER_PREFLIGHT_EXIT={provider_preflight_exit}",
+                f"GATE_PROVIDER_EXIT={provider_exit}",
                 f"GATE_INTEGRATED_EXIT={integrated_exit}",
             ]
         ),
@@ -260,8 +276,11 @@ def _run_fake_full_gate(
 
     run_env = dict(os.environ)
     run_env["PATH"] = f"{fake_bin}{os.pathsep}{run_env.get('PATH', '')}"
+    args = ["bash", str(gate_script), "--env-file", str(env_file), "--evidence-out", str(evidence_out)]
+    if preflight_only:
+        args.append("--preflight-only")
     result = subprocess.run(
-        ["bash", str(gate_script), "--env-file", str(env_file), "--evidence-out", str(evidence_out)],
+        args,
         cwd=gate_script.parents[2],
         env=run_env,
         text=True,
@@ -289,6 +308,7 @@ def test_managed_paid_pilot_preflight_runs_from_clean_env(tmp_path: Path) -> Non
     assert "placeholder-like: []" in result.stdout
     assert "wrong selectors: {}" in result.stdout
     assert "leaked local-dev vars: []" in result.stdout
+    assert "invalid Postgres targets: {}" in result.stdout
     assert "unsafe managed/test overlap: {}" in result.stdout
     assert "Managed paid-pilot clean-env preflight passed." in result.stdout
 
@@ -305,10 +325,14 @@ def test_managed_paid_pilot_preflight_writes_redacted_evidence_note(tmp_path: Pa
     assert "gate_status: `preflight_passed`" in note
     assert "`TP_ORCHESTRATOR_STATE_BACKEND`: `postgres`" in note
     assert "`TP_DATABASE_URL`: `scheme=postgresql+asyncpg; tls=no; path=set`" in note
+    assert "`TP_DISPATCH_TEST_DATABASE_URL`: `scheme=postgresql+asyncpg; tls=no; path=set`" in note
     assert "## Gate Step Results" in note
     assert "| Clean env preflight | `managed provider env validation` | `passed` | `0` |" in note
     assert "staging_user" not in note
     assert "staging-db.example.test" not in note
+    assert "dispatch_user" not in note
+    assert "dispatch-db.example.test" not in note
+    assert "tp_dispatch_test" not in note
     assert "tp-staging-artifacts" not in note
     assert "test-secret-value" not in note
 
@@ -376,15 +400,14 @@ def test_managed_paid_pilot_preflight_rejects_optional_placeholder_region(tmp_pa
     assert "TP_ARTIFACT_REGION" in result.stdout
 
 
-def test_managed_paid_pilot_preflight_rejects_same_postgres_database_with_different_credentials(
-    tmp_path: Path,
-) -> None:
+@pytest.mark.parametrize("reset_host", ["db.example.test", "db-alias.example.test"])
+def test_managed_paid_pilot_preflight_rejects_reset_database_name_collision(tmp_path: Path, reset_host: str) -> None:
     env_file = _write_env_file(
         tmp_path / "managed.env",
         extra="\n".join(
             [
                 "TP_DATABASE_URL=postgresql+asyncpg://staging_user:secret@db.example.test:5432/tp",
-                "TP_TEST_POSTGRES_URL=postgresql+asyncpg://test_user:secret@db.example.test:5432/tp",
+                f"TP_TEST_POSTGRES_URL=postgresql+asyncpg://test_user:secret@{reset_host}:5432/tp",
             ]
         ),
     )
@@ -392,8 +415,66 @@ def test_managed_paid_pilot_preflight_rejects_same_postgres_database_with_differ
     result = _run_preflight(env_file)
 
     assert result.returncode == 1
-    assert "TP_TEST_POSTGRES_URL" in result.stdout
-    assert "same Postgres host/port/database" in result.stdout
+    assert "'TP_TEST_POSTGRES_URL': 'database name must differ from TP_DATABASE_URL'" in result.stdout
+    assert reset_host not in result.stdout + result.stderr
+
+
+def test_managed_paid_pilot_preflight_requires_dispatch_database(tmp_path: Path) -> None:
+    env_file = _write_env_file(tmp_path / "managed.env", extra="TP_DISPATCH_TEST_DATABASE_URL=")
+
+    result = _run_preflight(env_file)
+
+    assert result.returncode == 1
+    assert "missing: ['TP_DISPATCH_TEST_DATABASE_URL']" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "database_url",
+    [
+        "postgresql://dispatch_user:maskedSecret@dispatch-db.example.test/tp_dispatch_test",
+        "postgresql+asyncpg://dispatch_user:maskedSecret@/tp_dispatch_test",
+        "postgresql+asyncpg://dispatch_user:maskedSecret@dispatch-db.example.test:bad/tp_dispatch_test",
+        "postgresql+asyncpg://dispatch_user:maskedSecret@dispatch-db.example.test:0/tp_dispatch_test",
+        "postgresql+asyncpg://dispatch_user:maskedSecret@dispatch-db.example.test:65536/tp_dispatch_test",
+        "postgresql+asyncpg://dispatch_user:maskedSecret@[dispatch-db.example.test/tp_dispatch_test",
+        "postgresql+asyncpg://dispatch_user:maskedSecret@dispatch-db.example.test/a/tp_dispatch_test",
+        "postgresql+asyncpg://dispatch_user:maskedSecret@dispatch-db.example.test/%74p_dispatch_test",
+        "postgresql+asyncpg://dispatch_user:maskedSecret@dispatch-db.example.test/tp_dispatch_test?%48ost=other",
+        "postgresql+asyncpg://dispatch_user:maskedSecret@dispatch-db.example.test/tp_staging",
+    ],
+)
+def test_managed_paid_pilot_preflight_rejects_invalid_dispatch_database(tmp_path: Path, database_url: str) -> None:
+    env_file = _write_env_file(tmp_path / "managed.env", extra=f"TP_DISPATCH_TEST_DATABASE_URL={database_url}")
+
+    result = _run_preflight(env_file)
+
+    assert result.returncode == 1
+    assert "invalid Postgres targets: {'TP_DISPATCH_TEST_DATABASE_URL':" in result.stdout
+    evidence = result.stdout + result.stderr
+    assert "maskedSecret" not in evidence
+    assert "dispatch-db.example.test" not in evidence
+
+
+@pytest.mark.parametrize("other_target", ["TP_DATABASE_URL", "TP_TEST_POSTGRES_URL"])
+def test_managed_paid_pilot_preflight_rejects_dispatch_name_collision_across_hosts(tmp_path: Path, other_target: str) -> None:
+    env_file = _write_env_file(
+        tmp_path / "managed.env",
+        extra=f"{other_target}=postgresql+asyncpg://other:secret@db-alias.example.test:5432/tp_dispatch_test",
+    )
+
+    result = _run_preflight(env_file)
+
+    assert result.returncode == 1
+    assert "'TP_DISPATCH_TEST_DATABASE_URL': 'database name must differ" in result.stdout
+    assert "db-alias.example.test" not in result.stdout + result.stderr
+
+
+def test_managed_paid_pilot_preflight_skips_live_identity_check(tmp_path: Path) -> None:
+    result, evidence_out, step_log = _run_fake_full_gate(tmp_path, provider_preflight_exit=43, preflight_only=True)
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert not step_log.exists()
+    assert "gate_status: `preflight_passed`" in evidence_out.read_text(encoding="utf-8")
 
 
 def test_managed_paid_pilot_full_gate_runs_components_before_integrated_smoke(
@@ -403,25 +484,24 @@ def test_managed_paid_pilot_full_gate_runs_components_before_integrated_smoke(
 
     assert result.returncode == 0, result.stderr + result.stdout
     assert step_log.read_text(encoding="utf-8").splitlines() == [
+        "service:provider-preflight",
         "make:db-upgrade",
-        "make:test-orchestrator-postgres-contract",
+        "service:provider-plain",
         "make:test-orchestrator-postgres-app-contract",
         "make:test-worker-redis-contract",
         "make:test-artifact-s3-contract",
         "make:test-frontdoor-redis-contract",
+        "service:provider",
         "integrated:-m pytest -q tests/orchestrator/test_paid_pilot_services_contract.py -m unit",
     ]
 
     note = evidence_out.read_text(encoding="utf-8")
     assert "gate_status: `gate_passed`" in note
+    assert f"| Destructive-test DB safety preflight | `{SERVICE_COMMAND} provider-preflight` | `passed` | `0` |" in note
     assert "| Database migrations | `make db-upgrade` | `passed` | `0` |" in note
-    assert (
-        "| Orchestrator Postgres contract | "
-        "`TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory "
-        "TP_ARTIFACT_STORE=local make test-orchestrator-postgres-contract` | "
-        "`passed` | `0` |"
-    ) in note
+    assert f"| Orchestrator Postgres contract | `{SERVICE_COMMAND} provider-plain` | `passed` | `0` |" in note
     assert "| Frontdoor Redis contract | `make test-frontdoor-redis-contract` | `passed` | `0` |" in note
+    assert f"| Orchestrator service authority contracts | `{SERVICE_COMMAND} provider` | `passed` | `0` |" in note
     assert (
         "| Integrated paid-pilot smoke | "
         "`TP_RUN_PAID_PILOT_SERVICES_CONTRACT=1 python -m pytest -q "
@@ -445,8 +525,9 @@ def test_managed_paid_pilot_full_gate_records_failed_component_and_stops(
 
     assert result.returncode == 42, result.stderr + result.stdout
     assert step_log.read_text(encoding="utf-8").splitlines() == [
+        "service:provider-preflight",
         "make:db-upgrade",
-        "make:test-orchestrator-postgres-contract",
+        "service:provider-plain",
         "make:test-orchestrator-postgres-app-contract",
         "make:test-worker-redis-contract",
     ]
@@ -460,6 +541,37 @@ def test_managed_paid_pilot_full_gate_records_failed_component_and_stops(
         "`failed` | `42` |"
     ) in note
     assert "| Artifact S3 contract | `make test-artifact-s3-contract` | `not_run` | `-` |" in note
+    assert f"| Orchestrator service authority contracts | `{SERVICE_COMMAND} provider` | `not_run` | `-` |" in note
+    assert (
+        "| Integrated paid-pilot smoke | "
+        "`TP_RUN_PAID_PILOT_SERVICES_CONTRACT=1 python -m pytest -q "
+        "tests/orchestrator/test_paid_pilot_services_contract.py -m unit` | "
+        "`not_run` | `-` |"
+    ) in note
+
+
+def test_managed_paid_pilot_full_gate_stops_before_migration_when_identity_check_fails(tmp_path: Path) -> None:
+    result, evidence_out, step_log = _run_fake_full_gate(tmp_path, provider_preflight_exit=43)
+
+    assert result.returncode == 43, result.stderr + result.stdout
+    assert step_log.read_text(encoding="utf-8").splitlines() == ["service:provider-preflight"]
+    note = evidence_out.read_text(encoding="utf-8")
+    assert "gate_status: `gate_failed`" in note
+    assert f"| Destructive-test DB safety preflight | `{SERVICE_COMMAND} provider-preflight` | `failed` | `43` |" in note
+    assert "| Database migrations | `make db-upgrade` | `not_run` | `-` |" in note
+
+
+def test_managed_paid_pilot_full_gate_stops_before_integrated_smoke_when_authority_contracts_fail(tmp_path: Path) -> None:
+    result, evidence_out, step_log = _run_fake_full_gate(tmp_path, provider_exit=44)
+
+    assert result.returncode == 44, result.stderr + result.stdout
+    assert step_log.read_text(encoding="utf-8").splitlines()[-2:] == [
+        "make:test-frontdoor-redis-contract",
+        "service:provider",
+    ]
+    note = evidence_out.read_text(encoding="utf-8")
+    assert "gate_status: `gate_failed`" in note
+    assert f"| Orchestrator service authority contracts | `{SERVICE_COMMAND} provider` | `failed` | `44` |" in note
     assert (
         "| Integrated paid-pilot smoke | "
         "`TP_RUN_PAID_PILOT_SERVICES_CONTRACT=1 python -m pytest -q "

@@ -16,10 +16,10 @@ Key Features:
 import functools
 import logging
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Deque, Dict, List, Optional
 
 import torch
 
@@ -100,7 +100,8 @@ class MetricsCollector:
             max_metrics: Maximum number of metrics to store
         """
         self.max_metrics = max_metrics
-        self.metrics: List[PerformanceMetric] = []
+        # Bounded ring buffer: appending at the cap evicts the oldest metric in O(1).
+        self.metrics: Deque[PerformanceMetric] = deque(maxlen=max_metrics)
         self.operation_profiles: Dict[str, OperationProfile] = {}
 
     def record_metric(
@@ -131,10 +132,6 @@ class MetricsCollector:
         )
 
         self.metrics.append(metric)
-
-        # Limit storage
-        if len(self.metrics) > self.max_metrics:
-            self.metrics = self.metrics[-self.max_metrics :]
 
     def record_operation(self, operation_name: str, execution_time: float, memory_mb: float = 0.0):
         """
@@ -193,7 +190,7 @@ class MetricsCollector:
         Returns:
             List of matching metrics
         """
-        results = self.metrics
+        results = list(self.metrics)
 
         if metric_type:
             results = [m for m in results if m.metric_type == metric_type]
@@ -289,10 +286,10 @@ class PerformanceMonitor:
                 memory_before = self._get_memory_usage()
 
                 # Time execution
-                start_time = time.time()
+                start_time = time.perf_counter()
                 result = func(*args, **kwargs)
                 self._synchronize()
-                elapsed = time.time() - start_time
+                elapsed = time.perf_counter() - start_time
 
                 # Get memory after
                 memory_after = self._get_memory_usage()
@@ -353,10 +350,10 @@ class PerformanceMonitor:
         for _ in range(num_iterations):
             memory_before = self._get_memory_usage()
 
-            start_time = time.time()
+            start_time = time.perf_counter()
             operation(*args, **kwargs)
             self._synchronize()
-            elapsed = time.time() - start_time
+            elapsed = time.perf_counter() - start_time
 
             memory_after = self._get_memory_usage()
 
@@ -499,21 +496,27 @@ class _ProfileContext:
         self.context_name = context_name
         self.start_time = 0.0
         self.memory_before = 0.0
+        # Whether timing started at __enter__: enabling the monitor inside a
+        # block entered while disabled must not record a measurement that never
+        # began (start_time would still be 0.0). Disabling inside the block
+        # still suppresses the recording, as before.
+        self._active = False
 
     def __enter__(self):
-        if not self.monitor._enabled:
+        self._active = self.monitor._enabled
+        if not self._active:
             return self
 
         self.memory_before = self.monitor._get_memory_usage()
-        self.start_time = time.time()
+        self.start_time = time.perf_counter()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if not self.monitor._enabled:
+        if not (self._active and self.monitor._enabled):
             return
 
         self.monitor._synchronize()
-        elapsed = time.time() - self.start_time
+        elapsed = time.perf_counter() - self.start_time
         memory_after = self.monitor._get_memory_usage()
         memory_delta = memory_after - self.memory_before
 

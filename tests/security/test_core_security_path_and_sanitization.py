@@ -77,6 +77,28 @@ def test_is_safe_path_uses_current_working_directory_at_call_time(monkeypatch: p
     assert not is_safe_path(outside_file)
 
 
+def test_path_validator_rejects_a_symlink_loop_inside_an_allowed_root(tmp_path: Path) -> None:
+    (tmp_path / "loop").symlink_to("loop")
+    validator = PathValidator([tmp_path])
+
+    assert validator.is_safe(tmp_path / "plain.txt")
+    assert validator.is_safe(tmp_path / "loop") is False
+    assert validator.is_safe(tmp_path / "loop" / "missing" / "out.txt") is False
+
+
+def test_safe_resolve_path_rejects_a_symlink_loop_inside_the_allowed_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / "loop").symlink_to("loop")
+
+    # The loop error is a RuntimeError on every interpreter, as Python 3.11 raised.
+    with pytest.raises(RuntimeError):
+        safe_resolve_path(tmp_path / "loop" / "asset.txt", allowed_root=tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert is_safe_path(tmp_path / "plain.txt")
+    assert is_safe_path(tmp_path / "loop") is False
+
+
 def test_sanitization_policy_sets_default_extensions() -> None:
     policy = SanitizationPolicy()
     assert policy.allowed_extensions == [".jpg", ".jpeg", ".png", ".tiff", ".exr"]
@@ -90,6 +112,18 @@ def test_sanitize_filename_strips_path_dangerous_chars_hidden_prefix_and_length(
     assert "<" not in result and ">" not in result and "|" not in result and "?" not in result
     assert not result.startswith(".")
     assert len(sanitize_filename("a" * 300 + ".png")) == 255
+
+
+@pytest.mark.parametrize("unsafe", ["..", "...", ".", "", "/", "../..", "dir/.."])
+def test_sanitize_filename_rejects_names_with_nothing_left(unsafe: str) -> None:
+    """An empty result joined to a directory would name the directory itself."""
+    with pytest.raises(ValidationError, match="empty after sanitization"):
+        sanitize_filename(unsafe)
+
+
+def test_sanitize_filename_keeps_the_rest_of_a_dotted_name() -> None:
+    assert sanitize_filename("..hidden.png") == "hidden.png"
+    assert sanitize_filename(".a") == "a"
 
 
 def test_validate_input_file_raises_for_missing_path(tmp_path: Path) -> None:

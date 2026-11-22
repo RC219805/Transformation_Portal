@@ -38,7 +38,9 @@ def write_pbr_maps(
             {"normal": Path, "roughness": Path, "ao": Path}
 
     Raises:
-        IOError: If all maps fail to write
+        IOError: If any map fails to write. Maps written before the failure
+            are left in place, but the call never reports a partial set as
+            success.
 
     Example:
         >>> paths = write_pbr_maps(
@@ -81,8 +83,14 @@ def write_pbr_maps(
             logger.error(error_msg)
             errors.append(error_msg)
 
-    # Only raise if ALL maps failed
-    if not written_paths:
-        raise IOError(f"All PBR map writes failed: {'; '.join(errors)}")
+    # Fail closed: a partial set of maps is not a PBR deliverable. Callers
+    # publish all three paths, so any missing map must surface as an error.
+    if errors:
+        if not written_paths:
+            raise IOError(f"All PBR map writes failed: {'; '.join(errors)}")
+        raise IOError(
+            f"PBR map writes failed ({len(errors)} of {len(maps_to_write)}): "
+            f"{'; '.join(errors)}; written: {sorted(written_paths)}"
+        )
 
     return written_paths

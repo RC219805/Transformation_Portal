@@ -381,10 +381,12 @@ test("logout POST emits attempt + failure(csrf) when Origin/Referrer validation 
     assert.equal(rumCalls[1].body.event_type, "logout_submit_failure");
     assert.deepEqual(rumCalls[1].body.metadata, { failure_code: "csrf" });
 
-    // Existing route behavior: Origin/Referrer failure does NOT destroy the
-    // session in storage, only clears the cookie. RUM emit must not change
-    // that.
+    // Origin/Referrer failure leaves both the server-side session and the
+    // cookie untouched: a forged cross-site logout must neither log the
+    // browser out nor orphan a still-valid authenticated session. RUM emit
+    // must not change that.
     assert.notEqual(await sessions.getSessionById(session.id, { touch: false }), null);
+    assert.equal(response.headers.get("set-cookie"), null);
 
     assertNoPiiInRumPosts(rumCalls);
   } finally {
@@ -414,8 +416,10 @@ test("logout POST emits attempt + failure(csrf) when the x-csrf-token header mis
     assert.equal(rumCalls[1].body.event_type, "logout_submit_failure");
     assert.deepEqual(rumCalls[1].body.metadata, { failure_code: "csrf" });
 
-    // CSRF token failure does NOT destroy the session in storage either.
+    // CSRF token failure does NOT destroy the session in storage either,
+    // and it does not clear the cookie that still points at it.
     assert.notEqual(await sessions.getSessionById(session.id, { touch: false }), null);
+    assert.equal(response.headers.get("set-cookie"), null);
 
     assertNoPiiInRumPosts(rumCalls);
   } finally {

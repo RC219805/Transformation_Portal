@@ -105,6 +105,16 @@ def test_tenant_manager_access_enforcement_and_node_type_policy(tmp_path: Path) 
         manager.enforce_node_type("tenant_a", "other")
 
 
+@pytest.mark.parametrize("relative", ["loop", "loop/missing/result.json"])
+def test_tenant_access_through_a_symlink_loop_is_denied(tmp_path: Path, relative: str) -> None:
+    manager = TenantManager(tmp_path / "workspaces", tmp_path / "cas")
+    tenant = manager.create_tenant("tenant_a")
+    (tenant.tenant_workspace / "loop").symlink_to("loop")
+
+    with pytest.raises(TenantError, match="invalid path"):
+        manager.enforce_tenant_access(tenant, tenant.tenant_workspace / relative)
+
+
 def test_tenant_aware_fs_guard_enforces_current_tenant(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     manager = TenantManager(tmp_path / "workspaces", tmp_path / "cas")
     tenant = manager.create_tenant("tenant_a")

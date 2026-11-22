@@ -494,3 +494,108 @@ class TestSandboxExecutorSecurityBoundaries:
         assert "Contained error" in result.error
         # Executor should still be functional
         assert executor.execution_count == 1
+
+
+def _manager_children() -> set:
+    import multiprocessing
+
+    return {child.pid for child in multiprocessing.active_children()}
+
+
+class TestGPUSemaphoreAccounting:
+    """GPUSemaphore lease accounting and lifecycle (T-14)."""
+
+    @pytest.fixture
+    def semaphore(self):
+        from transformation_portal.runtime.gpu_semaphore import GPUSemaphore
+
+        sem = GPUSemaphore(num_devices=1)
+        yield sem
+        sem.close()
+
+    def test_double_release_is_rejected_and_mints_no_second_token(self, semaphore) -> None:
+        from transformation_portal.runtime.gpu_semaphore import GPUSemaphoreError
+
+        slot = semaphore.try_acquire()
+        assert slot is not None
+        semaphore.release(slot)
+
+        with pytest.raises(GPUSemaphoreError, match="not an outstanding lease"):
+            semaphore.release(slot)
+
+        first = semaphore.try_acquire()
+        second = semaphore.try_acquire()
+        assert first is not None and first.device_id == 0
+        assert second is None
+
+    def test_release_of_foreign_slot_is_rejected(self, semaphore) -> None:
+        from transformation_portal.runtime.gpu_semaphore import GPUSemaphoreError, GPUSlot
+
+        with pytest.raises(GPUSemaphoreError):
+            semaphore.release(GPUSlot(device_id=0))
+
+        held = semaphore.try_acquire()
+        assert held is not None
+        assert semaphore.try_acquire() is None
+
+    def test_context_manager_does_not_rerelease_a_manually_released_slot(self, semaphore) -> None:
+        with semaphore.acquire(timeout=1) as slot:
+            semaphore.release(slot)
+
+        assert semaphore.try_acquire() is not None
+        assert semaphore.try_acquire() is None
+
+    def test_close_shuts_down_manager_process(self) -> None:
+        from transformation_portal.runtime.gpu_semaphore import GPUSemaphore, GPUSemaphoreError
+
+        before = _manager_children()
+        sem = GPUSemaphore(num_devices=1)
+        assert len(_manager_children() - before) == 1
+
+        sem.close()
+        sem.close()
+
+        assert _manager_children() - before == set()
+        with pytest.raises(GPUSemaphoreError, match="closed"):
+            sem.try_acquire()
+
+
+class TestSandboxExecutorSemaphoreLifecycle:
+    """An executor-owned GPU semaphore is created lazily and closed (T-14)."""
+
+    def test_no_manager_process_until_gpu_is_requested(self, tmp_path: Path) -> None:
+        config = ExecutorConfig(workspace_root=tmp_path / "ws", cas_root=tmp_path / "cas", max_concurrent_gpu=1)
+        before = _manager_children()
+
+        executor = SandboxExecutor(config=config)
+        try:
+            assert _manager_children() - before == set()
+            assert executor.get_summary()["gpu_enabled"] is True
+
+            cpu_result = executor.execute(node_id="cpu_node", node=MockSuccessNode())
+            assert cpu_result.success is True
+            assert _manager_children() - before == set()
+
+            gpu_result = executor.execute(node_id="gpu_node", node=MockSuccessNode(), use_gpu=True)
+            assert gpu_result.success is True
+            assert gpu_result.gpu_slot is not None and gpu_result.gpu_slot.device_id == 0
+            assert len(_manager_children() - before) == 1
+        finally:
+            executor.close()
+
+        assert _manager_children() - before == set()
+        assert executor.gpu_semaphore is None
+
+    def test_close_leaves_caller_owned_semaphore_alone(self, tmp_path: Path) -> None:
+        from transformation_portal.runtime.gpu_semaphore import GPUSemaphore
+
+        config = ExecutorConfig(workspace_root=tmp_path / "ws", cas_root=tmp_path / "cas", max_concurrent_gpu=1)
+        semaphore = GPUSemaphore(num_devices=1)
+        try:
+            with SandboxExecutor(config=config, gpu_semaphore=semaphore) as executor:
+                assert executor.execute(node_id="gpu_node", node=MockSuccessNode(), use_gpu=True).success
+
+            assert executor.gpu_semaphore is semaphore
+            assert semaphore.try_acquire() is not None
+        finally:
+            semaphore.close()

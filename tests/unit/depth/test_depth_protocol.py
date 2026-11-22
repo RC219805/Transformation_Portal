@@ -481,6 +481,36 @@ class TestDepthModelRegistry:
         assert isinstance(backend, FallbackProductionBackend)
         assert FallbackProductionBackend.constructor_calls == 1
 
+    def test_role_lookup_does_not_cross_roles_for_shared_model_id(self, registry):
+        """LC-21: role lookup must return the registration for that role, not another sharing its model_id."""
+
+        def make_backend(class_name: str, role: BackendRole) -> type:
+            backend_info = BackendInfo(
+                name=class_name,
+                model_id="mock/shared-model",
+                role=role,
+                license_tier=LicenseTier.COMMERCIAL,
+            )
+            namespace = {
+                "backend_info": backend_info,
+                "info": property(lambda self: backend_info),
+                "load": lambda self, device="auto", weights_path=None, strict_license=True: None,
+                "predict": lambda self, image: None,
+            }
+            return type(class_name, (), namespace)
+
+        draft_cls = make_backend("SharedDraftBackend", BackendRole.DRAFT)
+        production_cls = make_backend("SharedProductionBackend", BackendRole.PRODUCTION)
+        registry.register(draft_cls, name="draft")
+        registry.register(production_cls, name="production")
+
+        production = registry.get_backend(role=BackendRole.PRODUCTION, use_cache=False)
+        draft = registry.get_backend(role=BackendRole.DRAFT, use_cache=False)
+
+        assert isinstance(production, production_cls)
+        assert production.info.role == BackendRole.PRODUCTION
+        assert isinstance(draft, draft_cls)
+
     def test_get_backend_commercial_only_rejects_research(self, registry):
         """Test that commercial_only rejects non-commercial backends."""
         registry.register(MockResearchBackend)

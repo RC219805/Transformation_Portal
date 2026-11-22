@@ -210,6 +210,20 @@ discovered = registry.discover_plugins()
 print(f"Discovered {discovered} plugins")
 ```
 
+Discovery outside the built-in plugin root is opt-in. Export
+`TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS=1` before the process starts, or
+construct `PluginRegistry(allow_external_plugins=True)` /
+`PluginLoader(allow_external_plugins=True)`. Without the opt-in the user and
+environment plugin directories are not searched, and
+`registry.discover_plugins([...])` raises `ValueError` for any path outside the
+built-in root without loading anything.
+
+When `TRANSFORMATION_PORTAL_PLUGIN_TRUST_STORE` (or `plugin_trust_store_path=`)
+is configured, `PluginLoader` and `PluginRegistry.discover_plugins` run external
+code only from package directories whose `plugin.json` signature verifies
+([ADR-049](../architecture/ADR-049-plugin-manifest-trust.md)). Loose
+single-file plugins and unsigned packages are skipped.
+
 ### Manual Registration
 
 Register plugins programmatically:
@@ -371,6 +385,18 @@ my_plugin/
   "min_portal_version": "0.1.0"
 }
 ```
+
+`dependencies` are PEP 508 requirement strings checked against the installed
+distribution (name and version specifier, e.g. `PyYAML>=6`); a name with no
+installed distribution is accepted only when it is an importable module. A
+manifest with an invalid `plugin_type`, unparsable portal-version bounds,
+malformed or unmet dependencies, or an incompatible portal version is still
+reported by `PluginLoader.discover_all()` (with `load_errors`), but
+`PluginManager` refuses to hand out, initialize, execute or re-register it on
+reload. An entry module shipped inside the package directory must not share a
+name with an already-imported non-plugin module; an entry module the directory
+does not ship is resolved as an installed module (for example a pip-installed
+plugin).
 
 ### Distribution
 

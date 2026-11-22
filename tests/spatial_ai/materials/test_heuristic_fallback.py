@@ -90,6 +90,19 @@ class TestHeuristicFallback:
         # Should preserve color information
         assert albedo.shape == sample_rgb.shape
 
+    def test_albedo_keeps_linear_shadow_values(self, generator):
+        """M-3: albedo is filtered at float precision, not quantised to 8 bits."""
+        mask = np.ones((16, 16), dtype=bool)
+
+        uniform = generator._generate_albedo(np.full((16, 16, 3), 0.0030, dtype=np.float32), mask)
+        np.testing.assert_allclose(uniform, 0.0030, rtol=1e-5)
+
+        # A dark linear ramp spans less than one 8-bit step; its columns stay distinct.
+        ramp = np.broadcast_to(np.linspace(0.0005, 0.0035, 16, dtype=np.float32)[None, :, None], (16, 16, 3)).copy()
+        albedo = generator._generate_albedo(ramp, mask)
+        assert albedo.dtype == np.float32
+        assert np.all(np.diff(albedo[8, :, 0]) > 0)
+
     def test_normal_generation(self, generator, sample_rgb, sample_mask):
         """Test normal map generation."""
         normal = generator._generate_normal(
@@ -258,3 +271,63 @@ class TestHeuristicFallback:
             assert normal.shape == sample_rgb.shape
             assert roughness.shape == sample_rgb.shape[:2]
             assert metallic.shape == sample_rgb.shape[:2]
+
+
+class TestLocalVariance:
+    """The 5x5 local variance must match generic_filter(np.var) bit for bit, without a per-pixel callback."""
+
+    @pytest.mark.parametrize(
+        "shape,dtype",
+        [((1, 1), np.float64), ((2, 3), np.float64), ((3, 7), np.float32), ((1, 40), np.float32), ((67, 45), np.float32)],
+    )
+    def test_matches_generic_filter_bit_for_bit(self, monkeypatch, shape, dtype):
+        from scipy import ndimage
+
+        from transformation_portal.spatial_ai.materials import heuristic_fallback
+
+        values = (np.random.default_rng(7).standard_normal(shape) * 3.0).astype(dtype)
+        expected = ndimage.generic_filter(values, np.var, size=5)
+        # Small blocks so the row-block loop and its seams are exercised.
+        monkeypatch.setattr(heuristic_fallback, "_LOCAL_VARIANCE_BLOCK_PIXELS", 2 * shape[1])
+
+        result = heuristic_fallback._local_variance(values, size=5)
+
+        assert result.dtype == expected.dtype
+        assert np.array_equal(result, expected)
+
+    def test_roughness_and_depth_ao_do_not_call_generic_filter(self, monkeypatch):
+        """M-2: roughness and depth AO ran a Python np.var call per pixel on the full image."""
+        from scipy import ndimage
+
+        from transformation_portal.spatial_ai.materials import heuristic_fallback
+
+        rng = np.random.default_rng(3)
+        rgb = rng.random((48, 40, 3)).astype(np.float32)
+        depth = (rng.random((48, 40)) * 5.0).astype(np.float32)
+        mask = np.zeros((48, 40), dtype=bool)
+        mask[8:40, 4:30] = True
+
+        luminance = 0.2126 * rgb[:, :, 0] + 0.7152 * rgb[:, :, 1] + 0.0722 * rgb[:, :, 2]
+        variance = ndimage.generic_filter(luminance, np.var, size=5)
+        expected_roughness = np.clip(0.6 + variance / np.max(variance) * (0.8 - 0.6), 0, 1)
+        expected_roughness[~mask] = 0.5
+        depth_smooth = ndimage.gaussian_filter(depth, sigma=1.0)
+        concavity = np.clip(ndimage.laplace(depth_smooth), 0, None)
+        concavity = concavity / np.max(concavity)
+        depth_variance = ndimage.generic_filter(depth_smooth, np.var, size=5)
+        depth_variance = depth_variance / np.max(depth_variance)
+        expected_ao = 1.0 - np.clip((concavity * 0.7 + depth_variance * 0.3) * 0.7, 0, 1)
+        expected_ao = np.clip(expected_ao, 0, 1)
+        expected_ao[~mask] = 1.0
+
+        def _per_pixel_callback_forbidden(*args, **kwargs):
+            raise AssertionError("generic_filter runs a Python callback per pixel")
+
+        monkeypatch.setattr(heuristic_fallback.ndimage, "generic_filter", _per_pixel_callback_forbidden)
+        generator = heuristic_fallback.HeuristicFallback()
+
+        roughness = generator._generate_roughness(rgb, "wood", mask)
+        ao = generator._generate_ao(rgb, depth, 0.7, mask)
+
+        assert np.array_equal(roughness, expected_roughness.astype(np.float32))
+        assert np.array_equal(ao, expected_ao.astype(np.float32))

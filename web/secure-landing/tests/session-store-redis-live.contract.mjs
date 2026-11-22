@@ -122,6 +122,21 @@ test("RedisSessionStore live contract persists sessions and throttle state", asy
     await store.resetLoginAttempts("operator");
     assert.equal(await store.countLoginFailures("operator", sinceMs), 0);
 
+    const reserveOptions = { attemptedAt, sinceMs, limit: 2, remoteAddr: "127.0.0.1" };
+    const concurrent = await Promise.all(
+      Array.from({ length: 6 }, (_, index) =>
+        store.reserveLoginAttempt([`operator:addr-${index}`, "operator"], reserveOptions),
+      ),
+    );
+    assert.equal(concurrent.filter(Boolean).length, 2);
+    assert.equal(await store.countLoginFailures("operator", sinceMs), 2);
+    assert.ok((await client.pttl(`${keyPrefix}login:operator`)) > 0);
+    await store.resetLoginAttempts("operator");
+
+    // Redis relies on key TTLs, so the sweep must leave a live session intact.
+    await store.pruneExpiredSessions(Date.now());
+    assert.ok(await store.getRawSessionRow(sessionId), "sweep must not drop a live session");
+
     await store.deleteSession(sessionId);
     assert.equal(await store.getRawSessionRow(sessionId), null);
     await store.deleteSession(sessionId);

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { createOperateTools } from "../portal-src/operate-tools.js";
 
 const source = readFileSync(new URL("../portal-src/portal.template.js", import.meta.url), "utf8");
 function section(start, end) {
@@ -97,4 +98,57 @@ test('malformed heartbeats and events from a replaced native stream cannot exten
   h.stream.emit('log', '{"line":"late event"}');
   assert.equal(h.job.lastEventAt, previousTimestamp);
   assert.deepEqual(h.job.logs, []);
+});
+
+test('live log pane renders the retained buffer and coalesces autoscroll per frame', () => {
+  const frames = [];
+  let layoutReads = 0;
+  let writes = 0;
+  let text = '';
+  const pane = {
+    scrollTop: 0,
+    get scrollHeight() { layoutReads += 1; return (text.split('\n').length - 1) * 10; },
+    get textContent() { return text; },
+    set textContent(value) { writes += 1; text = value; },
+  };
+  const job = { id: 'job-live', logs: [] };
+  const otherJob = { id: 'job-other', logs: [] };
+  const state = { selectedJobId: job.id, jobs: [job, otherJob] };
+  const els = { logPane: pane };
+  // The stream appends to the job buffer, and logToPane schedules a render.
+  const tools = createOperateTools({
+    state, els, maxLogLines: 1200,
+    document: { getElementById: () => null },
+    portalRenderScheduler: { schedule: (callback) => frames.push(callback) },
+    _displayJobState: (job) => job.state, _portalPrivilegesReady: () => true,
+  });
+  layoutReads = 0;
+  const context = vm.createContext({ MAX_JOB_LOG_LINES: 1200, _deferredOperateSurfaceApi: () => tools });
+  vm.runInContext(
+    section('function appendJobLog(', 'function getReadableError(')
+    + section('function logToPane(', '// ===='),
+    context,
+  );
+
+  for (let index = 0; index < 3000; index += 1) {
+    context.appendJobLog(job, `[INFO] line ${index}`);
+    context.logToPane(job.id);
+  }
+  context.appendJobLog(otherJob, '[INFO] not for the selected job');
+  context.logToPane(otherJob.id);
+
+  assert.equal(job.logs.length, 1200);
+  assert.equal(job.logs[0], '[INFO] line 1800');
+  assert.equal(job.logs.at(-1), '[INFO] line 2999');
+  assert.equal(writes, 0, 'no pane writes per appended line');
+  assert.equal(layoutReads, 0, 'no forced reflow per appended line');
+  assert.equal(frames.length, 1, 'render and autoscroll share one frame');
+  frames[0]();
+  assert.equal(pane.textContent, job.logs.join('\n') + '\n');
+  assert.equal(writes, 1);
+  assert.equal(layoutReads, 1);
+  assert.equal(pane.scrollTop, 12_000);
+  context.appendJobLog(job, '[INFO] next frame');
+  context.logToPane(job.id);
+  assert.equal(frames.length, 2, 'a later frame schedules a new autoscroll');
 });

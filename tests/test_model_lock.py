@@ -407,6 +407,92 @@ def test_da3_inference_strict_mode_rejects_revisionless_da3_fallback(tmp_path: P
     assert fallback_used["called_without_revision"] is False
 
 
+def _install_revision_rejecting_da3_stub(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
+    calls: list[dict[str, object]] = []
+
+    class _FakeDA3Model:
+        def to(self, _device: str) -> "_FakeDA3Model":
+            return self
+
+        def eval(self) -> "_FakeDA3Model":
+            return self
+
+    class _FakeDepthAnything3:
+        @staticmethod
+        def from_pretrained(model_id: str, **kwargs):
+            calls.append({"model_id": model_id, **kwargs})
+            if "revision" in kwargs:
+                raise TypeError("revision unsupported by test stub")
+            return _FakeDA3Model()
+
+    fake_pkg = types.ModuleType("depth_anything_3")
+    fake_api = types.ModuleType("depth_anything_3.api")
+    fake_api.DepthAnything3 = _FakeDepthAnything3
+    monkeypatch.setitem(sys.modules, "depth_anything_3", fake_pkg)
+    monkeypatch.setitem(sys.modules, "depth_anything_3.api", fake_api)
+    return calls
+
+
+def _make_cpu_da3_engine(monkeypatch: pytest.MonkeyPatch):
+    from transformation_portal.lux_depth_v3 import inference as da3_inference
+    from transformation_portal.lux_depth_v3.config import DA3Config, DeviceConfig
+    from transformation_portal.lux_depth_v3.config import ModelVariant as DA3ModelVariant
+
+    monkeypatch.setattr(
+        da3_inference.DA3InferenceEngine,
+        "_auto_detect_backend",
+        lambda self: da3_inference.ModelBackend.PYTORCH_CPU,
+    )
+    config = DA3Config(
+        model_variant=DA3ModelVariant.METRIC_LARGE,
+        device=DeviceConfig(device="cpu", use_fp16=False),
+    )
+    return da3_inference.DA3InferenceEngine(config)
+
+
+def test_da3_inference_non_strict_mode_never_retries_pinned_revision_unpinned(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression (audit LC-05): a TypeError on the pinned load must not fall back to HEAD.
+
+    Manifests and run cards record the pinned revision, so loading repository HEAD
+    instead would make provenance claim weights that were never loaded.
+    """
+    manifest_path = tmp_path / "model_lock.yaml"
+    model_id = "depth-anything/DA3NESTED-GIANT-LARGE-1.1"
+    pinned = "9" * 40
+    _write_manifest(manifest_path, {model_id: {"revision": pinned}})
+    monkeypatch.setenv("TP_MODEL_LOCK_MANIFEST", str(manifest_path))
+    monkeypatch.delenv("TP_STRICT_MODEL_LOCK", raising=False)
+
+    calls = _install_revision_rejecting_da3_stub(monkeypatch)
+    engine = _make_cpu_da3_engine(monkeypatch)
+
+    with pytest.raises(RuntimeError, match="revision unsupported by test stub"):
+        engine._load_da3_model(model_id)
+
+    assert calls == [{"model_id": model_id, "revision": pinned}]
+
+
+def test_da3_inference_non_strict_mode_keeps_revisionless_retry_when_unpinned(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without a resolved revision the compatibility retry stays (nothing pinned is claimed)."""
+    manifest_path = tmp_path / "model_lock.yaml"
+    model_id = "depth-anything/DA3NESTED-GIANT-LARGE-1.1"
+    _write_manifest(manifest_path, {})
+    monkeypatch.setenv("TP_MODEL_LOCK_MANIFEST", str(manifest_path))
+    monkeypatch.delenv("TP_STRICT_MODEL_LOCK", raising=False)
+
+    calls = _install_revision_rejecting_da3_stub(monkeypatch)
+    engine = _make_cpu_da3_engine(monkeypatch)
+
+    engine._load_da3_model(model_id)
+
+    assert calls == [{"model_id": model_id, "revision": None}, {"model_id": model_id}]
+    assert engine.model is not None
+
+
 def test_artifact_attestation_gaussian_splatting_uses_source_only_shape() -> None:
     """Regression: the 3DGS attestation block in the shipped manifest is source-only.
 

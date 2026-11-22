@@ -67,6 +67,29 @@ def test_installed_dependency_does_not_create_load_error(tmp_path: Path):
     assert loaded.load_errors == []
 
 
+def test_dependency_check_resolves_distribution_names_and_version_specifiers():
+    """T-11: requirements are distribution names with version specifiers, not import names."""
+    import importlib.metadata
+
+    from transformation_portal.plugins.loader import PluginLoader
+
+    loader = PluginLoader(allow_external_plugins=False)
+    pyyaml_version = importlib.metadata.version("PyYAML")
+
+    # Installed distributions whose import name differs from the distribution name.
+    assert loader._check_dependencies(["PyYAML>=0.1", "Pillow>=0.1"]) == []  # noqa: SLF001
+    # Version specifiers are enforced against the installed distribution.
+    assert loader._check_dependencies(["PyYAML>=999.0"]) == [  # noqa: SLF001
+        f"Unsatisfied dependency: PyYAML>=999.0 (installed {pyyaml_version})"
+    ]
+    # Environment markers that do not apply are skipped.
+    assert loader._check_dependencies(['definitely_missing_dist_for_t11; python_version < "3"']) == []  # noqa: SLF001
+    # Malformed requirements fail closed instead of being ignored.
+    assert loader._check_dependencies(["not a requirement!!"]) == [  # noqa: SLF001
+        "Invalid dependency specifier: 'not a requirement!!'"
+    ]
+
+
 def test_invalid_entry_point_format_returns_load_error(tmp_path: Path):
     package_dir = tmp_path / "invalid_entry_point_package"
     write_plugin_json(

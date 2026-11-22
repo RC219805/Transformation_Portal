@@ -264,7 +264,47 @@ def test_masks_to_material_dict_merges_same_material():
     # Both regions should be present in merged mask
     assert merged_mask[12, 12] == pytest.approx(1.0)
     assert merged_mask[42, 42] == pytest.approx(1.0)
-    assert conf == pytest.approx(0.91)
+    # Labels come from a colour heuristic: the material confidence is the fixed
+    # heuristic value; the best mask IoU is kept as geometry metadata only.
+    assert conf == pytest.approx(0.5)
+    assert backend.get_runtime_metadata()["material_mask_predicted_iou"]["stone"] == pytest.approx(0.91)
+
+
+def test_sam_vit_h_mask_iou_is_not_reported_as_material_confidence():
+    """LC-06: SAM predicted_iou must not authorise heuristic colour labels as material confidence."""
+    from types import SimpleNamespace
+
+    from transformation_portal.lux_depth_v3.materials_v3 import MaterialsV3Engine
+
+    h, w = 240, 320
+    image = np.full((h, w, 3), 128, dtype=np.uint8)  # plain mid-grey wall -> 'stone' by mean colour
+    seg = np.zeros((h, w), dtype=bool)
+    seg[40:200, 40:280] = True
+
+    backend = SAMVitHBackend()
+    result = backend._masks_to_material_dict(image, [{"segmentation": seg, "predicted_iou": 0.97}])
+
+    assert set(result) == {"stone"}
+    assert result["stone"][1] == pytest.approx(0.5)
+    metadata = backend.get_runtime_metadata()
+    assert metadata["material_confidence_evidence"]["stone"]["confidence_score_type"] == "heuristic_material_confidence_v1"
+    assert metadata["material_confidence_evidence"]["stone"]["material_confidence"] == pytest.approx(0.5)
+    assert metadata["material_mask_predicted_iou"] == {"stone": pytest.approx(0.97)}
+
+    cfg = SimpleNamespace(
+        enable_materials_v3=True,
+        apply_pixel_ops=True,
+        min_coverage_px=500,
+        min_mean_conf=0.2,
+        refinement_strategy="canary",
+        quality_tier="premium",
+    )
+    out = MaterialsV3Engine(cfg).process(image.astype(np.float32) / 255.0, {"materials": result})
+    pixel_ops = out["materials_v3_pixel_ops"]
+    assert [entry["material"] for entry in pixel_ops["applied"]] == []
+    assert [(entry["material"], entry["reason"]) for entry in pixel_ops["blocked"]] == [
+        ("stone", "below_confidence_threshold")
+    ]
 
 
 # =============================================================================

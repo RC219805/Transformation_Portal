@@ -74,6 +74,10 @@ class DepthProStage(Stage):
         - transform hash
         - input image hash
         - device class
+        - supplied focal length
+
+    The stage cache holds the in-memory result only. A run that asks for files
+    (``output_dir``) always computes, so the files are always written.
     """
 
     CHECKPOINT_URL = "https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt"
@@ -110,6 +114,17 @@ class DepthProStage(Stage):
         self._model = None
         self._transform = None
         self._model_loaded = False
+
+    def execute(self, context: StageContext) -> StageResult:
+        """Execute with the stage cache, unless the run asks for files.
+
+        A cache hit returns the stored depth map without running ``compute``,
+        so it cannot write the files requested through ``output_dir``; and the
+        paths one run wrote are not a result to hand to the next run.
+        """
+        if context.get_artifact("output_dir"):
+            return self.execute_uncached(context)
+        return super().execute(context)
 
     def compute(self, context: StageContext) -> StageResult:
         """Run Depth Pro inference with full provenance tracking.
@@ -203,6 +218,12 @@ class DepthProStage(Stage):
             - Transform representation hash
             - Input image hash
             - Device class
+            - Supplied focal length
+
+        The transform component is the placeholder ``unloaded`` until the
+        model has been loaded (ADR-018 lists the transform as a key
+        component), so a stage that has already run inference looks an image
+        up under a different key than a fresh stage does.
         """
         image = context.get_artifact("image")
         if image is None:

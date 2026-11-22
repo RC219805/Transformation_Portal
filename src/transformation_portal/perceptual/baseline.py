@@ -111,7 +111,7 @@ class PerceptualBaseline:
         metrics = baseline.get_baseline_metrics()
 
         # Track enhancements
-        enhanced_result = baseline.analyze_enhanced("pool_enhanced.jpg", step=1)
+        enhanced_result = baseline.analyze_enhanced("pool_enhanced.jpg", step=1, baseline_name="pool")
 
         # Generate reports
         report = baseline.generate_report()
@@ -218,6 +218,7 @@ class PerceptualBaseline:
         step: int,
         description: str = "",
         image_type: Optional[ImageType] = None,
+        baseline_name: Optional[str] = None,
     ) -> AnalysisResult:
         """
         Analyze enhanced version of an image.
@@ -227,12 +228,26 @@ class PerceptualBaseline:
             step: Enhancement step number
             description: Description of enhancement
             image_type: Optional image type
+            baseline_name: Name (file stem) of the calibrated baseline image this
+                enhances. Defaults to the enhanced file's stem.
 
         Returns:
             Analysis result
+
+        Raises:
+            RuntimeError: If the baseline is not calibrated.
+            ValueError: If no calibrated baseline matches ``baseline_name``.
         """
         if not self.calibrated:
             raise RuntimeError("Baseline not calibrated. Call calibrate() first.")
+
+        resolved_name = baseline_name if baseline_name is not None else Path(image_path).stem
+        if self.tracker.get_trajectory(resolved_name) is None:
+            known = ", ".join(sorted(self.tracker.get_all_trajectories())) or "<none>"
+            raise ValueError(
+                f"No calibrated baseline for '{resolved_name}' (known baselines: {known}). "
+                "Pass baseline_name= to name the baseline image this enhances."
+            )
 
         # Load enhanced image
         tensor, metadata = self.image_loader.load(image_path, image_type)
@@ -241,7 +256,7 @@ class PerceptualBaseline:
         result = self.analyzer.analyze(tensor, metadata)
 
         # Track in enhancement tracker
-        self.tracker.track_enhancement(result, step, description)
+        self.tracker.track_enhancement(result, step, description, baseline_name=resolved_name)
 
         logger.info(f"Analyzed enhanced image: {metadata.path.name}, " f"quality={result.overall_quality:.3f}")
 

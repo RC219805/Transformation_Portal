@@ -68,6 +68,7 @@ const TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS = 200;
 const DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS = 30000;
 const DEFERRED_SURFACE_RETRY_WINDOW_MS = 30000;
 const DEFERRED_SURFACE_REGISTRY = Object.freeze({
+    recovery: { datasetKey: 'clientRecoveryJsUrl', factoryName: 'createDeferredClientRecoveryApi' },
     operate: { datasetKey: 'operateSurfaceJsUrl', factoryName: 'createDeferredOperateSurfaceApi' },
     build: { datasetKey: 'buildSurfaceJsUrl', factoryName: 'createDeferredBuildSurfaceApi' },
     profile: { datasetKey: 'profileSurfaceJsUrl', factoryName: 'createDeferredProfileSurfaceApi' },
@@ -300,6 +301,8 @@ const els = {
         rightsManifest: _domId('rightsManifestGuidance'),
     },
     inputDirStatus: _domId('inputDirStatus'),
+    submissionRecoveryPanel: _domId('submissionRecoveryPanel'),
+    uploadRecoveryPanel: _domId('uploadRecoveryPanel'),
     stagedUploadShell: _domId('stagedUploadShell'),
     stagedUploadStatus: _domId('stagedUploadStatus'),
     stagedUploadDropzone: _domId('stagedUploadDropzone'),
@@ -3082,27 +3085,27 @@ const BUILD_STEP_CONTENT = Object.freeze({
     lux: [
         {
             label: 'Configure',
-            meta: 'Pipeline and preset posture.',
+            meta: 'Choose a workflow and preset.',
             title: '1. Configure the draft',
-            summary: 'Choose a pipeline and preset for your next run.'
+            summary: 'Choose a workflow and preset.'
         },
         {
             label: 'Paths',
             meta: 'Inputs, outputs, and roots.',
             title: '2. Set paths',
-            summary: 'Choose the source folder and where to save your outputs.'
+            summary: 'Choose source and output folders.'
         },
         {
             label: 'Outputs',
             meta: 'Deliverables, posture, and readiness.',
             title: '3. Choose your outputs',
-            summary: 'Select the depth model, output format, and optional deliverables.'
+            summary: 'Select the depth model, format, and optional outputs.'
         },
         {
             label: 'Dispatch',
-            meta: 'Primary review, launch, and parity tools.',
+            meta: 'Check readiness, then start the run.',
             title: '4. Review and dispatch',
-            summary: 'Check the preview and resolve any issues before starting the run.'
+            summary: 'Resolve preview issues before starting the run.'
         }
     ],
     photographyUnified: [
@@ -3128,25 +3131,25 @@ const BUILD_STEP_CONTENT = Object.freeze({
             label: 'Stage',
             meta: 'Select the archive stage.',
             title: '1. Select the archive stage',
-            summary: 'Pick the archive stage from the connection card, then continue into stage-specific inputs.'
+            summary: 'Choose an archive workflow and its required inputs.'
         },
         {
             label: 'Paths',
             meta: 'Required stage files.',
             title: '2. Provide stage inputs',
-            summary: 'Supply the archive root, archive index, or rights manifest required for the selected stage.'
+            summary: 'Provide the required archive root, index, or rights manifest.'
         },
         {
             label: 'Readiness',
             meta: 'Review governance signals.',
             title: '3. Review readiness',
-            summary: 'Confirm the stage-specific readiness checks before moving to dispatch.'
+            summary: 'Confirm stage readiness before dispatch.'
         },
         {
             label: 'Dispatch',
             meta: 'Canonical command and launch.',
             title: '4. Dispatch archive job',
-            summary: 'Review the canonical command, warnings, and launch the archive job.'
+            summary: 'Review the canonical command and warnings, then launch.'
         }
     ]
 });
@@ -4931,6 +4934,11 @@ function _finalizeBootstrapRetry(outcome, details = null) {
     state.bootstrap.retry.deadlineAt = 0;
     state.bootstrap.lastRateLimitHint = null;
     _recordBootstrapRetryEvent(outcome, details);
+    // A recovered incident must not consume the retry budget of the next one:
+    // the attempt counter is reported with the success event, then reset.
+    if (outcome === 'succeeded') {
+        state.bootstrap.retry.attempt = 0;
+    }
 }
 
 function _bootstrapFailureDetails(reason = '', httpStatus = 0, message = '', rateLimitHint = null) {
@@ -5039,6 +5047,13 @@ function _scheduleBootstrapRetry(reason = '', httpStatus = 0, rateLimitHint = nu
 
     const now = Date.now();
     if (!state.bootstrap.retry.deadlineAt || state.bootstrap.retry.deadlineAt <= now) {
+        if (!state.bootstrap.retry.deadlineAt) {
+            // No open window means the previous incident was finalized
+            // (succeeded or terminal), so this failure starts a new incident
+            // with a fresh BOOTSTRAP_RETRY_MAX_ATTEMPTS budget. A window that
+            // merely elapsed inside a running retry chain keeps its count.
+            state.bootstrap.retry.attempt = 0;
+        }
         state.bootstrap.retry.deadlineAt = now + BOOTSTRAP_RETRY_MAX_WINDOW_MS;
     }
 
@@ -5093,6 +5108,7 @@ function _setBootstrapStatus(status, reason = '', httpStatus = 0) {
     const allowedStatuses = new Set(['pending', 'ready', 'degraded', 'unavailable']);
     const nextStatus = allowedStatuses.has(status) ? status : 'pending';
     state.bootstrap.status = nextStatus;
+    _deferredSurfaceState.get('recovery')?.api?.sync();
     state.bootstrap.lastErrorReason = String(reason || '').trim();
     state.bootstrap.lastHttpStatus = Number.isFinite(Number(httpStatus)) ? Number(httpStatus) : 0;
     state.bootstrap.lastTransitionAt = Date.now();
@@ -5183,9 +5199,9 @@ function _recordProtectedFamilySuppression(family, payload) {
     try {
         // eslint-disable-next-line no-console
         console.warn(
-            `[portal] suppressing further requests to ${family}: reason=${detail.reason || 'config_failure'} ` +
+            `[portal] ${family} suppressed: reason=${detail.reason || 'config_failure'} ` +
             `upstreamStatus=${detail.upstreamStatus || 'unknown'}. ` +
-            `Resolve frontdoor configuration (TP_BACKEND_API_KEY / backend TP_API_KEY).`
+            `Check TP_BACKEND_API_KEY / TP_API_KEY.`
         );
     } catch {
         // logging is best-effort
@@ -5279,8 +5295,11 @@ function _flushBootstrapOnlineFollowup(force = false) {
 function _syncBootstrapGuardedControls() {
     renderWorkspaceGuidance();
     const readiness = _dispatchReadinessSnapshot();
+    if (state.portalUi.recoverySubmissionBlocked && !state.portalUi.dispatchHandoffJobId) {
+        readiness.detail = 'A submission is unresolved. Use Check status or explicitly confirm a separate changed draft.';
+    }
     if (els.runJobBtn && els.runJobBtn.textContent !== 'Dispatching...') {
-        els.runJobBtn.disabled = !readiness.canRun;
+        els.runJobBtn.disabled = !readiness.canRun || Boolean(state.portalUi.recoverySubmissionBlocked && !state.portalUi.dispatchHandoffJobId);
     }
     if (els.dispatchReadinessReason) {
         _renderBannerDetailWithRetryCountdown(
@@ -5364,15 +5383,6 @@ function _stagedUploadsEnabledForState() {
     );
 }
 
-function _stagedUploadsVisibleForState() {
-    return _stagedUploadsSupportedForState();
-}
-
-function _stagedUploadErrorMessage(payload, fallback = 'Failed to stage uploads.') {
-    const message = String(payload?.error?.message || '').trim();
-    return message || fallback;
-}
-
 function _setStagedUploadState(patch = {}) {
     state.portalUi.stagedUpload = {
         ...(state.portalUi.stagedUpload || {}),
@@ -5381,15 +5391,16 @@ function _setStagedUploadState(patch = {}) {
 }
 
 function _syncStagedUploadUi() {
-    const visible = _stagedUploadsVisibleForState();
+    const visible = _stagedUploadsSupportedForState() || Boolean(state.portalUi.recoveryUploadPresent);
     const enabled = _stagedUploadsEnabledForState();
     const uploadState = state.portalUi.stagedUpload || {};
-    const busy = Boolean(uploadState.busy);
+    const busy = Boolean(uploadState.busy || state.portalUi.recoveryUploadBlocked);
     const progressPercent = Math.max(0, Math.min(100, Number(uploadState.progressPercent) || 0));
     if (els.stagedUploadShell) {
         els.stagedUploadShell.classList.toggle('hidden', !visible);
         els.stagedUploadShell.dataset.busy = busy ? 'true' : 'false';
         els.stagedUploadShell.dataset.capabilityStatus = enabled ? 'available' : 'gated';
+        els.stagedUploadShell.dataset.outcome = uploadState.status || (state.portalUi.recoveryUploadBlocked ? 'outcome_unknown' : 'idle');
     }
     if (els.stagedUploadStatus) {
         if (!visible) {
@@ -5397,9 +5408,9 @@ function _syncStagedUploadUi() {
         } else if (!enabled) {
             els.stagedUploadStatus.textContent = 'Staged upload controls are visible for this pipeline but gated for this portal cohort.';
         } else if (uploadState.error) {
-            els.stagedUploadStatus.textContent = 'The last staged upload attempt failed. Fix the payload and try again.';
+            els.stagedUploadStatus.textContent = String(uploadState.error);
         } else if (busy) {
-            els.stagedUploadStatus.textContent = String(uploadState.status || 'Uploading files to the staged input directory...');
+            els.stagedUploadStatus.textContent = uploadState.status === 'staging' ? 'Files transferred. The server is validating and staging them.' : state.portalUi.recoveryUploadBlocked && !uploadState.busy ? 'Upload outcome unknown. Use Check status before staging another batch.' : 'Transferring selected files…';
         } else if (uploadState.summary) {
             els.stagedUploadStatus.textContent = 'Staged uploads are ready. Review the receipt below before dispatching the next run.';
         } else {
@@ -5429,7 +5440,7 @@ function _syncStagedUploadUi() {
     }
     if (els.stagedUploadProgressLabel) {
         if (busy) {
-            els.stagedUploadProgressLabel.textContent = `${progressPercent}% uploaded`;
+            els.stagedUploadProgressLabel.textContent = !uploadState.busy ? 'Staging outcome unknown; check the receipt.' : uploadState.status === 'staging' ? 'Files transferred; validating and staging…' : `${progressPercent}% of file bytes transferred`;
         } else if (uploadState.summary) {
             els.stagedUploadProgressLabel.textContent = 'Upload complete.';
         } else {
@@ -5498,6 +5509,9 @@ function _syncBootstrapUi() {
 function _applyPortalBootstrap(rawBootstrap, options = {}) {
     configImportGeneration += 1;
     const bootstrap = rawBootstrap && typeof rawBootstrap === 'object' ? rawBootstrap : _defaultPortalBootstrap();
+    if (bootstrap.recoveryContextStatus === 'ready' && _validRecoveryContext(bootstrap.recoveryContext)) {
+        state.portalUi.recoveryOwner = bootstrap.recoveryContext;
+    }
     const nextStatus = ['pending', 'ready', 'degraded', 'unavailable'].includes(String(options.status || ''))
         ? String(options.status)
         : 'ready';
@@ -5511,12 +5525,17 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
         csrfToken: mode === 'managed' ? String(bootstrap.csrfToken || '') : '',
         actor: mode === 'managed' && bootstrap.actor && typeof bootstrap.actor === 'object' ? bootstrap.actor : null,
         logoutPending: false,
+        recoveryContext: bootstrap.recoveryContextStatus === 'ready' ? bootstrap.recoveryContext : null,
+        recoveryContextStatus: bootstrap.recoveryContextStatus || 'unavailable',
         features: {
             apiKeyInput: mode === 'direct_debug' && bootstrap.features?.apiKeyInput !== false,
             directDebug: mode === 'direct_debug' && bootstrap.features?.directDebug !== false,
             artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal),
             reviewSurfaceDeferred: Boolean(bootstrap.features?.reviewSurfaceDeferred),
             stagedUploads: Boolean(bootstrap.features?.stagedUploads),
+            jobSubmissionReceipts: bootstrap.features?.jobSubmissionReceipts === true,
+            uploadReceipts: bootstrap.features?.uploadReceipts === true,
+            photographicCatalogueThumbnails: bootstrap.features?.photographicCatalogueThumbnails === true,
             rumTelemetry: Boolean(bootstrap.features?.rumTelemetry),
             fastVlmCaptioning: Boolean(bootstrap.features?.fastVlmCaptioning),
             photographicDeliveryHistory: bootstrap.features?.photographicDeliveryHistory === true,
@@ -5783,6 +5802,7 @@ function _handlePortalLogout() {
     if (state.auth.logoutPending) return;
     state.auth.logoutPending = true;
     deferredReviewSurfaceApi?.syncAuthorization?.();
+    _deferredSurfaceState.get('recovery')?.api?.sync();
     if (els.logoutBtn) els.logoutBtn.disabled = true;
     const logoutStartedAt = _portalRumNow();
     _queueClientLogoutRumSample('logout_submit_attempt', 1);
@@ -6005,7 +6025,7 @@ function _applyStagedUploadResult(result) {
         busy: false,
         progressPercent: 100,
         status: 'ready',
-        summary: `Staged ${fileCount} file${fileCount === 1 ? '' : 's'} (${formatBytes(totalBytes)}). Input directory updated with receipt-backed operator detail.`,
+        summary: `Staged ${fileCount} file${fileCount === 1 ? '' : 's'} (${formatBytes(totalBytes)}). Input directory updated.`,
         error: '',
         lastBatchId: String(result?.batch_id || ''),
         fileCount,
@@ -6050,6 +6070,11 @@ function _submitStagedUploadSelection(fileList) {
         return;
     }
 
+    const operationStamp = _clientRecoveryOperationStamp();
+    if (!operationStamp) {
+        createToast('Confirm access before staging. No upload was sent.', 'error');
+        return;
+    }
     _setStagedUploadState({
         busy: true,
         progressPercent: 0,
@@ -6062,106 +6087,14 @@ function _submitStagedUploadSelection(fileList) {
     });
     _syncStagedUploadUi();
 
-    const formData = new FormData();
-    selection.entries.forEach(({ file, relativePath }) => {
-        formData.append('files', file, relativePath);
+    void _loadClientRecoverySurface().then((api) => {
+        if (!api) throw new Error('Recovery controls unavailable. No upload was sent.');
+        if (operationStamp !== _clientRecoveryOperationStamp()) throw new Error('Workspace changed. Select files again. No upload was sent.');
+        api.upload(selection);
+    }).catch((error) => {
+        _setStagedUploadState({ busy: false, status: 'idle', error: error.message, receipt: null });
+        _syncStagedUploadUi();
     });
-    formData.append(
-        'client_manifest',
-        JSON.stringify({
-            schema: 'tp.portal.upload_manifest.v1',
-            files: selection.entries.map((entry) => ({
-                relative_path: entry.relativePath,
-                size_bytes: entry.sizeBytes,
-                name: entry.name,
-            })),
-        })
-    );
-
-    const requestTraceparent = portalInternals.createChildTraceparent(_portalRumTraceparent());
-    const headers = _buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${API_BASE}/v1/uploads/staging`);
-    xhr.responseType = 'json';
-    Object.entries(headers).forEach(([key, value]) => {
-        if (typeof value === 'string' && value) {
-            xhr.setRequestHeader(key, value);
-        }
-    });
-
-    xhr.upload.onprogress = (event) => {
-        if (!event.lengthComputable) return;
-        const progressPercent = Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)));
-        _setStagedUploadState({
-            progressPercent,
-            status: `Uploading ${selection.entries.length} file${selection.entries.length === 1 ? '' : 's'} to staged storage...`,
-        });
-        _syncStagedUploadUi();
-    };
-
-    xhr.onerror = () => {
-        _setStagedUploadState({
-            busy: false,
-            progressPercent: 0,
-            status: 'idle',
-            error: 'Network failure interrupted the staged upload.',
-            receipt: null,
-        });
-        _syncStagedUploadUi();
-        createToast('Network failure interrupted the staged upload.', 'error');
-    };
-
-    xhr.onabort = () => {
-        _setStagedUploadState({
-            busy: false,
-            progressPercent: 0,
-            status: 'idle',
-            error: 'Staged upload canceled before completion.',
-            receipt: null,
-        });
-        _syncStagedUploadUi();
-        createToast('Staged upload canceled before completion.', 'error');
-    };
-
-    xhr.onload = () => {
-        const payload = xhr.response && typeof xhr.response === 'object'
-            ? xhr.response
-            : (() => {
-                try {
-                    return JSON.parse(xhr.responseText || '{}');
-                } catch (_err) {
-                    return {};
-                }
-            })();
-        let invalidResponse = false;
-        if (xhr.status >= 200 && xhr.status < 300 && payload?.success && payload.data) {
-            try {
-                _applyStagedUploadResult(payload.data);
-                return;
-            } catch (_err) {
-                invalidResponse = true;
-            }
-        }
-
-        const nonRetryableDetails = _nonRetryableProtectedDetails(payload);
-        if (nonRetryableDetails) {
-            _recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);
-        }
-        const errorMessage = invalidResponse
-            ? 'Staged upload returned an invalid response. Try staging the files again.'
-            : _stagedUploadErrorMessage(payload);
-        _setStagedUploadState({
-            busy: false,
-            progressPercent: 0,
-            status: 'idle',
-            error: errorMessage,
-            receipt: null,
-        });
-        _syncStagedUploadUi();
-        createToast(errorMessage, 'error');
-    };
-
-    xhr.send(formData);
 }
 
 function resumeBlockedJobStreamsAfterAuthUpdate() {
@@ -6175,7 +6108,7 @@ function resumeBlockedJobStreamsAfterAuthUpdate() {
         if (!_isJobStreamRecoverable(job)) return;
         if (_jobHasActiveStream(job)) return;
         appendJobLog(job, '[INFO] API key updated. Reconnecting event stream...');
-        logToPane(job.id, '[INFO] API key updated. Reconnecting event stream...');
+        logToPane(job.id);
         startJobEventStream(job, job.eventStreamUrl);
     });
 }
@@ -6192,7 +6125,7 @@ async function copyToClipboard(text) {
             document.body.appendChild(ta);
             try {
                 ta.select();
-                if (!document.execCommand("copy")) throw new Error('clipboard_copy_rejected');
+                if (!document.execCommand("copy")) throw new Error('Copy rejected');
             } finally {
                 document.body.removeChild(ta);
             }
@@ -6540,6 +6473,12 @@ function _ensureDeferredReviewSurfaceCss() {
 function _reviewAuthorization() {
     if (state.auth?.logoutPending) return { status: 'revoked', ownerKey: '' };
     const ownerKey = _transientDraftOwnerKey();
+    const established = state.portalUi.recoveryOwner;
+    if (_validRecoveryContext(established)) {
+        const verified = ownerKey && state.auth?.recoveryContextStatus === 'ready'
+            && _validRecoveryContext(state.auth.recoveryContext);
+        return { status: verified ? 'ready' : 'unavailable', ownerKey: established.ownerId };
+    }
     return { status: ownerKey ? 'ready' : 'unavailable', ownerKey };
 }
 
@@ -6637,14 +6576,14 @@ async function _loadDeferredReviewSurface() {
     deferredReviewSurfaceLoadPromise = import(moduleUrl)
         .then((module) => {
             if (!module || typeof module.createDeferredReviewSurfaceApi !== 'function') {
-                throw new Error('Deferred review surface module missing createDeferredReviewSurfaceApi');
+                throw new Error('Missing review factory');
             }
             _clearDeferredReviewSurfaceLoadFailure();
             deferredReviewSurfaceApi = module.createDeferredReviewSurfaceApi(_createDeferredReviewSurfaceHost());
             return deferredReviewSurfaceApi;
         })
         .catch((error) => {
-            console.error('Failed to load deferred review surface', error);
+            console.error('Review load failed', error);
             _noteDeferredReviewSurfaceLoadFailure();
             deferredReviewSurfaceApi = null;
             return null;
@@ -6705,14 +6644,14 @@ async function loadDeferredSurface(name, hostFactory) {
         .then((module) => {
             const factory = module?.[descriptor.factoryName];
             if (typeof factory !== 'function') {
-                throw new Error(`Deferred surface "${name}" missing factory ${descriptor.factoryName}`);
+                throw new Error(`Missing ${name}: ${descriptor.factoryName}`);
             }
             entry.lastFailureAt = 0;
             entry.api = factory(typeof hostFactory === 'function' ? hostFactory() : {});
             return entry.api;
         })
         .catch((error) => {
-            console.error(`Failed to load deferred surface "${name}"`, error);
+            console.error(`Surface ${name} failed`, error);
             const now = Date.now();
             entry.lastFailureAt = now;
             if ((now - entry.lastToastAt) >= DEFERRED_SURFACE_RETRY_WINDOW_MS) {
@@ -6728,9 +6667,108 @@ async function loadDeferredSurface(name, hostFactory) {
     return entry.loadPromise;
 }
 
+// Only opaque receipt references enter tab storage. Draft payloads stay page-local.
+function _validRecoveryContext(value) {
+    return value?.schema === 'tp.portal.recovery_context.v1'
+        && typeof value.ownerId === 'string' && /^[a-f0-9]{64}$/.test(value.ownerId)
+        && typeof value.tenantId === 'string' && value.tenantId.length > 0 && value.tenantId.length <= 256 && !/[\x00-\x1f\x7f]/.test(value.tenantId);
+}
+
+function _clientRecoveryContext() {
+    const supplied = state.auth?.recoveryContext;
+    const valid = _validRecoveryContext(supplied);
+    if (valid) state.portalUi.recoveryOwner = supplied;
+    const established = state.portalUi.recoveryOwner;
+    const ready = _portalPrivilegesReady() && !state.auth?.logoutPending
+        && (!(established || state.portalUi.recoveryContextRequired) || valid);
+    return {
+        ready,
+        scope: established?.ownerId || JSON.stringify([state.auth?.mode, state.auth?.actor?.accessEmail, state.auth?.actor?.username]),
+        intent: JSON.stringify(generatePayload()),
+        draftGeneration: configImportGeneration,
+        features: state.auth?.features || {}
+    };
+}
+
+function _clientRecoveryOperationStamp(payload) {
+    const current = _clientRecoveryContext();
+    return current.ready && (!payload || current.intent === JSON.stringify(payload))
+        ? JSON.stringify([current.scope, configImportGeneration, current.intent]) : '';
+}
+
+function _acceptRecoveredJob(data, options = {}) {
+    if (!_clientRecoveryContext().ready || (options.automatic && state.currentView !== 'build')) return false;
+    if (deferredReviewSurfaceApi?.hasUnsavedChanges?.()) {
+        createToast('Save or discard Review edits before opening this run.', 'info');
+        return false;
+    }
+    let job = _findJobById(data.id);
+    if (!job) {
+        job = hydrateJobFromServer(data);
+        state.jobs.push(job);
+    }
+    state.selectedJobId = job.id;
+    state.portalUi.lastSelectedJobId = job.id;
+    state.portalUi.dispatchHandoffJobId = job.id;
+    if (els.logPane) els.logPane.textContent = job.logs.join('\n');
+    if (els.runJobBtn) {
+        els.runJobBtn.dataset.action = 'open-live-job';
+        els.runJobBtn.dataset.jobId = job.id;
+        els.runJobBtn.textContent = 'Open Live Job';
+    }
+    scheduleRenderJobQueue();
+    const message = `Run accepted: ${job.id}. Open Live Job.`;
+    createToast(message, 'success');
+    _announcePortalStatus('dispatch', message, { force: true });
+    void emitPortalEvent('job_submitted', { surface: 'dispatch', metadata: { job_id: job.id, pipeline: job.pipeline } });
+    if (_isJobStreamRecoverable(job) && !_jobHasActiveStream(job)) startJobEventStream(job, data.events_url);
+    void refreshJobStatus(job);
+    return true;
+}
+
+function _loadClientRecoverySurface() {
+    return loadDeferredSurface('recovery', () => ({
+        context: _clientRecoveryContext,
+        canRequest: (type) => !_isProtectedFamilySuppressed(type === 'upload' ? 'uploads_staging' : 'jobs_list'),
+        retryDelay: (response, now) => portalInternals.parseRateLimitRetryHint(response, now)?.retryAfterMs || 0,
+        onProtectedFailure(type, envelope) {
+            const nonRetryableDetails = _nonRetryableProtectedDetails(envelope);
+            if (!nonRetryableDetails) return false;
+            _recordProtectedFamilySuppression(type === 'upload' ? 'uploads_staging' : 'jobs_list', nonRetryableDetails);
+            return true;
+        },
+        headers: (extra, method) => _buildAuthHeaders(extra, method),
+        apiBase: API_BASE, document,
+        panels: { job: els.submissionRecoveryPanel, upload: els.uploadRecoveryPanel },
+        acceptJob: _acceptRecoveredJob,
+        applyUpload: _applyStagedUploadResult,
+        uploadState: (patch) => { _setStagedUploadState(patch); _syncStagedUploadUi(); },
+        submitSeparateIntent: () => void submitJob({ separate: true }),
+        onAuthorizationFailure: () => void loadPortalBootstrap({ isRetryAttempt: true }),
+        onSubmissionMetric: (sample) => _queuePortalRumSample({
+            eventType: 'queue_request', metric: 'submit', value: sample.durationMs, unit: 'ms',
+            traceparent: _portalRumTraceparent(),
+            metadata: { outcome: sample.outcome, ...(sample.status ? { status: sample.status } : {}) }
+        }),
+        onState: (_attempts, needsContext = false, { outcome, jobBlocked, uploadBlocked, uploadPresent }) => {
+            state.portalUi.recoveryContextRequired = needsContext;
+            if (document.body) document.body.dataset.submissionOutcome = outcome;
+            if (state.portalUi.recoverySubmissionBlocked !== jobBlocked) {
+                state.portalUi.recoverySubmissionBlocked = jobBlocked;
+                _syncBootstrapGuardedControls();
+            }
+            state.portalUi.recoveryUploadBlocked = uploadBlocked;
+            state.portalUi.recoveryUploadPresent = uploadPresent;
+            _syncStagedUploadUi();
+        }
+    }));
+}
+
 function _createDeferredOperateSurfaceHost() {
     return {
         state,
+        copyToClipboard,
+        maxLogLines: MAX_JOB_LOG_LINES,
         els,
         portalRenderScheduler,
         EVENT_SOURCE_READY_STATE_CONNECTING,
@@ -6861,6 +6899,7 @@ function _deferredBuildSurfaceApi() {
 }
 
 function _loadDeferredBuildSurface() {
+    void _loadClientRecoverySurface();
     return loadDeferredSurface('build', _createDeferredBuildSurfaceHost);
 }
 
@@ -7003,8 +7042,7 @@ function selectJob(jobId, reviewConfirmed = false) {
         void refreshJobStatus(job);
     }
     if (job && els.logPane) {
-        els.logPane.textContent = job.logs.join('\n') + (job.logs.length ? '\n' : '');
-        els.logPane.scrollTop = els.logPane.scrollHeight;
+        _deferredOperateSurfaceApi()?.renderLogs?.();
     }
     renderReviewSurfaces();
     if (state.currentView === 'operate') {
@@ -7214,8 +7252,7 @@ async function _fetchJobStatus(job) {
         if (!_syncHydratedJob(job, hydrated, rawJob)) return;
         job.logsLoadStatus = 'ready';
         if (state.selectedJobId === job.id && els.logPane) {
-            els.logPane.textContent = job.logs.join('\n') + (job.logs.length ? '\n' : '');
-            els.logPane.scrollTop = els.logPane.scrollHeight;
+            _deferredOperateSurfaceApi()?.renderLogs?.();
             if (!_isJobStreamRecoverable(job) && els.logStatusIndicator) {
                 els.logStatusIndicator.classList.add('hidden');
             }
@@ -7247,7 +7284,7 @@ function scheduleSseReconnect(job) {
     job.sseRetry.attempt = attempt;
     _noteTransportWarning(job, 'reconnect_pending', `Event stream disconnected. Reconnecting in ${Math.ceil(delayMs / 1000)}s (attempt ${attempt}).`, 'warn');
     appendJobLog(job, `[WARN] Event stream disconnected. Reconnecting in ${Math.ceil(delayMs / 1000)}s (attempt ${attempt}).`);
-    logToPane(job.id, `[WARN] Event stream disconnected. Reconnecting in ${Math.ceil(delayMs / 1000)}s (attempt ${attempt}).`);
+    logToPane(job.id);
     scheduleRenderJobQueue();
 
     job.sseRetry.timer = setTimeout(() => {
@@ -8678,13 +8715,13 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
         });
         if (!res.ok) {
             await _maybeSuppressOnProtectedResponse('config_metadata', res);
-            throw new Error(`config metadata fetch failed (${res.status})`);
+            throw new Error(`HTTP ${res.status}`);
         }
         const payload = await res.json();
         const data = payload?.success === true && payload?.data && typeof payload.data === 'object'
             ? payload.data
             : null;
-        if (!data) throw new Error('invalid config metadata payload');
+        if (!data) throw new Error('Invalid response');
         if (state.pipeline !== pipelineName) return;
         state.metadata = {
             pipeline: String(data.pipeline || pipelineName),
@@ -8863,7 +8900,7 @@ async function _fetchConfigPreview(payload, request) {
         const data = response?.success === true && response?.data && typeof response.data === 'object'
             ? response.data
             : null;
-        if (!data) throw new Error('invalid config preview payload');
+        if (!data) throw new Error('Invalid response');
         if (!request.isCurrent() || _configPreviewRequestKey(generatePayload()) !== requestKey) {
             return;
         }
@@ -9738,7 +9775,7 @@ async function fetchPresetsForPipeline(pipelineName, silent = false) {
         const res = await fetch(`${API_BASE}/v1/presets?pipeline=${encodeURIComponent(pipelineName)}`, { headers });
         if (!res.ok) {
             await _maybeSuppressOnProtectedResponse('presets', res);
-            throw new Error(`preset fetch failed (${res.status})`);
+            throw new Error(`HTTP ${res.status}`);
         }
         const payload = await res.json();
         const presets = parsePresetsResponse(payload, pipelineName)
@@ -9777,10 +9814,10 @@ async function fetchReadiness(silent = false) {
         const res = await fetch(`${API_BASE}/v1/readiness`, { headers });
         if (!res.ok) {
             await _maybeSuppressOnProtectedResponse('readiness', res);
-            throw new Error(`readiness fetch failed (${res.status})`);
+            throw new Error(`HTTP ${res.status}`);
         }
         const payload = await res.json();
-        if (!payload || payload.success !== true || !payload.data) throw new Error('invalid readiness payload');
+        if (!payload || payload.success !== true || !payload.data) throw new Error('Invalid response');
         state.readiness = {
             server: payload.data.server || {},
             pipelines: payload.data.pipelines || {}
@@ -10451,6 +10488,7 @@ function renderPreRunDiagnostics(payload) {
 }
 
 function renderCLI() {
+    _deferredSurfaceState.get('recovery')?.api?.sync();
     if (!els.cliPreview) return;
     const payload = generatePayload();
     const preview = _currentPreviewForPayload(payload);
@@ -11007,13 +11045,8 @@ function handleArtifactRailKeydown(event) {
     if (nextButton) nextButton.focus();
 }
 
-function logToPane(jobId, line) {
-    if (state.selectedJobId === jobId || !state.selectedJobId) {
-        if (els.logPane) {
-            els.logPane.textContent += line + '\n';
-            els.logPane.scrollTop = els.logPane.scrollHeight;
-        }
-    }
+function logToPane(jobId) {
+    _deferredOperateSurfaceApi()?.appendLog?.(jobId);
 }
 
 // ============================================================================
@@ -11047,7 +11080,7 @@ async function checkBackend(force = false) {
             }
             _flushBootstrapOnlineFollowup(force);
         } else {
-            throw new Error('backend not ready');
+            throw new Error('offline');
         }
     } catch {
         state.backendOk = false;
@@ -11100,7 +11133,7 @@ function _applyJobStreamEvent(job, eventName, parsed) {
     if (eventName === 'log') {
         const line = String(parsed.line || '');
         appendJobLog(job, line);
-        logToPane(job.id, line);
+        logToPane(job.id);
         return;
     }
     if (eventName === 'progress') {
@@ -11169,7 +11202,7 @@ function _applyJobStreamEvent(job, eventName, parsed) {
             if (readable) {
                 const line = `[ERROR] ${readable}`;
                 appendJobLog(job, line);
-                logToPane(job.id, line);
+                logToPane(job.id);
             }
         }
         if (parsed.artifacts && parsed.artifacts.items) {
@@ -11182,7 +11215,7 @@ function _applyJobStreamEvent(job, eventName, parsed) {
         _reconcileJobTimeline(job);
         const endLine = `[SYSTEM] Stream closed. Exit code: ${parsed.exit_code}`;
         appendJobLog(job, endLine);
-        logToPane(job.id, endLine);
+        logToPane(job.id);
         stopJobActivity(job);
         if (state.selectedJobId === job.id) void refreshJobStatus(job);
         scheduleRenderJobQueue();
@@ -11245,7 +11278,7 @@ async function _startAuthorizedFetchSse(job, eventsUrl) {
                     ? `[ERROR] Event stream authorization failed (${status}). Restore the managed session to resume live job events.`
                     : `[ERROR] Event stream authorization failed (${status}). Update API key to resume live job events.`;
                 appendJobLog(job, line);
-                logToPane(job.id, line);
+                logToPane(job.id);
                 createToast(
                     _isManagedAuthMode()
                         ? 'Event stream authorization failed. Restore the managed session to resume live logs.'
@@ -11256,7 +11289,7 @@ async function _startAuthorizedFetchSse(job, eventsUrl) {
                 _noteTransportWarning(job, `stream_status_${status}`, `Event stream subscribe failed with status ${status}. ${parsedError.message}`, isRetryableStatus ? 'warn' : 'error');
                 const line = `[WARN] Event stream subscribe failed (${status}). ${parsedError.message}`;
                 appendJobLog(job, line);
-                logToPane(job.id, line);
+                logToPane(job.id);
             }
             scheduleRenderJobQueue();
             return;
@@ -11341,7 +11374,7 @@ async function _startAuthorizedFetchSse(job, eventsUrl) {
             _noteTransportWarning(job, 'stream_error', `Event stream error: ${err instanceof Error ? err.message : String(err)}`, 'warn');
             const line = `[WARN] Event stream error: ${err instanceof Error ? err.message : String(err)}`;
             appendJobLog(job, line);
-            logToPane(job.id, line);
+            logToPane(job.id);
             scheduleRenderJobQueue();
         }
     } finally {
@@ -11445,7 +11478,7 @@ function startJobEventStream(job, eventsUrl) {
             : '[WARN] Native SSE transport failed. Reconnecting...';
         _noteTransportWarning(job, warningCode, warningDetail, 'warn');
         appendJobLog(job, logLine);
-        logToPane(job.id, logLine);
+        logToPane(job.id);
         _teardownJobEventStream(job);
         scheduleRenderJobQueue();
         scheduleSseReconnect(job);
@@ -11586,7 +11619,7 @@ async function cancelJob(id) {
             job.finishedAt = job.finishedAt || Date.now();
             job.updatedAt = Date.now();
             appendJobLog(job, '[WARN] Canceled by user.');
-            logToPane(id, '[WARN] Canceled by user.');
+            logToPane(id);
             _reconcileJobTimeline(job);
             scheduleRenderJobQueue();
             if (state.selectedJobId === id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
@@ -11624,7 +11657,7 @@ async function cancelJob(id) {
             : rawMessage;
         job.cancelError = message || 'Cancellation failed.';
         appendJobLog(job, `[WARN] Cancellation was not confirmed: ${job.cancelError}`);
-        logToPane(id, `[WARN] Cancellation was not confirmed: ${job.cancelError}`);
+        logToPane(id);
         scheduleRenderJobQueue();
         _announceCancellationStatus(job, `Cancellation was not confirmed for job ${id}. The job remains active. Retry Cancel.`);
         await refreshJobStatus(job);
@@ -11677,7 +11710,8 @@ function handleJobListClick(event) {
     }
 }
 
-async function submitJob() {
+async function submitJob(options) {
+    const separate = options?.separate === true;
     if (state.portalUi.dispatchPending) return;
     if (_blockManagedUnavailableAction('dispatch jobs')) return;
     const invalidField = _firstInvalidBuildInput();
@@ -11764,6 +11798,11 @@ async function submitJob() {
         return;
     }
 
+    const operationStamp = _clientRecoveryOperationStamp(payload);
+    if (!operationStamp) {
+        createToast('Confirm the draft and access. No request was sent.', 'error');
+        return;
+    }
     if (els.runJobBtn) {
         els.runJobBtn.disabled = true;
         els.runJobBtn.textContent = "Dispatching...";
@@ -11772,119 +11811,13 @@ async function submitJob() {
     state.portalUi.dispatchPending = true;
     renderWorkspaceGuidance();
 
-    const randomId = window.crypto?.randomUUID ? window.crypto.randomUUID().replace(/-/g, '').slice(0, 8) : Math.random().toString(36).slice(2, 8);
-    const localId = `job_${randomId}`;
-
-    const job = {
-        id: localId,
-        pipeline: payload.pipeline,
-        state: 'queued',
-        progress: 0,
-        logs: [],
-        artifacts: [],
-        error: null,
-        eventSource: null,
-        fetchAbortController: null,
-        eventStreamUrl: null,
-        usesFetchSse: false,
-        sseRetry: { attempt: 0, timer: null },
-        reconnectBlocked: false,
-        lastEventAt: 0,
-        mockInterval: null,
-        startedAt: 0,
-        finishedAt: 0,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        timeline: [],
-        transportWarnings: [],
-        progressMilestones: []
-    };
-    _reconcileJobTimeline(job);
-    state.jobs.push(job);
-    state.selectedJobId = job.id;
-    if (els.logPane) els.logPane.textContent = '';
-    if (els.logStatusIndicator) els.logStatusIndicator.classList.remove('hidden');
-    scheduleRenderJobQueue();
-    const initLine = `[INFO] Initializing ${payload.pipeline}...`;
-    appendJobLog(job, initLine);
-    logToPane(job.id, initLine);
-
-    const requestTraceparent = portalInternals.createChildTraceparent(_portalRumTraceparent());
-    const requestStartedAt = _portalRumNow();
-    let queueRumRecorded = false;
     try {
-        const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST', {
-            traceparent: requestTraceparent
-        });
-        const res = await fetch(`${API_BASE}/v1/jobs`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(payload)
-        });
-        _queuePortalRumSample({
-            eventType: 'queue_request',
-            metric: 'submit',
-            value: _portalRumNow() - requestStartedAt,
-            unit: 'ms',
-            traceparent: requestTraceparent,
-            metadata: {
-                outcome: res.ok ? 'ok' : 'error',
-                status: res.status
-            }
-        });
-        queueRumRecorded = true;
-        if (!res.ok) {
-            const parsedError = await extractApiError(res);
-            if (parsedError.error) job.error = parsedError.error;
-            throw new Error(parsedError.message);
-        }
-        const data = await res.json();
-
-        job.id = data.data.id;
-        state.selectedJobId = job.id;
-        state.portalUi.lastSelectedJobId = String(job.id || '');
-        scheduleRenderJobQueue();
-        state.portalUi.dispatchHandoffJobId = String(job.id || '');
-        if (els.runJobBtn) {
-            els.runJobBtn.dataset.action = 'open-live-job';
-            els.runJobBtn.dataset.jobId = String(job.id || '');
-            els.runJobBtn.textContent = 'Open Live Job';
-        }
-        createToast(`Job dispatched: ${job.id}. Open the live job to monitor progress.`, 'success');
-        _announcePortalStatus('dispatch', `Job ${job.id} was dispatched. Open Live Job to monitor progress.`, { force: true });
-        void emitPortalEvent('job_submitted', {
-            surface: 'dispatch',
-            metadata: {
-                job_id: String(job.id || ''),
-                pipeline: String(job.pipeline || payload.pipeline || '')
-            }
-        });
-
-        startJobEventStream(job, data.data.events_url);
-    } catch (err) {
-        if (!queueRumRecorded) {
-            _queuePortalRumSample({
-                eventType: 'queue_request',
-                metric: 'submit',
-                value: _portalRumNow() - requestStartedAt,
-                unit: 'ms',
-                traceparent: requestTraceparent,
-                metadata: {
-                    outcome: 'error'
-                }
-            });
-        }
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        job.state = 'failed';
-        job.finishedAt = Date.now();
-        appendJobLog(job, `[ERROR] ${errorMessage}`);
-        _reconcileJobTimeline(job);
-        scheduleRenderJobQueue();
-        const toastMessage = errorMessage
-            ? `Backend submission failed: ${truncateMiddle(errorMessage, 180)}`
-            : 'Backend submission failed.';
-        createToast(toastMessage, "error");
-        if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
+        const api = await _loadClientRecoverySurface();
+        if (!api) throw new Error('Recovery controls unavailable. No request was sent.');
+        if (operationStamp !== _clientRecoveryOperationStamp(payload)) throw new Error('Workspace changed. Review the draft. No request was sent.');
+        await api.submit(payload, { separate });
+    } catch (error) {
+        createToast(error instanceof Error ? error.message : String(error), 'error');
     } finally {
         state.portalUi.dispatchPending = false;
         if (els.runJobBtn) {
@@ -11938,7 +11871,7 @@ function startSseWatchdog() {
                 : '[WARN] Native SSE stream stalled. Reconnecting...';
             _noteTransportWarning(job, 'stream_stalled', stalledDetail, 'warn');
             appendJobLog(job, stalledLine);
-            logToPane(job.id, stalledLine);
+            logToPane(job.id);
             _teardownJobEventStream(job);
             scheduleSseReconnect(job);
         });
@@ -12240,7 +12173,7 @@ if (els.copyRunCardFingerprintBtn) {
 }
 
 if (els.clearLogsBtn) els.clearLogsBtn.addEventListener('click', () => {
-    if (els.logPane) els.logPane.textContent = '';
+    _deferredOperateSurfaceApi()?.clearLogs?.();
 });
 if (els.runJobBtn) els.runJobBtn.addEventListener('click', _handleRunJobAction);
 if (els.refreshHealthBtn) {
@@ -12326,9 +12259,11 @@ function applyThemePreference(preference, options) {
     document.documentElement.classList.toggle('light', mode === 'light');
 
     if (persist) {
-        localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);
-        if (normalizedPreference === 'system') localStorage.removeItem(THEME_STORAGE_KEY);
-        else localStorage.setItem(THEME_STORAGE_KEY, normalizedPreference);
+        try {
+            localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);
+            if (normalizedPreference === 'system') localStorage.removeItem(THEME_STORAGE_KEY);
+            else localStorage.setItem(THEME_STORAGE_KEY, normalizedPreference);
+        } catch { /* The theme still applies for this page when storage is denied. */ }
     }
 
     _syncThemeButton();
@@ -12906,8 +12841,13 @@ window.addEventListener('popstate', portalHistoryNavigation.pop);
 
 async function init() {
     const themeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    _migrateThemePreferenceStorage();
-    const savedThemePreference = _normalizeThemePreference(localStorage.getItem(THEME_STORAGE_KEY)) || 'system';
+    // Denied or full site storage must not abort start-up (audit finding F-11): the theme then
+    // starts as 'system', which applyThemePreference derives from a missing saved value.
+    let savedThemePreference;
+    try {
+        _migrateThemePreferenceStorage();
+        savedThemePreference = localStorage.getItem(THEME_STORAGE_KEY);
+    } catch { /* storage unavailable */ }
     applyThemePreference(savedThemePreference, { persist: false, themeQuery });
     setupAmbientMotion();
     _startPortalRumObservers();

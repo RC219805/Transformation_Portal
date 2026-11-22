@@ -230,6 +230,10 @@ class ImageSaveStage(AsyncStage[ImageData, ImageData]):
         self._suffix = suffix
         self._worker_pool = worker_pool
         self._owns_pool = worker_pool is None
+        # Same-stem inputs (kitchen.png, kitchen.tif) would overwrite each other's output.
+        from transformation_portal.utils.image_utils import OutputStemAllocator
+
+        self._stem_allocator = OutputStemAllocator()
 
     async def startup(self) -> None:
         """Initialize resources."""
@@ -250,8 +254,10 @@ class ImageSaveStage(AsyncStage[ImageData, ImageData]):
         import numpy as np
         from PIL import Image
 
+        from transformation_portal.utils.image_utils import atomic_output_path
+
         # Determine output path
-        stem = image_data.path.stem + self._suffix
+        stem = self._stem_allocator.claim(image_data.path) + self._suffix
         ext_map = {
             "TIFF": ".tiff",
             "JPEG": ".jpg",
@@ -272,20 +278,21 @@ class ImageSaveStage(AsyncStage[ImageData, ImageData]):
                 # Save as 8-bit for other formats
                 array = (np.clip(array, 0, 1) * 255).astype(np.uint8)
 
-        if self._format == "TIFF":
-            try:
-                import tifffile
+        with atomic_output_path(output_path) as temp_path:
+            if self._format == "TIFF":
+                try:
+                    import tifffile
 
-                tifffile.imwrite(str(output_path), array, compression="lzw")
-            except ImportError:
-                img = Image.fromarray(array)
-                img.save(str(output_path), format="TIFF")
-        else:
-            img = Image.fromarray(array)
-            if self._format in ("JPEG", "WEBP"):
-                img.save(str(output_path), quality=self._quality)
+                    tifffile.imwrite(str(temp_path), array, compression="lzw")
+                except ImportError:
+                    img = Image.fromarray(array)
+                    img.save(str(temp_path), format="TIFF")
             else:
-                img.save(str(output_path))
+                img = Image.fromarray(array)
+                if self._format in ("JPEG", "WEBP"):
+                    img.save(str(temp_path), quality=self._quality)
+                else:
+                    img.save(str(temp_path))
 
         return output_path
 
@@ -590,6 +597,13 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
         if array.max() > 1.0:
             array = array / 255.0
 
+        # Greyscale (H, W) input: work on an (H, W, 1) view so the per-pixel masks,
+        # which are broadcast with ``[..., np.newaxis]``, line up with the image;
+        # the singleton channel axis is squeezed again on exit.
+        squeeze_channel = array.ndim == 2
+        if squeeze_channel:
+            array = array[..., np.newaxis]
+
         h, w = array.shape[:2]
         intensity = self._intensity
 
@@ -767,7 +781,8 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
 
         # 8. Transition blending (smooth material boundaries)
         # Apply final gaussian smoothing to mask edges
-        final_blend = gaussian_filter(enhanced, sigma=0.3)
+        # Spatial axes only: never blur across the colour-channel axis
+        final_blend = gaussian_filter(enhanced, sigma=(0.3, 0.3, 0) if enhanced.ndim == 3 else 0.3)
         blend_factor = 0.15  # Subtle blending
         enhanced = enhanced * (1 - blend_factor) + final_blend * blend_factor
 
@@ -780,7 +795,10 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
             depth_factor = np.clip(1.0 - depth * 0.3, 0.7, 1.0)
             enhanced = array + depth_factor[..., np.newaxis] * (enhanced - array)
 
-        image_data.array = np.clip(enhanced, 0.0, 1.0)
+        enhanced = np.clip(enhanced, 0.0, 1.0)
+        if squeeze_channel:
+            enhanced = enhanced[..., 0]
+        image_data.array = enhanced
         image_data.metadata["material_enhanced"] = True
         image_data.metadata["materials"] = self._materials
         image_data.metadata["material_response_version"] = "2.0"
@@ -850,33 +868,14 @@ class ColorGradingStage(AsyncStage[ImageData, ImageData]):
             self._load_lut()
 
     def _load_lut(self) -> None:
-        """Load LUT from .cube file."""
+        """Load LUT from .cube file (shared parser, table indexed ``lut[r, g, b]``)."""
         if self._lut_path is None or not self._lut_path.exists():
             return
 
         try:
-            import numpy as np
+            from transformation_portal.utils.image_utils import load_cube_lut
 
-            lut_size = 0
-            lut_data = []
-
-            with open(self._lut_path, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("LUT_3D_SIZE"):
-                        lut_size = int(line.split()[-1])
-                    elif line and not line.startswith("#") and not line.startswith("TITLE"):
-                        parts = line.split()
-                        if len(parts) == 3:
-                            try:
-                                r, g, b = map(float, parts)
-                                lut_data.append([r, g, b])
-                            except ValueError:
-                                continue
-
-            if lut_size > 0 and len(lut_data) == lut_size**3:
-                # pylint: disable=too-many-function-args  # numpy reshape accepts multiple positional args
-                self._lut_data = np.array(lut_data).reshape(lut_size, lut_size, lut_size, 3)
+            self._lut_data = load_cube_lut(self._lut_path)
         except (OSError, ValueError, IndexError):
             # LUT file unreadable or malformed - disable LUT processing
             self._lut_data = None
@@ -890,21 +889,10 @@ class ColorGradingStage(AsyncStage[ImageData, ImageData]):
             array = array / 255.0
 
         if self._lut_data is not None:
-            # Trilinear interpolation for LUT application
-            lut_size = self._lut_data.shape[0]
-            indices = array * (lut_size - 1)
-            indices = np.clip(indices, 0, lut_size - 1.001)
+            from transformation_portal.utils.image_utils import apply_cube_lut
 
-            # Floor indices for nearest-neighbor lookup
-            # (trilinear interpolation would use idx1 and frac)
-            idx0 = np.floor(indices).astype(np.int32)
-
-            # Simple nearest-neighbor for now (full trilinear is more complex)
-            r, g, b = idx0[..., 0], idx0[..., 1], idx0[..., 2]
-            graded = self._lut_data[r, g, b]
-
-            # Blend with original based on intensity
-            array = array * (1 - self._intensity) + graded * self._intensity
+            # Shared trilinear lookup (same as the 4K pipeline), blended by intensity.
+            array = apply_cube_lut(array, self._lut_data, strength=self._intensity)
         else:
             # Fallback: simple contrast/saturation adjustment
             # Increase saturation slightly
@@ -979,37 +967,52 @@ class ResizeStage(AsyncStage[ImageData, ImageData]):
         self._maintain_aspect = maintain_aspect
         self._worker_pool = worker_pool
 
+    @staticmethod
+    def _resize_float_planes(array: Any, size: Tuple[int, int], resample: Any) -> Any:
+        """Resize an (H, W) or (H, W, C) array plane by plane in float32 (PIL mode "F")."""
+        import numpy as np
+        from PIL import Image
+
+        planes = array[..., np.newaxis] if array.ndim == 2 else array
+        resized = [
+            np.asarray(Image.fromarray(np.ascontiguousarray(planes[..., c], dtype=np.float32)).resize(size, resample))
+            for c in range(planes.shape[2])
+        ]
+        stacked = np.stack(resized, axis=-1)
+        return stacked[..., 0] if array.ndim == 2 else stacked
+
     def _resize_sync(self, image_data: ImageData) -> ImageData:
-        """Synchronous image resizing."""
+        """Synchronous image resizing.
+
+        uint8 images are resized by PIL directly. Float and other integer images
+        (for example the float32 produced by ``ImageLoadStage`` from 16-bit
+        sources) are resized per channel in float32 so their precision is not
+        quantised to 8 bits; integer results are rounded and clipped back to
+        their dtype, float results are clipped to the pipeline's [0, 1] range.
+        A depth map of the same size as the image is resized alongside it.
+        """
         import numpy as np
         from PIL import Image
 
         array = image_data.array
         original_dtype = array.dtype
         original_shape = array.shape
-
-        # Convert to PIL Image
-        if array.dtype in (np.float32, np.float64):
-            pil_array = (np.clip(array, 0, 1) * 255).astype(np.uint8)
-        else:
-            pil_array = array
-
-        img = Image.fromarray(pil_array)
+        src_h, src_w = original_shape[:2]
 
         # Determine target size
         if self._target_size:
             target_w, target_h = self._target_size
         elif self._scale_factor:
-            target_w = int(img.width * self._scale_factor)
-            target_h = int(img.height * self._scale_factor)
+            target_w = int(src_w * self._scale_factor)
+            target_h = int(src_h * self._scale_factor)
         else:
             return image_data  # No resize needed
 
         # Maintain aspect ratio if requested
         if self._maintain_aspect:
-            ratio = min(target_w / img.width, target_h / img.height)
-            target_w = int(img.width * ratio)
-            target_h = int(img.height * ratio)
+            ratio = min(target_w / src_w, target_h / src_h)
+            target_w = int(src_w * ratio)
+            target_h = int(src_h * ratio)
 
         # Select resampling method
         method_map = {
@@ -1021,12 +1024,28 @@ class ResizeStage(AsyncStage[ImageData, ImageData]):
         resample = method_map.get(self._method, Image.Resampling.LANCZOS)
 
         # Resize
-        resized = img.resize((target_w, target_h), resample=resample)
-        result_array = np.array(resized)
+        if original_dtype == np.uint8:
+            result_array = np.array(Image.fromarray(array).resize((target_w, target_h), resample=resample))
+        else:
+            result_array = self._resize_float_planes(array, (target_w, target_h), resample)
+            if np.issubdtype(original_dtype, np.floating):
+                result_array = np.clip(result_array, 0.0, 1.0).astype(original_dtype)
+            elif np.issubdtype(original_dtype, np.integer):
+                info = np.iinfo(original_dtype)
+                result_array = np.clip(np.rint(result_array), info.min, info.max).astype(original_dtype)
 
-        # Convert back to original dtype
-        if original_dtype in (np.float32, np.float64):
-            result_array = result_array.astype(np.float32) / 255.0
+        # Keep a per-pixel depth map aligned with the resized image (downstream
+        # stages combine them element-wise). Bilinear (nearest when requested)
+        # avoids ringing beyond the original depth range at depth edges.
+        depth = image_data.depth_map
+        if depth is not None and getattr(depth, "shape", ())[:2] == (src_h, src_w):
+            depth_resample = Image.Resampling.NEAREST if self._method == "nearest" else Image.Resampling.BILINEAR
+            depth_dtype = np.asarray(depth).dtype
+            resized_depth = self._resize_float_planes(np.asarray(depth), (target_w, target_h), depth_resample)
+            if np.issubdtype(depth_dtype, np.integer):
+                info = np.iinfo(depth_dtype)
+                resized_depth = np.clip(np.rint(resized_depth), info.min, info.max)
+            image_data.depth_map = resized_depth.astype(depth_dtype)
 
         image_data.array = result_array
         image_data.metadata["resized"] = True
@@ -1122,17 +1141,28 @@ class DenoiseStage(AsyncStage[ImageData, ImageData]):
         # Create per-pixel sigma map (more blur for distant pixels)
         sigma_map = base_sigma * (1 + depth * 2)
 
-        # Apply spatially varying blur (simplified - use uniform regions)
+        # Apply spatially varying blur (simplified - use uniform regions).
+        # Bands are 0.5 wide and centred on multiples of 0.5 (the historical
+        # [0.5, 1.0, 1.5, 2.0] grid), extended to cover the whole sigma_map
+        # range so the far field is never left un-denoised.
         denoised = np.zeros_like(array)
-        for sigma_level in [0.5, 1.0, 1.5, 2.0]:
-            mask = (sigma_map >= sigma_level - 0.25) & (sigma_map < sigma_level + 0.25)
-            if not mask.any():
+        covered = np.zeros(sigma_map.shape, dtype=bool)
+        finite = np.isfinite(sigma_map)
+        level_index = np.zeros(sigma_map.shape, dtype=np.int64)
+        level_index[finite] = np.floor((sigma_map[finite] + 0.25) / 0.5).astype(np.int64)
+        for index in np.unique(level_index[finite]):
+            if index <= 0:
                 continue
+            sigma_level = 0.5 * float(index)
+            mask = finite & (level_index == index)
             sigma = base_sigma * sigma_level
             self._apply_blur_to_masked_region(array, denoised, mask, sigma)
+            covered |= mask
 
-        # Fill any remaining pixels
-        remaining = denoised.sum(axis=-1 if len(denoised.shape) == 3 else None) == 0
+        # Fill any remaining pixels (sigma below the first band or non-finite depth)
+        remaining = ~covered
+        if remaining.ndim == 3:
+            remaining = remaining[..., 0]
         if remaining.any():
             self._fill_remaining_pixels(array, denoised, remaining)
 

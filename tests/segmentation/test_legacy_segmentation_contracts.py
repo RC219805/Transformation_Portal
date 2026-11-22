@@ -521,3 +521,58 @@ def test_material_segmenter_visualizations_are_shape_stable() -> None:
     assert labels.shape == image.shape
     assert labels.dtype == np.uint8
     assert not np.shares_memory(labels, image)
+
+
+def _recording_component(real_cls: type, calls: list) -> type:
+    """A stand-in that records its constructor kwargs and exposes ``real_cls``'s signature."""
+    import inspect
+
+    class _Recorder:
+        __signature__ = inspect.signature(real_cls)
+
+        def __init__(self, **kwargs) -> None:
+            inspect.signature(real_cls).bind_partial(**kwargs)
+            calls.append(kwargs)
+
+    return _Recorder
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected_sam", "expected_clip"),
+    [
+        ({"device": "cpu"}, {"device": "cpu"}, {"device": "cpu"}),
+        ({"model_type": "vit_b", "device": "cpu"}, {"model_type": "vit_b", "device": "cpu"}, {"device": "cpu"}),
+        ({"model_revision": "a" * 40}, {}, {"model_revision": "a" * 40}),
+        ({"points_per_side": 16, "cache_dir": Path("hf")}, {"points_per_side": 16}, {"cache_dir": Path("hf")}),
+    ],
+)
+def test_material_segmenter_routes_kwargs_to_the_components_that_accept_them(
+    monkeypatch: pytest.MonkeyPatch, kwargs: dict, expected_sam: dict, expected_clip: dict
+) -> None:
+    import transformation_portal.segmentation.material_segmenter as material_module
+
+    sam_calls: list = []
+    clip_calls: list = []
+    monkeypatch.setattr(material_module, "SAMSegmenter", _recording_component(SAMSegmenter, sam_calls))
+    monkeypatch.setattr(material_module, "CLIPClassifier", _recording_component(CLIPClassifier, clip_calls))
+
+    MaterialSegmenter(**kwargs)
+
+    assert sam_calls == [expected_sam]
+    assert clip_calls == [expected_clip]
+
+
+def test_material_segmenter_rejects_kwargs_no_created_component_accepts(monkeypatch: pytest.MonkeyPatch) -> None:
+    import transformation_portal.segmentation.material_segmenter as material_module
+
+    sam_calls: list = []
+    clip_calls: list = []
+    monkeypatch.setattr(material_module, "SAMSegmenter", _recording_component(SAMSegmenter, sam_calls))
+    monkeypatch.setattr(material_module, "CLIPClassifier", _recording_component(CLIPClassifier, clip_calls))
+
+    with pytest.raises(TypeError, match="model_type"):
+        MaterialSegmenter(sam_segmenter=_FakeSAMForMaterials(), model_type="vit_b")
+    with pytest.raises(TypeError, match="not_a_parameter"):
+        MaterialSegmenter(not_a_parameter=1)
+    assert sam_calls == []
+    assert clip_calls == []

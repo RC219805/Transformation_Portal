@@ -138,7 +138,7 @@ class WorkflowExecutor:
 
         if handler is None:
             raise NotImplementedError(
-                f"No executor implementation for node type {node.node_type.name} " f"({node.node_type.value})"
+                f"No executor implementation for node type {node.node_type.name} ({node.node_type.value}) (@specialist)"
             )
 
         outputs = handler(node, inputs)

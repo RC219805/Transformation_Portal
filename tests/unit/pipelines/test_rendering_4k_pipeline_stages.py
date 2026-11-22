@@ -245,6 +245,91 @@ class TestApplyColorGrading:
 
 
 # ---------------------------------------------------------------------------
+# .cube LUT application (H-02: red/blue axis order)
+# ---------------------------------------------------------------------------
+
+
+def _write_cube(path, size, transfer) -> None:
+    """Write a spec-conformant .cube file: red index fastest, then green, then blue."""
+    lines = ['TITLE "test"', f"LUT_3D_SIZE {size}", "DOMAIN_MIN 0.0 0.0 0.0", "DOMAIN_MAX 1.0 1.0 1.0"]
+    for b in range(size):
+        for g in range(size):
+            for r in range(size):
+                out = transfer(r / (size - 1), g / (size - 1), b / (size - 1))
+                lines.append(" ".join(f"{v:.6f}" for v in out))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+_LUT_PIXELS = np.array([[[1.0, 0.25, 0.0], [0.0, 0.5, 1.0], [0.2, 0.4, 0.6]]], dtype=np.float32)
+
+
+class TestCubeLutApplication:
+    def test_identity_lut_returns_input(self, tmp_path):
+        from transformation_portal.pipelines.rendering_4k import stages
+
+        cube = tmp_path / "identity.cube"
+        _write_cube(cube, 5, lambda r, g, b: (r, g, b))
+
+        np.testing.assert_allclose(stages._apply_lut(_LUT_PIXELS, cube, strength=1.0), _LUT_PIXELS, atol=1e-5)
+        image = _float32_image(16, 16)
+        np.testing.assert_allclose(stages._apply_lut(image, cube, strength=1.0), image, atol=1e-5)
+
+    def test_red_blue_swap_lut_swaps_red_and_blue(self, tmp_path):
+        from transformation_portal.pipelines.rendering_4k import stages
+
+        cube = tmp_path / "swap_rb.cube"
+        _write_cube(cube, 5, lambda r, g, b: (b, g, r))
+
+        image = _float32_image(16, 16)
+        result = stages._apply_lut(image, cube, strength=1.0)
+        np.testing.assert_allclose(result, image[..., ::-1], atol=1e-5)
+
+    def test_trilinear_interpolation_matches_multilinear_transfer(self, tmp_path):
+        """A transfer that is linear in each input axis is reproduced exactly between grid nodes."""
+        from transformation_portal.pipelines.rendering_4k import stages
+
+        def transfer(r, g, b):
+            return (r * g, g * (1.0 - b), 0.25 + 0.5 * b * r)
+
+        cube = tmp_path / "multilinear.cube"
+        _write_cube(cube, 3, transfer)
+
+        image = _float32_image(16, 16)
+        r, g, b = image[..., 0], image[..., 1], image[..., 2]
+        expected = np.stack(transfer(r, g, b), axis=-1)
+        np.testing.assert_allclose(stages._apply_lut(image, cube, strength=1.0), expected, atol=1e-5)
+
+    def test_partial_strength_blends_lut_output_with_input(self, tmp_path):
+        from transformation_portal.pipelines.rendering_4k import stages
+
+        cube = tmp_path / "swap_rb.cube"
+        _write_cube(cube, 5, lambda r, g, b: (b, g, r))
+
+        result = stages._apply_lut(_LUT_PIXELS, cube, strength=0.25)
+        np.testing.assert_allclose(result, 0.75 * _LUT_PIXELS + 0.25 * _LUT_PIXELS[..., ::-1], atol=1e-5)
+
+    def test_color_grading_applies_lut_in_channel_order(self, tmp_path):
+        from transformation_portal.pipelines.rendering_4k.stages import apply_color_grading
+        from transformation_portal.pipelines.rendering_4k.types import ColorGradingConfig
+
+        cube = tmp_path / "swap_rb.cube"
+        _write_cube(cube, 5, lambda r, g, b: (b, g, r))
+
+        config = ColorGradingConfig(lut_paths=[str(cube)], lut_strengths=[1.0], saturation=1.0, vibrance=1.0)
+        result = apply_color_grading(_LUT_PIXELS, config)
+        np.testing.assert_allclose(result, _LUT_PIXELS[..., ::-1], atol=1e-5)
+
+    def test_invalid_lut_is_skipped_with_none(self, tmp_path):
+        from transformation_portal.pipelines.rendering_4k import stages
+
+        cube = tmp_path / "truncated.cube"
+        cube.write_text("LUT_3D_SIZE 4\n0 0 0\n1 1 1\n", encoding="utf-8")
+
+        assert stages._load_cube_lut(cube) is None
+        assert stages._apply_lut(_LUT_PIXELS, cube, strength=1.0) is None
+
+
+# ---------------------------------------------------------------------------
 # apply_upscaling()
 # ---------------------------------------------------------------------------
 
@@ -294,3 +379,12 @@ class TestApplyUpscaling:
 
         assert result is wide
         assert result.size == wide.size
+
+    def test_binding_edge_lands_exactly_on_target(self):
+        """int() truncation turned 104x52 -> 3840x2160 into 3839x1919 (finding L-06)."""
+        from transformation_portal.pipelines.rendering_4k_pipeline import UpscalingConfig, apply_upscaling
+
+        config = UpscalingConfig(enabled=True, target_resolution=(3840, 2160), preserve_sharpness=False)
+        result = apply_upscaling(_pil_image(104, 52), config)
+
+        assert result.size == (3840, 1920)

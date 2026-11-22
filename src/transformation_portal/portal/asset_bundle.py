@@ -128,12 +128,17 @@ PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES = (
     "portal-photographic-drafts.js",
     "portal-photographic-loader.js",
     "portal-photographic.css",
+    "portal-photographic-workspace.js",
+    "portal-photographic-thumbnails.js",
+    "portal-photographic-workspace.css",
     "portal-review.css",
     "portal-operate.js",
+    "portal-operate-tools.js",
     "portal-build.js",
     "portal-profile.js",
     "portal-overview.js",
     "portal-config-transfer.js",
+    "portal-client-recovery.js",
     "shared-ui-tokens.css",
     "fonts/portal-sans.woff2",
     "fonts/portal-mono.woff2",
@@ -150,9 +155,11 @@ PORTAL_HTML_TEMPLATE_TOKENS = {
     "__PORTAL_REVIEW_JS_URL__": "portal-review.js",
     "__PORTAL_PHOTOGRAPHIC_JS_URL__": "portal-photographic.js",
     "__PORTAL_PHOTOGRAPHIC_CSS_URL__": "portal-photographic.css",
+    "__PORTAL_PHOTOGRAPHIC_WORKSPACE_CSS_URL__": "portal-photographic-workspace.css",
     "__PORTAL_REVIEW_CSS_URL__": "portal-review.css",
     "__PORTAL_OPERATE_JS_URL__": "portal-operate.js",
     "__PORTAL_BUILD_JS_URL__": "portal-build.js",
+    "__PORTAL_CLIENT_RECOVERY_JS_URL__": "portal-client-recovery.js",
     "__PORTAL_CONFIG_TRANSFER_JS_URL__": "portal-config-transfer.js",
     "__PORTAL_PROFILE_JS_URL__": "portal-profile.js",
     "__PORTAL_OVERVIEW_JS_URL__": "portal-overview.js",
@@ -282,7 +289,10 @@ def _portal_direct_asset_signature(asset_name: str) -> Tuple[str, int, int]:
     return _portal_asset_signature(PORTAL_ASSET_PATHS[asset_name])
 
 
-@lru_cache(maxsize=16)
+# Keyed by (asset name, file signature): the bound must comfortably exceed the
+# number of manifest assets, otherwise one page load cycles through more names
+# than the cache holds and every lookup re-reads and re-hashes its file.
+@lru_cache(maxsize=256)
 def _build_portal_direct_asset_fingerprint(asset_name: str, _: Tuple[str, int, int]) -> str:
     return _fingerprint_bytes(PORTAL_ASSET_PATHS[asset_name].read_bytes())
 
@@ -350,6 +360,7 @@ def _portal_html_signature() -> Tuple[object, ...]:
                 "portal-profile.js",
                 "portal-overview.js",
                 "portal-config-transfer.js",
+                "portal-client-recovery.js",
                 "brand/dna-symbol-dark.svg",
                 "brand/dna-symbol-light.svg",
                 "fonts/portal-sans.woff2",
@@ -393,8 +404,18 @@ def _requested_portal_asset_fingerprint(request: Request) -> str:
     return str(request.query_params.get(PORTAL_ASSET_FINGERPRINT_PARAM, "")).strip()
 
 
+def _constant_time_text_equal(left: str, right: str) -> bool:
+    """Compare client-supplied text in constant time without raising.
+
+    ``hmac.compare_digest`` raises ``TypeError`` for ``str`` operands holding
+    non-ASCII characters, which a percent-decoded query value or a latin-1
+    decoded header can carry; compare the UTF-8 bytes instead.
+    """
+    return hmac.compare_digest(left.encode("utf-8", "surrogatepass"), right.encode("utf-8", "surrogatepass"))
+
+
 def _portal_asset_cache_control(current_fingerprint: str, requested_fingerprint: str) -> str:
-    if requested_fingerprint and hmac.compare_digest(requested_fingerprint, current_fingerprint):
+    if requested_fingerprint and _constant_time_text_equal(requested_fingerprint, current_fingerprint):
         return PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
     return PORTAL_ASSET_CACHE_CONTROL
 
@@ -411,7 +432,7 @@ def _portal_asset_request_etag_matches(request: Request, current_etag: str) -> b
         normalized = candidate.strip()
         if normalized == "*":
             return True
-        if normalized and hmac.compare_digest(normalized, current_etag):
+        if normalized and _constant_time_text_equal(normalized, current_etag):
             return True
     return False
 

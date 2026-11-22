@@ -31,7 +31,14 @@ import numpy as np
 from PIL import Image
 
 from .adjustments import AdjustmentSettings, apply_adjustments
-from .io_utils import ProcessingContext, float_to_dtype_array, image_to_float, save_image
+from .io_utils import (
+    ProcessingContext,
+    float_to_dtype_array,
+    image_to_float,
+    pixels_to_float,
+    read_full_precision_pixels,
+    save_image,
+)
 from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES, ProcessingProfile
 
 
@@ -292,7 +299,12 @@ def _process_image_worker(
         icc_profile = None
         if isinstance(image.info, dict):
             icc_profile = image.info.get("icc_profile")
-        float_result = image_to_float(image, return_format="object")
+        # Pillow decodes 16-bit RGB(A) TIFFs at 8 bits; take those samples from tifffile.
+        full_precision = read_full_precision_pixels(source, image)
+        if full_precision is None:
+            float_result = image_to_float(image, return_format="object")
+        else:
+            float_result = pixels_to_float(full_precision, return_format="object")
         arr = float_result.array
         dtype = float_result.dtype
         alpha = float_result.alpha

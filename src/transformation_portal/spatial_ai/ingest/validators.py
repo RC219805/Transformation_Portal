@@ -116,7 +116,7 @@ def validate_gamma(
         >>> validate_gamma(2.2)
         LinearityViolationError: gamma must be 1.0, got 2.2
     """
-    if abs(gamma - expected) > tolerance:
+    if not abs(gamma - expected) <= tolerance:  # NaN-safe: NaN fails the comparison
         raise LinearityViolationError(
             field="gamma",
             expected=expected,

@@ -129,15 +129,20 @@ class TestRecipeValidatorInit:
 
         assert "custom_field" in validator.schema["required"]
 
-    def test_nonexistent_schema_path_uses_default(self, temp_workspace):
-        """Test that nonexistent schema path falls back to default."""
+    @pytest.mark.regression
+    def test_nonexistent_schema_path_raises(self, temp_workspace):
+        """L-12: a missing custom schema must not silently fall back to the built-in one."""
         from transformation_portal.utils.recipe_validator import RecipeValidator
 
         nonexistent = temp_workspace["root"] / "nonexistent.json"
-        validator = RecipeValidator(schema_path=nonexistent)
+        with pytest.raises(FileNotFoundError, match="nonexistent.json"):
+            RecipeValidator(schema_path=nonexistent)
 
-        # Should fall back to embedded schema
-        assert "name" in validator.schema["required"]
+    def test_no_schema_path_uses_default(self):
+        """Without schema_path the embedded schema is used."""
+        from transformation_portal.utils.recipe_validator import RecipeValidator
+
+        assert "name" in RecipeValidator().schema["required"]
 
 
 class TestRecipeValidatorValidate:
@@ -318,6 +323,21 @@ class TestRecipeValidatorFallback:
 
         assert is_valid is True
         assert errors == []
+
+    @pytest.mark.regression
+    @pytest.mark.parametrize("stage", ["upscaling_4k", "quality_assessment", "output"])
+    def test_fallback_stage_list_matches_schema(self, stage):
+        """L-12: the no-jsonschema fallback accepts exactly the schema's stage enum."""
+        from transformation_portal.utils.recipe_validator import RecipeValidator, get_recipe_schema
+
+        recipe = {"name": "Test", "stages": [stage]}
+        expected = stage in get_recipe_schema()["properties"]["stages"]["items"]["enum"]
+
+        fallback = RecipeValidator()
+        fallback._validator = None
+
+        assert fallback.validate(recipe)[0] is expected
+        assert RecipeValidator().validate(recipe)[0] is expected
 
 
 class TestRecipeValidatorValidateFile:

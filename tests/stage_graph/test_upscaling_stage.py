@@ -1,5 +1,6 @@
 """Unit tests for UpscalingStage (StageGraph integration with Phase 4 backend)."""
 
+import hashlib
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -7,7 +8,8 @@ import pytest
 
 pytestmark = pytest.mark.unit
 
-from transformation_portal.stage_graph.stage import StageContext, StageStatus
+from transformation_portal.stage_graph.graph import StageGraph
+from transformation_portal.stage_graph.stage import Stage, StageContext, StageResult, StageStatus
 from transformation_portal.stage_graph.stages.upscaling import UpscalingStage
 
 
@@ -103,6 +105,44 @@ class TestUpscalingStageUnit:
         assert "bicubic" in key1
         assert "realesrgan" in key2
 
+    def test_cache_key_distinguishes_scale_factors_that_round_to_the_same_decimal(self):
+        """1.25 and 1.2 produce different outputs, so they need different cache keys."""
+        img = np.random.randint(0, 255, (40, 40, 3), dtype=np.uint8)
+        context = StageContext(artifacts={"image": img})
+
+        key_125 = UpscalingStage(scale_factor=1.25).get_cache_key(context)
+        key_120 = UpscalingStage(scale_factor=1.2).get_cache_key(context)
+
+        assert key_125 != key_120
+        assert "bicubic_1.25_" in key_125 and "bicubic_1.2_" in key_120
+        # Equal factors still share one key, however they were spelled.
+        assert UpscalingStage(scale_factor=2).get_cache_key(context) == UpscalingStage(scale_factor=2.0).get_cache_key(context)
+
+    def test_cached_result_is_not_reused_for_a_nearby_scale_factor(self, tmp_path):
+        img = np.random.randint(0, 255, (40, 40, 3), dtype=np.uint8)
+
+        def run(scale_factor):
+            context = StageContext(artifacts={"image": img}, device="cpu", cache_enabled=True, cache_dir=tmp_path)
+            return UpscalingStage(scale_factor=scale_factor).execute(context)
+
+        image_hash = hashlib.sha256(img.tobytes()).hexdigest()[:16]
+        legacy_key = f"upscale_bicubic_1.2_1.0.0_{image_hash}"
+        with patch.object(UpscalingStage, "get_cache_key", return_value=legacy_key):
+            legacy = run(1.25)
+        assert legacy.artifacts["upscaled_image"].shape == (50, 50, 3)
+        assert (tmp_path / f"{legacy_key}.json").is_file()
+
+        first = run(1.25)
+        second = run(1.2)
+        repeat = run(1.2)
+
+        assert first.artifacts["upscaled_image"].shape == (50, 50, 3)
+        assert second.cache_hit is False
+        assert second.artifacts["upscaled_image"].shape == (48, 48, 3)
+        assert second.artifacts["upscale_metadata"]["scale_factor"] == 1.2
+        assert repeat.cache_hit is True
+        assert repeat.artifacts["upscaled_image"].shape == (48, 48, 3)
+
     def test_cache_key_no_image(self):
         """Cache key without image should return 'no_image'."""
         stage = UpscalingStage()
@@ -170,6 +210,48 @@ class TestUpscalingStageUnit:
         assert np.array_equal(result.artifacts["upscaled_image"], img)
         assert result.artifacts["upscale_metadata"]["skipped"] is True
         assert result.artifacts["upscale_metadata"]["scale_factor"] == 1.0
+
+    @pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
+    def test_pipeline_continues_past_disabled_upscaling(self, parallel):
+        """scale_factor=1.0 disables upscaling; the stages after it must still run."""
+
+        class _Enhancement(Stage):
+            def __init__(self):
+                super().__init__("enhancement")
+
+            def get_cache_key(self, context):
+                return "enhancement"
+
+            def compute(self, context):
+                return StageResult(
+                    self.name, self.version, StageStatus.COMPLETED, artifacts={"enhanced_image": context.artifacts["image"]}
+                )
+
+        class _Export(Stage):
+            def __init__(self):
+                super().__init__("export")
+
+            def get_dependencies(self):
+                return ["upscaling"]
+
+            def get_cache_key(self, context):
+                return "export"
+
+            def compute(self, context):
+                shape = context.artifacts["upscaled_image"].shape
+                return StageResult(self.name, self.version, StageStatus.COMPLETED, artifacts={"exported_shape": shape})
+
+        graph = StageGraph("no-upscale")
+        graph.add_stage(_Enhancement())
+        graph.add_stage(UpscalingStage(scale_factor=1.0))
+        graph.add_stage(_Export())
+        img = np.random.randint(0, 255, (12, 16, 3), dtype=np.uint8)
+
+        execution = graph.execute(StageContext(artifacts={"image": img}, cache_enabled=False), parallel=parallel)
+
+        assert execution.success is True and execution.error is None
+        assert execution.stage_results["upscaling"].status == StageStatus.SKIPPED
+        assert execution.stage_results["export"].artifacts["exported_shape"] == (12, 16, 3)
 
     def test_bicubic_backend_uint8(self):
         """Test bicubic upscaling with uint8 images."""

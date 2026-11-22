@@ -218,9 +218,10 @@ accepted. Retained-generation finishing needs a distinct source-authority
 contract, and research execution needs its separate license/runtime boundary;
 use the standalone commands for these workflows.
 
-Deploy matching API and worker code, apply `make db-upgrade` through
-`0007_photography_bindings`, and load the managed service environment on each
-host. It must supply database/Redis URLs, backend/frontdoor authentication,
+Apply `make db-upgrade` to the current head, at least `0010_upload_receipts`,
+before deploying matching API and worker code. Managed photography uses the
+physical bindings introduced in `0007_photography_bindings`. Load the managed
+service environment on each host. It must supply database/Redis URLs, backend/frontdoor authentication,
 authorized input/output roots, an executable governed
 `TRANSFORMATION_PORTAL_DA3_PYTHON`, and the same protected service-owned mode
 0700 `TP_ORCHESTRATOR_EXECUTION_ROOT`. See the

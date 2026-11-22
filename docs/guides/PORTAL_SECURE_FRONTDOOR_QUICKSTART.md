@@ -136,6 +136,7 @@ Notes:
 - `TP_PORTAL_RUM_ROLLOUT_PERCENT=0` keeps managed portal/bootstrap RUM disabled even when the hard flag is on.
 - `TP_FRONTDOOR_RUM_ENABLED=0` independently disables landing, login, logout, and front-door payloads submitted through the RUM proxy after the shared hard flag is on.
 - `TP_FRONTDOOR_RUM_ROLLOUT_PERCENT=0` samples out front-door RUM even when both hard flags are on.
+- When RUM is on, the front door caps `/v1/portal/rum` bodies at 16 KiB and answers larger ones with `413 REQUEST_TOO_LARGE` without contacting FastAPI. The client header allowlist covers `Accept` and `Content-Type`. The proxy also supplies trace and forwarding context and backend credentials.
 - `TP_PORTAL_RUM_LOG_PATH` is optional. When set, FastAPI appends PII-free JSONL records for the pilot summary CLI.
 - `TP_PORTAL_EVENT_LOG_PATH` is optional. When set, FastAPI appends PII-free portal event JSONL for viewer, review, and stream telemetry evidence.
 - Direct-debug rollout stability reuses `TP_PORTAL_DIRECT_DEBUG_COHORT_KEY`.
@@ -199,7 +200,175 @@ Notes:
 - `TP_PORTAL_UPLOAD_ROOT` must stay within `TP_ALLOWED_INPUT_ROOTS`. In pilot tenant mode, place staging under the intended tenant's workspace or CAS root so the returned input directory passes tenant admission.
 - A successful file or folder upload replaces Input Directory only. Output Directory must separately name an authorized destination; staging does not dispatch a job.
 - `TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES` is route-specific and does not change the existing `/v1/jobs` request-size ceiling.
+- Each multipart part's header block is capped at 16 KiB (not configurable). Larger or unparseable part headers return typed `400` with reason `invalid_multipart_payload`.
+- `TP_PORTAL_UPLOAD_TTL_SECONDS` is the age at which legacy TTL cleanup can remove an unreferenced staged batch. An input directory inside or above the batch protects it. After an interrupted staging operation leaves a batch without a receipt, legacy cleanup waits for both the TTL and one hour. The request-correlated upload ledger governs batches that carry its marker or lock identity.
 - `TP_PORTAL_UPLOAD_CAPTURE_METADATA_ENABLED=0` keeps the capture metadata artifact on the empty-array path until the extraction pilot is explicitly enabled.
+
+
+### Request-correlated upload recovery
+
+Apply the additive `0010_upload_receipts` migration after
+`0009_job_submissions` before deploying the matching Postgres backend. The
+ledger reads are required for new job admission, including keyless requests,
+even while correlated writes are disabled. Deploy backend reads before the
+matching client. Enable new
+correlated writes separately with `TP_PORTAL_UPLOAD_RECEIPTS_ENABLED=1`; the
+default is disabled. The managed capability requires the current signed tenant
+and composite Access-email/portal-username identity plus Postgres operational
+storage. Direct-debug and informational actor headers grant no receipt access.
+
+`POST /v1/uploads/staging` accepts an optional canonical UUID in
+`X-TP-Upload-Request-ID`. Its successful response retains the existing upload
+staging envelope. A duplicate scoped ID returns `409` before multipart parsing
+or another batch; this header does not make upload bodies replayable.
+`GET /v1/uploads/staging/receipts/{request_id}` returns
+`tp.orchestrator.upload_receipt.v1` with `request_id`, `status` (`pending`,
+`ready`, `expired`, or `unknown`) and a staging `receipt` only when verified
+ready. Unknown or missing evidence is not proof that a POST was rejected.
+Every lookup rechecks current tenant/path authority and exact retained bytes.
+Before publishing ready, the writer verifies the same completion seal and exact
+input inventory used by lookup. Unexpected entries, symlinks and multiply-linked
+files fail closed. Recovery metadata, including its completion seal, retains
+its 4 MiB per-file ceiling; uploads
+whose metadata exceeds that ceiling return `413` without publishing ready. The
+writer uses the configured upload file limit; later lookup uses the exact sealed
+count, so reducing that setting does not invalidate an accepted receipt.
+
+Recovery covers API-process restart on the same intact filesystem and database.
+It does not promise host/power-loss persistence, storage synchronization, or
+resumption of an incomplete upload. Browser cancellation stops client waiting;
+it does not revoke a running staging thread or delete a completed batch. The
+server retains streams and its stable cross-process lock until the worker and
+completion transaction finish. A sealed filesystem completion can be reconciled
+after a crash before its database-ready update.
+
+Completion and new job admission check expiry against fresh database time after
+acquiring the matching ledger-row locks. Expiry at that check prevents
+publishing ready or admitting a new job. Receipt lookup returns the existing `expired`
+status with a null receipt; a staging POST whose completion expires returns
+`409 CONFLICT` with `details.reason=upload_expired`. These responses do not
+authorize automatically repeating an upload POST.
+
+The existing TTL and cleanup loop remain in force. Ledger-owned batches require
+an atomic deletion claim under the stable filesystem lock and ledger-row lock.
+Retained job references prevent deletion, including jobs admitted without a
+submission key. Admission pins every distinct staged batch named by read inputs,
+including input/archive aliases, photographic manifests and sidecars, nested or
+metadata paths, and ancestor directories, from both the submitted and effective
+request. Matching uses absolute server-owned ledger locators, independent of
+the process working directory. Portal-relative read selectors resolve against
+the server application's `REPO_ROOT`; client root fields and headers cannot
+replace that base. Tracked inputs require verified tenant scope
+and must be ready and unexpired; trusted and keyless calls do not bypass this
+requirement. Frozen plans
+and physical bindings retain their exact read locators; legacy archive admission
+also retains the read defaults from its server-built command. Command output
+fields never pin a batch. For frozen Materials constituents, the read-set pass
+snapshots only SHA/size-bound evidence JSON within existing `MaterialLimits`
+(at most 1 MiB per descriptor) and frozen resource bounds. It runs before global
+capacity locks; accepted submission replays return before these reads. The API
+drains the background read after cancellation. This pass does not open or decode
+NPY masks or initialize models.
+
+Older retained jobs without exact frozen read-set references conservatively
+retain the parent namespace of a recognized `materials_manifest`. That
+retention-only fallback can overretain batches until job removal and cannot
+reconstruct historical mask inputs. New admissions use the precise frozen read
+set.
+
+Admission locks batches in a stable order in the same
+transaction. Cleanup also protects retained nested and ancestor selectors.
+Failed deletion remains fenced for retry by the existing loop, including a
+partial deletion that removed its marker. Such a retry requires the ledger's
+deleting claim and stable lock; a stale worker cannot republish ready. Permanent
+lock identities keep markerless ledger remnants out of legacy cleanup. They
+live outside deletable batch directories and are not reused. Do not remove
+lock files manually.
+
+Rollback disables new writes with `TP_PORTAL_UPLOAD_RECEIPTS_ENABLED=0` and
+restarts the serving process. Keep the additive schema, receipt reads and
+ownership-aware cleanup for outstanding attempts; no down-migration is required.
+A recovered receipt requires explicit operator acceptance before replacing the
+current input path. Never automatically repeat its POST.
+
+Validate the restart/concurrency/fencing lane against a dedicated migrated
+`*_test` Postgres database:
+
+```bash
+TP_UPLOAD_RECEIPT_TEST_DATABASE_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/tp_upload_recovery_test make test-upload-recovery-services
+```
+
+The lane covers cancellation ownership, sealed-completion recovery, duplicate
+requests, retained-job pinning and bounded cleanup fairness. It uses no Redis
+queue or model runtime and is not host/power-loss qualification.
+
+### Browser transfer reconciliation
+
+The portal waits for a verified server response before adding a submitted run.
+When job-submission receipts are enabled by signed backend bootstrap, each POST
+uses an actor-scoped opaque request key. A lost or malformed response triggers
+bounded GET-only receipt checks, then an explicit **Check status** action. An
+unknown outcome never permits an automatic second POST. An intentionally changed
+draft requires a separate, explicit confirmation and retains the earlier attempt.
+
+Upload cancellation stops the browser transport and reconciles its outcome;
+server staging may continue. Recovered input paths require explicit acceptance
+and never replace the chosen output path. Without receipt capability, an
+uncertain upload remains unresolved and its existing paths remain unchanged.
+
+Only opaque attempt IDs, actor-scope digests and creation times enter bounded
+tab storage (at most 16 entries). Request bodies, private Review drafts, upload
+paths and credentials are not stored there. Access uncertainty masks recovered
+results; a fresh authorized GET is required before revealing them again. Session
+recovery never replays a POST.
+
+Implemented timeout candidates are 30 seconds for the complete job response,
+90 seconds without upload progress, 120 seconds after transfer, and 60 seconds
+of receipt polling before manual status checks. Controlled-clock and browser
+regressions cover stalled responses, cancellation, unknown outcomes and late
+receipts. These tests are not representative transfer-latency measurements;
+qualify these candidates on the intended staging environment before capability
+enablement. Keep new backend capabilities disabled until their release gates
+pass. Existing route paths, selectors and successful API envelopes are retained.
+
+### Loaded runs and logs
+
+Operate searches the currently loaded run IDs and workflow names. State filters
+compose with that search; runs sort newest first, with run ID breaking timestamp
+ties. Filtering never changes the selected inspector, even when its run is
+outside the visible results. This is loaded-run discovery, not a server history
+query.
+
+Log search, pause/resume following, copy, download and clear operate on the
+existing browser buffer of at most 1,200 lines. Pausing preserves scroll position
+while new lines continue to arrive. Copy and download include the entire loaded
+buffer, regardless of the search; clear affects only that local buffer. These
+actions do not fetch or modify durable backend logs.
+
+Build retains its workflow values and steps. Friendly workflow labels and saved
+browser-profile provenance clarify the existing controls; compact layouts keep
+editing text accessible and recovery dialogs scroll within short screens.
+
+## Upgrade activation and acceptance
+
+The [upgrade closeout (#2334)](https://github.com/RC219805/Transformation_Portal/pull/2334) records
+the activation contract. Keep the following capabilities default-off until their
+deployment and acceptance gates pass:
+
+- `TP_JOB_SUBMISSION_RECOVERY_ENABLED=0`,
+  `TP_PORTAL_UPLOAD_RECEIPTS_ENABLED=0` and
+  `TP_PHOTO_REVIEW_THUMBNAILS_ENABLED=0` remain the rollout defaults.
+- Apply `0010_upload_receipts` before deploying the matching Postgres backend,
+  including deployments that keep receipt writes off or use keyless jobs.
+- The retained `88ed65aa` native campaign is source-invalid for this code. Review and
+  bind the current descriptor/read-set and role-authority source closure, then
+  run and retain fresh CPU and mixed-workload qualification before native enablement.
+  Keep native admission and Materials capability flags off until qualified.
+- Provide a real authorized staging environment, credentials and deployment
+  target/URL, then pass `make validate-frontdoor-deployment-gate` with those
+  settings. Record deployment evidence for that exact target and serving source.
+- Actual Safari/iOS/VoiceOver and operator/photographic acceptance remain
+  open release gates. Retain explicit operator sign-off before rollout.
 
 ## Local Development
 

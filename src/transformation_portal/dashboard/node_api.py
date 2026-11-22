@@ -6,6 +6,7 @@ details including inputs, outputs, artifacts, and logs.
 
 from __future__ import annotations
 
+import codecs
 import logging
 from typing import TYPE_CHECKING, Optional
 
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Optional FastAPI import
 try:
-    from fastapi import APIRouter, HTTPException
+    from fastapi import APIRouter, HTTPException, Query
     from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
     FASTAPI_AVAILABLE = True
@@ -25,6 +26,9 @@ except ImportError:
     APIRouter = None
 
 from transformation_portal.dashboard.node_state_store import get_store
+
+# Upper bound for preview reads, so one request cannot load a whole object.
+_MAX_PREVIEW_BYTES = 65536
 
 # Global CAS reference
 _global_cas: Optional["ArtifactStore"] = None  # type: ignore
@@ -136,13 +140,13 @@ def create_node_inspection_router() -> "APIRouter":
         )
 
     @router.get("/runs/{run_id}/nodes/{node_id}/logs")
-    async def get_node_logs(run_id: str, node_id: str, tail: int = 100):
+    async def get_node_logs(run_id: str, node_id: str, tail: int = Query(100, ge=1, le=1000)):
         """Get node execution logs.
 
         Args:
             run_id: Run identifier
             node_id: Node identifier
-            tail: Number of recent log entries to return
+            tail: Number of recent log entries to return (1-1000; out of range is 422)
         """
         store = get_store()
         node = store.get_node(run_id, node_id)
@@ -214,7 +218,7 @@ def create_node_inspection_router() -> "APIRouter":
         )
 
     @router.get("/artifact/{hash}/preview")
-    async def preview_artifact(hash: str, max_bytes: int = 4096):
+    async def preview_artifact(hash: str, max_bytes: int = Query(default=4096, ge=1, le=_MAX_PREVIEW_BYTES)):
         """Preview artifact contents.
 
         Args:
@@ -235,6 +239,9 @@ def create_node_inspection_router() -> "APIRouter":
             with obj.path.open("rb") as f:
                 data = f.read(max_bytes)
 
+            # A multi-byte character split by the read boundary is not binary.
+            complete = obj.size_bytes <= len(data)
+
             # Detect content type
             content_type = "binary"
             preview = None
@@ -249,14 +256,14 @@ def create_node_inspection_router() -> "APIRouter":
             # Check for JSON
             elif data[:1] in (b"{", b"["):
                 try:
-                    preview = data.decode("utf-8")
+                    preview = codecs.getincrementaldecoder("utf-8")().decode(data, final=complete)
                     content_type = "application/json"
                 except Exception:
                     pass
             # Check for text
             else:
                 try:
-                    preview = data.decode("utf-8")
+                    preview = codecs.getincrementaldecoder("utf-8")().decode(data, final=complete)
                     content_type = "text/plain"
                 except Exception:
                     preview = data.hex()[:500]

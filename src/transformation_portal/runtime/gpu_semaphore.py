@@ -22,8 +22,9 @@ from __future__ import annotations
 import logging
 import multiprocessing as mp
 import os
+import uuid
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Generator, Optional
 
 logger = logging.getLogger(__name__)
@@ -35,9 +36,13 @@ class GPUSlot:
 
     Attributes:
         device_id: CUDA device ID (0, 1, 2, ...)
+        lease_id: Identifier of the outstanding lease this slot represents
+            (set by :class:`GPUSemaphore`; a slot without one cannot be
+            released)
     """
 
     device_id: int
+    lease_id: Optional[str] = field(default=None, compare=False, repr=False)
 
     @property
     def device_string(self) -> str:
@@ -102,6 +107,10 @@ class GPUSemaphore:
 
         self._manager = mp.Manager()
         self._queue = self._manager.Queue()
+        # lease_id -> device_id of every slot handed out and not yet released.
+        # Managed so that forked children share the accounting with the parent.
+        self._outstanding = self._manager.dict()
+        self._closed = False
 
         # Populate queue with available device IDs
         for device_id in self._device_ids:
@@ -173,19 +182,26 @@ class GPUSemaphore:
             ...     model = model.to(slot.device_string)
             ...     result = model(inputs)
         """
+        self._check_open()
         try:
             device_id = self._queue.get(timeout=timeout)
         except Exception as exc:
             raise GPUSemaphoreError(f"Failed to acquire GPU slot (timeout={timeout}s): {exc}") from exc
 
-        slot = GPUSlot(device_id=device_id)
+        slot = self._lease(device_id)
         logger.debug("Acquired GPU slot: device_id=%d", device_id)
 
         try:
             yield slot
         finally:
-            self._queue.put(device_id)
-            logger.debug("Released GPU slot: device_id=%d", device_id)
+            if self._closed:
+                logger.debug("GPU semaphore closed before slot release: device_id=%d", device_id)
+            elif slot.lease_id in self._outstanding:
+                self.release(slot)
+            else:
+                # Released manually inside the block; returning the token again
+                # would mint a second lease for the same device.
+                logger.warning("GPU slot for device %d was already released", device_id)
 
     def try_acquire(self) -> Optional[GPUSlot]:
         """Try to acquire a GPU slot without blocking.
@@ -197,17 +213,49 @@ class GPUSemaphore:
             Unlike acquire(), this does not automatically release the slot.
             Call release() when done.
         """
+        self._check_open()
         try:
             device_id = self._queue.get_nowait()
-            return GPUSlot(device_id=device_id)
         except Exception:
             return None
+        return self._lease(device_id)
 
     def release(self, slot: GPUSlot) -> None:
         """Release a manually acquired GPU slot.
 
         Args:
             slot: GPUSlot to release (from try_acquire)
+
+        Raises:
+            GPUSemaphoreError: If the slot is not an outstanding lease of this
+                semaphore (already released, or never issued by it). Returning
+                its token anyway would let two holders use one device.
         """
-        self._queue.put(slot.device_id)
-        logger.debug("Released GPU slot: device_id=%d", slot.device_id)
+        self._check_open()
+        device_id = self._outstanding.pop(slot.lease_id, None) if slot.lease_id is not None else None
+        if device_id is None or device_id != slot.device_id:
+            if device_id is not None:
+                # Mismatched device for a known lease: keep the lease outstanding.
+                self._outstanding[slot.lease_id] = device_id
+            raise GPUSemaphoreError(f"GPU slot for device {slot.device_id} is not an outstanding lease of this semaphore")
+        self._queue.put(device_id)
+        logger.debug("Released GPU slot: device_id=%d", device_id)
+
+    def close(self) -> None:
+        """Shut down the manager process backing this semaphore (idempotent)."""
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self._manager.shutdown()
+        except Exception as exc:  # pragma: no cover - best-effort teardown
+            logger.debug("GPU semaphore manager shutdown failed: %s", exc)
+
+    def _check_open(self) -> None:
+        if self._closed:
+            raise GPUSemaphoreError("GPU semaphore is closed")
+
+    def _lease(self, device_id: int) -> GPUSlot:
+        lease_id = uuid.uuid4().hex
+        self._outstanding[lease_id] = device_id
+        return GPUSlot(device_id=device_id, lease_id=lease_id)

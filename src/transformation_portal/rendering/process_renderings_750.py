@@ -33,6 +33,8 @@ from typing import Dict, Iterable
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter
 
+from transformation_portal.utils.image_utils import convert_to_rgb
+
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif"}
 CONVERTIBLE_IMAGE_SUFFIXES = {".ti", ".tif", ".webp", ".bmp", ".tga", ".psd", ".exr"}
 
@@ -90,7 +92,7 @@ def _convert_with_pillow(source: Path, destination: Path) -> None:
             base.paste(img, mask=img.split()[-1])
             img = base
         elif img.mode != "RGB":
-            img = img.convert("RGB")
+            img = convert_to_rgb(img)
         img.save(destination, format="JPEG", quality=95)
 
 
@@ -142,7 +144,7 @@ def _load_rgb(path: Path) -> np.ndarray:
     """Return the image located at *path* as an ``np.float32`` RGB array."""
 
     with Image.open(path) as img:
-        rgb = img.convert("RGB")
+        rgb = convert_to_rgb(img)
         arr = np.asarray(rgb, dtype=np.float32) / 255.0
     return arr
 

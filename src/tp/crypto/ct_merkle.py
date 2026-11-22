@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import operator
 from typing import Sequence
 
 # ---------------------------------------------------------------------------
@@ -454,7 +455,21 @@ def verify_ct_consistency_proof(
         Uses constant-time comparison for final root verification to
         prevent timing attacks that could leak information about valid proofs.
         Returns False (fail closed) for any malformed inputs rather than raising.
+
+        The proof is bound to both tree sizes exactly as RFC 9162 section
+        2.1.4.2 binds it: a proof whose length is not the one the two sizes
+        define is rejected. Sizes that define the same path are
+        indistinguishable to any RFC 9162 verifier, so callers must
+        authenticate each (tree size, root) pair together, as a signed tree
+        head does.
     """
+    # Integer-like sizes (for example numpy integers) keep working; floats,
+    # strings and None are malformed and fail closed.
+    try:
+        first_tree_size = operator.index(first_tree_size)
+        second_tree_size = operator.index(second_tree_size)
+    except TypeError:
+        return False
     if first_tree_size < 1 or second_tree_size < first_tree_size:
         return False
 
@@ -480,71 +495,42 @@ def verify_ct_consistency_proof(
             return False
         proof_list.append(coerced_elem)
 
-    proof_len = len(proof_list)
-
-    if proof_len == 0:
+    # RFC 9162 section 2.1.4.2, steps 1-7.
+    if not proof_list:
         return False
 
-    # Check if first_tree_size is a power of two
-    is_power_of_two = (first_tree_size & (first_tree_size - 1)) == 0
+    # Step 2: when the older tree is a complete subtree its root is not part
+    # of the transmitted proof, so it seeds the walk instead.
+    if first_tree_size & (first_tree_size - 1) == 0:
+        proof_list.insert(0, coerced_first_root)
 
-    if is_power_of_two:
-        # For power-of-two first_tree_size: simple iterative extension
-        # The proof elements extend sr to the right at each tree level
-        sr = coerced_first_root
-        for elem in proof_list:
-            sr = ct_node_hash(sr, elem)
-        return hmac.compare_digest(sr, coerced_second_root)
-
-    # Non-power-of-two case
-    # proof[0] is the complete subtree hash, subsequent elements build paths
+    # Steps 3-4: skip the levels where the older tree's last node is a right child.
     fn = first_tree_size - 1
     sn = second_tree_size - 1
-    fr = proof_list[0]
-    sr = proof_list[0]
-    proof_index = 1
+    while fn & 1:
+        fn >>= 1
+        sn >>= 1
 
-    # Process while fn is odd (at right-child position in the tree)
-    while fn & 1 == 1:
-        if fn == sn:
-            # Both trees have same structure at this level, combine from left
-            if proof_index >= proof_len:
-                return False
-            fr = ct_node_hash(proof_list[proof_index], fr)
-            sr = ct_node_hash(proof_list[proof_index], sr)
-            proof_index += 1
+    # Steps 5-6: fr rebuilds the older root and sr the newer one.
+    fr = sr = proof_list[0]
+    for node in proof_list[1:]:
+        if sn == 0:
+            # The proof is longer than the path the two tree sizes define.
+            return False
+        if fn & 1 or fn == sn:
+            fr = ct_node_hash(node, fr)
+            sr = ct_node_hash(node, sr)
+            while not fn & 1 and fn != 0:
+                fn >>= 1
+                sn >>= 1
         else:
-            # Trees diverge: sr extends to the right first, then both combine
-            if proof_index >= proof_len:
-                return False
-            sr = ct_node_hash(sr, proof_list[proof_index])
-            proof_index += 1
-            if proof_index >= proof_len:
-                return False
-            fr = ct_node_hash(proof_list[proof_index], fr)
-            sr = ct_node_hash(proof_list[proof_index], sr)
-            proof_index += 1
+            sr = ct_node_hash(sr, node)
         fn >>= 1
         sn >>= 1
 
-    # Continue building toward roots
-    while sn > 0:
-        if proof_index >= proof_len:
-            break
-        if fn & 1 == 1 or fn == sn:
-            # Both combine from left
-            fr = ct_node_hash(proof_list[proof_index], fr)
-            sr = ct_node_hash(proof_list[proof_index], sr)
-            proof_index += 1
-        elif fn < sn:
-            # Only sr extends to the right
-            sr = ct_node_hash(sr, proof_list[proof_index])
-            proof_index += 1
-        fn >>= 1
-        sn >>= 1
-
-    if proof_index != proof_len:
-        return False
-
-    # Use constant-time comparison for both root checks
-    return hmac.compare_digest(fr, coerced_first_root) and hmac.compare_digest(sr, coerced_second_root)
+    # Step 7: both roots must match and the proof must have consumed exactly
+    # the path for these sizes (sn == 0), which binds it to both tree sizes.
+    # Constant-time comparison for both root checks.
+    first_matches = hmac.compare_digest(fr, coerced_first_root)
+    second_matches = hmac.compare_digest(sr, coerced_second_root)
+    return sn == 0 and first_matches and second_matches

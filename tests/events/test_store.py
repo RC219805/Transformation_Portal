@@ -285,6 +285,30 @@ class TestEventStore:
 
         assert len(store.get_events()) == 0
 
+    def test_clear_removes_persisted_events_from_date_directories(self, tmp_path):
+        """clear() must delete the per-date files, or a reopened store resurrects them (EVT-01)."""
+        storage_path = tmp_path / "events"
+        store = EventStore(storage_path)
+        store.append(Event(id="evt-1", type="test", timestamp=1_700_000_000.0, data={}))
+        store.append(Event(id="evt-2", type="test", timestamp=1_700_000_001.0, data={}))
+        assert len(list(storage_path.rglob("*.json"))) == 2
+
+        store.clear()
+
+        assert list(storage_path.rglob("*.json")) == []
+        assert EventStore(storage_path).get_events() == []
+
+    def test_limit_zero_returns_no_events(self, tmp_path):
+        """limit=0 means zero events, not "no limit" (EVT-01)."""
+        store = EventStore(tmp_path / "events")
+        for index in range(3):
+            store.append(Event(id=f"evt-{index}", type="test", timestamp=1000.0 + index, data={}))
+
+        assert store.get_events(limit=0) == []
+        assert store.get_events_by_type("test", limit=0) == []
+        assert [e.id for e in store.get_events_by_type("test", limit=2)] == ["evt-1", "evt-2"]
+        assert len(store.get_events(limit=None)) == 3
+
     def test_persistence_to_disk(self, tmp_path):
         """Test events are persisted to disk."""
         storage_path = tmp_path / "events"

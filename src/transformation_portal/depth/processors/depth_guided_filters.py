@@ -265,15 +265,14 @@ class DepthGuidedFilters:
                 "clarity_strength": self.clarity_strength,
             }
 
-            if "clarity_strength" in config:
-                self.clarity_strength = config["clarity_strength"]
+            try:
+                if "clarity_strength" in config:
+                    self.clarity_strength = config["clarity_strength"]
 
-            result = self.process(image, depth)
-
-            # Restore
-            self.clarity_strength = old_params["clarity_strength"]
-
-            return result
+                return self.process(image, depth)
+            finally:
+                # Restore even when process() raises
+                self.clarity_strength = old_params["clarity_strength"]
         else:
             return self.process(image, depth)
 

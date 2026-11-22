@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from typing import List, Optional, Union
 
+from .path_safety import resolve_rejecting_symlink_loops
 from .validation import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -19,12 +20,12 @@ class PathValidator:
     """Validates filesystem paths against security policies."""
 
     def __init__(self, allowed_roots: List[Union[str, Path]]):
-        self.allowed_roots = [Path(p).resolve() for p in allowed_roots]
+        self.allowed_roots = [resolve_rejecting_symlink_loops(p) for p in allowed_roots]
 
     def is_safe(self, path: Union[str, Path]) -> bool:
         """Check if path is within allowed roots."""
         try:
-            target = Path(path).resolve()
+            target = resolve_rejecting_symlink_loops(path)
             # On Windows, resolve() might handle different drive letters
             # strict=False allows checking non-existent paths (for outputs)
 
@@ -59,9 +60,10 @@ def safe_resolve_path(path: Union[str, Path], allowed_root: Optional[Union[str, 
 
     Raises:
         ValidationError: If path attempts traversal out of root.
+        SymlinkLoopError: If path or the root runs through a symlink loop.
     """
-    root = Path(allowed_root if allowed_root is not None else os.getcwd()).resolve()
-    target = Path(path).resolve()
+    root = resolve_rejecting_symlink_loops(allowed_root if allowed_root is not None else os.getcwd())
+    target = resolve_rejecting_symlink_loops(path)
 
     # Check traversal
     try:

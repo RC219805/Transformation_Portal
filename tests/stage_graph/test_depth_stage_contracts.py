@@ -9,7 +9,9 @@ import numpy as np
 import pytest
 
 from transformation_portal.stage_graph.stage import StageContext, StageStatus
+from transformation_portal.stage_graph.stages import depth_pro as depth_pro_module
 from transformation_portal.stage_graph.stages.depth import DepthEstimationStage
+from transformation_portal.stage_graph.stages.depth_pro import DepthProStage
 
 pytestmark = pytest.mark.unit
 
@@ -126,6 +128,102 @@ def test_inference_exception_fails_without_synthetic_artifacts() -> None:
     assert result.artifacts == {}
     with pytest.raises(RuntimeError, match="Depth inference failed"):
         stage._estimate_depth(_image_uint8(), device="cpu")
+
+
+class _StubDepthPro(DepthProStage):
+    """Depth Pro stage with the model replaced; cache and output handling are real."""
+
+    def __init__(self, checkpoint_path):
+        super().__init__(checkpoint_path=checkpoint_path, device="cpu")
+        self.inference_runs = 0
+
+    def _load_model(self) -> None:
+        self._transform = "Compose(ToTensor(), Normalize())"
+        self._model_loaded = True
+
+    def _run_inference(self, image, *, focal_length_px=None):
+        self.inference_runs += 1
+        camera = {
+            "focal_length_px": None,
+            "focal_length_source": "unavailable",
+            "fov_deg": None,
+            "coordinate_space": "input_image",
+        }
+        return np.ones(image.shape[:2], dtype=np.float32), 0.01, camera
+
+
+@pytest.fixture
+def depth_pro_checkpoint(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(depth_pro_module, "DEPTH_PRO_AVAILABLE", True)
+    checkpoint = tmp_path / "depth_pro.pt"
+    checkpoint.write_bytes(b"not-a-real-checkpoint")
+    return checkpoint
+
+
+def test_depth_pro_cache_key_keeps_the_adr_018_layout(depth_pro_checkpoint) -> None:
+    """Cached depth maps stay addressable: the key layout must not drift."""
+    import hashlib
+
+    image = _image_uint8()
+    stage = _StubDepthPro(depth_pro_checkpoint)
+    context = StageContext(artifacts={"image": image})
+    prefix = f"depthpro_{stage._get_checkpoint_hash()[:16]}_{stage._get_package_version()}"
+    suffix = f"{hashlib.sha256(image.tobytes()).hexdigest()[:16]}_cpu_focal_estimated_v2"
+
+    assert stage.get_cache_key(context) == f"{prefix}_unloaded_{suffix}"
+
+    stage._load_model()
+    transform_hash = hashlib.sha256(repr(stage._transform)[:100].encode()).hexdigest()[:8]
+    assert stage.get_cache_key(context) == f"{prefix}_{transform_hash}_{suffix}"
+
+
+def test_depth_pro_run_that_asks_for_files_is_not_answered_from_the_cache(tmp_path, depth_pro_checkpoint) -> None:
+    cache_dir = tmp_path / "cache"
+    image = _image_uint8()
+    warm = _StubDepthPro(depth_pro_checkpoint)
+    assert warm.execute(StageContext(artifacts={"image": image}, cache_enabled=True, cache_dir=cache_dir)).is_success()
+
+    stage = _StubDepthPro(depth_pro_checkpoint)
+    output_dir = tmp_path / "delivery"
+    result = stage.execute(
+        StageContext(artifacts={"image": image, "output_dir": output_dir}, cache_enabled=True, cache_dir=cache_dir)
+    )
+
+    assert result.status == StageStatus.COMPLETED, result.error
+    assert result.cache_hit is False
+    assert stage.inference_runs == 1
+    assert result.artifacts["depth_float_path"] == output_dir / "depth_depthpro.npy"
+    assert sorted(path.name for path in output_dir.iterdir()) == [
+        "depth_depthpro.npy",
+        "depth_depthpro_preview.png",
+        "depth_depthpro_provenance.json",
+    ]
+    assert np.array_equal(np.load(output_dir / "depth_depthpro.npy"), result.artifacts["depth_map"])
+
+
+def test_depth_pro_file_outputs_are_not_written_into_the_stage_cache(tmp_path, depth_pro_checkpoint) -> None:
+    cache_dir = tmp_path / "cache"
+    image = _image_uint8()
+
+    with_files = _StubDepthPro(depth_pro_checkpoint)
+    for _ in range(2):
+        context = StageContext(
+            artifacts={"image": image, "output_dir": tmp_path / "delivery"}, cache_enabled=True, cache_dir=cache_dir
+        )
+        assert with_files.execute(context).status == StageStatus.COMPLETED
+    assert with_files.inference_runs == 2
+    assert not cache_dir.exists() or list(cache_dir.iterdir()) == []
+
+    # In-memory runs still use the cache. Each run gets a stage that has not
+    # loaded its model, as a new process would: the key of a loaded stage
+    # carries the transform hash (ADR-018) and differs from a fresh one.
+    in_memory = [_StubDepthPro(depth_pro_checkpoint) for _ in range(2)]
+    results = [
+        stage.execute(StageContext(artifacts={"image": image}, cache_enabled=True, cache_dir=cache_dir)) for stage in in_memory
+    ]
+    assert [result.cache_hit for result in results] == [False, True]
+    assert [stage.inference_runs for stage in in_memory] == [1, 0]
+    assert set(results[1].artifacts) == {"depth_map", "depth_provenance"}
 
 
 @pytest.mark.parametrize("image", [_image_float(), _image_uint8()])

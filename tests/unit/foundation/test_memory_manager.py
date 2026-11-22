@@ -295,8 +295,9 @@ class TestProfiling:
 
         cfg = MemoryConfig(enable_profiling=True)
         mgr = MemoryManager(config=cfg, device=CPU_DEVICE)
-        mgr.allocate((4, 4), tag="my_op")
+        kept = mgr.allocate((4, 4), tag="my_op")  # keep it alive: dead tensors leave tracking
         assert len(mgr.allocations) == 1
+        assert id(kept) in mgr.allocations
 
     def test_profiling_records_tag_stats(self):
         from transformation_portal.foundation.memory_manager import MemoryConfig, MemoryManager
@@ -370,3 +371,87 @@ class TestCacheManagement:
         mgr.pools["large"].put(large_tensor)
         mgr._moderate_cleanup()
         assert mgr.pools["large"].get_stats()["total_tensors"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Accounting and aliasing regressions (audit M-18)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.ml
+@pytest.mark.regression
+class TestAccountingAndAliasing:
+    def test_double_deallocate_does_not_alias_later_allocations(self):
+        from transformation_portal.foundation.memory_manager import MemoryConfig, MemoryManager
+
+        mgr = MemoryManager(MemoryConfig(), CPU_DEVICE)
+        t = mgr.allocate((4, 4), torch.float32)
+        assert mgr.deallocate(t) is True
+        assert mgr.deallocate(t) is False  # already pooled: not cached a second time
+        a = mgr.allocate((4, 4), torch.float32)
+        b = mgr.allocate((4, 4), torch.float32)
+        assert a.data_ptr() != b.data_ptr()
+
+    def test_pool_rejects_second_view_of_pooled_memory(self):
+        from transformation_portal.foundation.memory_manager import MemoryPool
+
+        pool = MemoryPool(size_mb=10, device=CPU_DEVICE)
+        t = torch.zeros(4, 4)
+        assert pool.put(t) is True
+        assert pool.put(t.view(4, 4)) is False
+        assert pool.get_stats()["total_tensors"] == 1
+
+    def test_garbage_collected_tensors_leave_tracking(self):
+        import gc
+
+        from transformation_portal.foundation.memory_manager import MemoryConfig, MemoryManager
+
+        mgr = MemoryManager(MemoryConfig(enable_profiling=True), CPU_DEVICE)
+        for _ in range(50):
+            x = mgr.allocate((64, 64), torch.float32, tag="tile")
+            del x
+        gc.collect()
+        assert len(mgr.allocations) == 0
+        assert mgr._get_memory_usage() == 0
+        assert mgr.get_memory_stats()["allocations"]["total_allocated_mb"] == 0
+        assert mgr.allocation_stats["tile"]["count"] == 50
+
+    def test_live_tracked_allocations_count_towards_usage(self):
+        from transformation_portal.foundation.memory_manager import MemoryConfig, MemoryManager
+
+        mgr = MemoryManager(MemoryConfig(enable_profiling=True), CPU_DEVICE)
+        kept = [mgr.allocate((16, 16), torch.float32) for _ in range(3)]
+        assert mgr._get_memory_usage() == 3 * 16 * 16 * 4
+        mgr.deallocate(kept[0], return_to_pool=False)
+        assert mgr._get_memory_usage() == 2 * 16 * 16 * 4
+        assert mgr.peak_memory_bytes == 3 * 16 * 16 * 4
+
+    def test_mps_usage_queries_allocator_when_profiling_off(self, monkeypatch):
+        from transformation_portal.foundation.memory_manager import MemoryConfig, MemoryManager
+
+        mgr = MemoryManager(MemoryConfig(enable_profiling=False), CPU_DEVICE)
+        mgr.device = torch.device("mps")
+        monkeypatch.setattr(torch.mps, "current_allocated_memory", lambda: 123456, raising=False)
+        assert mgr._get_memory_usage() == 123456
+
+    def test_mps_clear_cache_releases_allocator_cache(self, monkeypatch):
+        from transformation_portal.foundation.memory_manager import MemoryManager
+
+        mgr = MemoryManager(device=CPU_DEVICE)
+        mgr.device = torch.device("mps")
+        calls = []
+        monkeypatch.setattr(torch.mps, "empty_cache", lambda: calls.append(1), raising=False)
+        mgr.clear_cache()
+        assert calls == [1]
+
+    def test_pooled_tensor_comes_back_without_autograd_state(self):
+        from transformation_portal.foundation.memory_manager import MemoryConfig, MemoryManager
+
+        mgr = MemoryManager(MemoryConfig(), CPU_DEVICE)
+        r = mgr.allocate((8,), torch.float32)
+        r.requires_grad_(True)
+        mgr.deallocate(r)
+        reused = mgr.allocate((8,), torch.float32)
+        assert reused.requires_grad is False
+        assert reused.is_leaf
+        assert reused.data_ptr() == r.data_ptr()

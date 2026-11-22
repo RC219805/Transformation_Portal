@@ -6,8 +6,11 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
+import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path, PureWindowsPath
 
 import pytest
@@ -360,3 +363,130 @@ def test_direct_index_uses_batch_manifest_when_run_card_has_no_artifact_index(
     result = module._index_job_artifacts(job_id="job_artifacts_manifest", output_dir=output_dir)
 
     assert [item["path"] for item in result.items] == ["manifests/batch_2026-05-06_120000.json"]
+
+
+def _set_mtime(path: Path, timestamp: float) -> None:
+    os.utime(path, (timestamp, timestamp))
+
+
+def test_run_window_accepts_only_paths_changed_inside_it(tmp_path: Path) -> None:
+    module = importlib.import_module("transformation_portal.portal.job_artifacts")
+    untouched = tmp_path / "untouched.txt"
+    untouched.write_text("operator file", encoding="utf-8")
+    # ``untouched`` keeps its real timestamps, which precede a window opening in
+    # the future; the other two are moved explicitly so no clock race is involved.
+    window_start = untouched.stat().st_ctime + 100.0
+    window_end = window_start + 100.0
+    produced = tmp_path / "produced.txt"
+    produced.write_text("job output", encoding="utf-8")
+    _set_mtime(produced, window_start + 50.0)
+    replaced_later = tmp_path / "replaced-later.txt"
+    replaced_later.write_text("rewritten by a later run", encoding="utf-8")
+    _set_mtime(replaced_later, window_end + 50.0)
+
+    def changed(path: Path, not_before: float | None = None, not_after: float | None = None) -> bool:
+        return module._path_changed_within(path, not_before=not_before, not_after=not_after)
+
+    assert changed(untouched) is True
+    assert changed(untouched, window_start, window_end) is False
+    assert changed(produced, window_start, window_end) is True
+    assert changed(replaced_later, window_start, window_end) is False
+    assert changed(replaced_later, window_start) is True
+    assert changed(tmp_path / "missing.txt", window_start) is False
+    assert changed(untouched, float("inf")) is False
+
+
+def test_run_window_counts_a_copy_that_preserved_an_older_mtime(tmp_path: Path) -> None:
+    module = importlib.import_module("transformation_portal.portal.job_artifacts")
+    source = tmp_path / "source.tif"
+    source.write_bytes(b"payload")
+    _set_mtime(source, 1_000_000_000.0)
+    time.sleep(0.05)
+    copied = tmp_path / "bag" / "data" / "source.tif"
+    copied.parent.mkdir(parents=True)
+    shutil.copy2(source, copied)
+    source_changed_at = source.stat().st_ctime
+    copy_landed_at = copied.stat().st_ctime
+    if copy_landed_at <= source_changed_at:
+        pytest.skip("filesystem timestamps are too coarse to order the copy after its source")
+    window_start = (source_changed_at + copy_landed_at) / 2.0
+
+    assert copied.stat().st_mtime == pytest.approx(1_000_000_000.0)
+    assert module._path_changed_within(copied, not_before=window_start, not_after=None) is True
+    assert module._path_changed_within(source, not_before=window_start, not_after=None) is False
+
+
+def test_direct_index_walk_claims_only_files_changed_inside_the_run_window(tmp_path: Path) -> None:
+    module = importlib.import_module("transformation_portal.portal.job_artifacts")
+    output_dir = tmp_path / "shared-out"
+    (output_dir / "client_deliverables").mkdir(parents=True)
+    operator_index = output_dir / "archive_index_normalized.csv.gz"
+    operator_index.write_bytes(b"operator supplied index")
+    other_job_output = output_dir / "client_deliverables" / "final_render.png"
+    other_job_output.write_bytes(b"\x89PNG other job output")
+    window_start = max(operator_index.stat().st_ctime, other_job_output.stat().st_ctime) + 100.0
+    report = output_dir / "bag_validate_report.json"
+    report.write_text("{}", encoding="utf-8")
+    _set_mtime(report, window_start + 5.0)
+
+    unbounded = module._index_job_artifacts(job_id="job_shared", output_dir=output_dir)
+    bound = module._index_job_artifacts(
+        job_id="job_shared",
+        output_dir=output_dir,
+        max_indexed_artifacts=1,
+        not_before=window_start,
+    )
+
+    assert {item["path"] for item in unbounded.items} == {
+        "archive_index_normalized.csv.gz",
+        "bag_validate_report.json",
+        "client_deliverables/final_render.png",
+    }
+    assert [item["path"] for item in bound.items] == ["bag_validate_report.json"]
+    assert set(bound.artifact_lookup) == {"bag_validate_report.json"}
+    # Files outside the window are not counted, so they cannot force truncation.
+    assert bound.artifacts["truncated"] is False
+
+
+def test_direct_run_metadata_ignores_run_cards_and_manifests_outside_the_run_window(tmp_path: Path) -> None:
+    module = importlib.import_module("transformation_portal.portal.job_artifacts")
+    output_dir = tmp_path / "out"
+    manifests_dir = output_dir / "manifests"
+    manifests_dir.mkdir(parents=True)
+    stale_card = output_dir / "run_card_2099-01-01_000000.json"
+    stale_card.write_text(
+        json.dumps({"batch_id": "2099-01-01_000000", "total_images": 4, "success_count": 3, "error_count": 1}),
+        encoding="utf-8",
+    )
+    stale_manifest = manifests_dir / "batch_2099-01-01_000000.json"
+    stale_manifest.write_text(json.dumps({"batch_id": "2099-01-01_000000", "results": []}), encoding="utf-8")
+    window_start = max(stale_card.stat().st_ctime, stale_manifest.stat().st_ctime) + 100.0
+
+    unbounded = module._resolve_job_run_metadata(output_dir)
+    without_own_card = module._resolve_job_run_metadata(output_dir, not_before=window_start)
+
+    assert unbounded is not None and unbounded.run_card_path == stale_card.resolve()
+    assert without_own_card == module.JobRunMetadata(output_dir=output_dir.resolve())
+
+    own_card = output_dir / "run_card_2026-03-03_000000.json"
+    own_card.write_text(
+        json.dumps({"batch_id": "2026-03-03_000000", "total_images": 2, "success_count": 2, "error_count": 0}),
+        encoding="utf-8",
+    )
+    _set_mtime(own_card, window_start + 5.0)
+    own_manifest = manifests_dir / "batch_2026-03-03_000000.json"
+    own_manifest.write_text(json.dumps({"batch_id": "2026-03-03_000000", "results": []}), encoding="utf-8")
+    _set_mtime(own_manifest, window_start + 5.0)
+
+    still_unbounded = module._resolve_job_run_metadata(output_dir)
+    with_own_card = module._resolve_job_run_metadata(output_dir, not_before=window_start)
+    after_window = module._resolve_job_run_metadata(output_dir, not_before=window_start, not_after=window_start + 1.0)
+
+    # Unbound, the stale card still wins on its newer batch id; bound, it cannot.
+    assert still_unbounded is not None and still_unbounded.run_card_path == stale_card.resolve()
+    assert with_own_card is not None
+    assert with_own_card.run_card_path == own_card.resolve()
+    assert with_own_card.run_card_payload is not None
+    assert with_own_card.run_card_payload["batch_id"] == "2026-03-03_000000"
+    assert with_own_card.batch_manifest_path == own_manifest.resolve()
+    assert after_window == module.JobRunMetadata(output_dir=output_dir.resolve())

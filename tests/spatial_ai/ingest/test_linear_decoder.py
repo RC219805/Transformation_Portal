@@ -14,8 +14,10 @@ Architecture: ADR-023 (Isolation), ADR-026 (APEX Research Ultra)
 from __future__ import annotations
 
 import json
+import struct
 import sys
 import types
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -30,6 +32,7 @@ from transformation_portal.spatial_ai.ingest import (
     ColorSpaceError,
     LinearDecoder,
     LinearIngestResult,
+    RangeViolationError,
     UnsupportedFormatError,
     decode,
 )
@@ -43,6 +46,22 @@ class TestLinearDecoder:
         """Test that gamma != 1.0 is always rejected (no override possible)."""
         with pytest.raises(ValueError, match="gamma=1.0"):
             LinearDecoder(gamma=2.2)
+
+    def test_nan_gamma_rejected(self):
+        """I-6: NaN gamma must be rejected like any other non-linear gamma."""
+        with pytest.raises(ValueError, match="gamma=1.0"):
+            LinearDecoder(gamma=float("nan"))
+        with pytest.raises(ValueError, match="gamma=1.0"):
+            LinearIngestResult(
+                linear_rgb=np.zeros((4, 4, 3), dtype=np.float32),
+                gamma=float("nan"),
+                bit_depth=32,
+                dtype="float32",
+                input_size=(4, 4),
+                input_path=Path("test.png"),
+                input_format="PNG",
+                color_space="linear_sRGB",
+            )
 
     def test_linear_decode_preserves_hdr(self, tmp_path: Path):
         """Test that linear ingest preserves HDR values >1.0."""
@@ -376,6 +395,296 @@ class TestLinearDecoder:
         # Also test default behavior (strict_ingest not specified)
         result_default = decode(test_img_path, gamma=1.0)
         assert result_default.linear_rgb.dtype == np.float32
+
+
+def _write_png16(path: Path, samples: np.ndarray, color_type: int) -> None:
+    """Write an unfiltered, non-interlaced 16-bit PNG (Pillow cannot write 16-bit RGB).
+
+    ``samples`` is (H, W, C) uint16; ``color_type`` is the IHDR color type
+    (0 gray, 2 RGB, 4 gray+alpha, 6 RGBA).
+    """
+    height, width = samples.shape[:2]
+
+    def chunk(tag: bytes, payload: bytes) -> bytes:
+        return struct.pack(">I", len(payload)) + tag + payload + struct.pack(">I", zlib.crc32(tag + payload))
+
+    rows = samples.astype(">u2").reshape(height, -1)
+    scanlines = b"".join(b"\x00" + rows[y].tobytes() for y in range(height))
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 16, color_type, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(scanlines))
+        + chunk(b"IEND", b"")
+    )
+
+
+class TestSixteenBitPngDecode:
+    """16-bit PNG must be ingested at its true bit depth, never reduced to 8 bits."""
+
+    HEIGHT = 6
+    WIDTH = 9
+
+    def _samples(self, channels: int) -> np.ndarray:
+        samples = np.random.default_rng(1601).integers(0, 65536, size=(self.HEIGHT, self.WIDTH, channels), dtype=np.uint16)
+        # Neighbours that differ only in the low byte are indistinguishable after an 8-bit decode.
+        samples[0, 0] = 0x1200
+        samples[0, 1] = 0x12FF
+        return samples
+
+    @pytest.mark.parametrize("strict_ingest", [False, True], ids=["non_strict", "strict"])
+    @pytest.mark.parametrize(
+        ("color_type", "channels"),
+        [(0, 1), (2, 3), (4, 2), (6, 4)],
+        ids=["gray", "rgb", "gray_alpha", "rgba"],
+    )
+    def test_16bit_png_is_decoded_at_true_bit_depth(self, tmp_path: Path, color_type: int, channels: int, strict_ingest: bool):
+        """Every 16-bit PNG layout round-trips exactly, in RGB order, with alpha dropped."""
+        samples = self._samples(channels)
+        png_path = tmp_path / "deep.png"
+        _write_png16(png_path, samples, color_type)
+        rgb = samples[:, :, :3] if channels >= 3 else np.repeat(samples[:, :, :1], 3, axis=2)
+
+        result = decode(png_path, strict_ingest=strict_ingest)
+
+        np.testing.assert_array_equal(result.linear_rgb, rgb.astype(np.float32) / 65535.0)
+        assert result.linear_rgb[0, 0, 0] != result.linear_rgb[0, 1, 0]
+        assert result.input_size == (self.HEIGHT, self.WIDTH)
+        assert result.input_format == "PNG"
+
+    def test_8bit_rgba_png_keeps_pillow_decode(self, tmp_path: Path):
+        """8-bit PNG is not routed to the 16-bit decoder; values stay sample / 255."""
+        samples = np.random.default_rng(801).integers(0, 256, size=(self.HEIGHT, self.WIDTH, 4), dtype=np.uint8)
+        png_path = tmp_path / "shallow.png"
+        Image.fromarray(samples).save(png_path)
+
+        result = decode(png_path)
+
+        np.testing.assert_array_equal(result.linear_rgb, samples[:, :, :3].astype(np.float32) / 255.0)
+
+    def test_16bit_rgb_png_fails_closed_without_opencv(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Without a true-depth decoder the file is rejected, not ingested at 8 bits."""
+        png_path = tmp_path / "deep.png"
+        _write_png16(png_path, self._samples(3), 2)
+        monkeypatch.setitem(sys.modules, "cv2", None)
+
+        with pytest.raises(RuntimeError, match="Refusing to silently reduce it to 8-bit"):
+            decode(png_path)
+
+    def test_16bit_rgb_png_rejects_reduced_decode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """A decoder result that is not uint16 at the declared size is never normalized."""
+        cv2 = pytest.importorskip("cv2")
+        png_path = tmp_path / "deep.png"
+        _write_png16(png_path, self._samples(3), 2)
+        reduced = np.zeros((self.HEIGHT, self.WIDTH, 3), dtype=np.uint8)
+        monkeypatch.setattr(cv2, "imdecode", lambda buffer, flags: reduced)
+
+        with pytest.raises(RuntimeError, match="Refusing to ingest a reduced decode"):
+            decode(png_path)
+
+    def test_16bit_rgb_png_with_truncated_pixel_data_fails_closed(self, tmp_path: Path):
+        """A readable header with incomplete pixel data is an error, not a partial image."""
+        png_path = tmp_path / "deep.png"
+        _write_png16(png_path, self._samples(3), 2)
+        data = png_path.read_bytes()
+        png_path.write_bytes(data[: len(data) // 2])
+
+        with pytest.raises(RuntimeError, match="could not decode 16-bit PNG"):
+            decode(png_path)
+
+
+class TestLinearOutputRangeValidation:
+    """Decoded samples that are NaN, Inf or negative fail ingest (finding I-2)."""
+
+    @pytest.mark.parametrize(
+        "bad_value, issue",
+        [(np.nan, "NaN values detected"), (np.inf, "Infinite values detected"), (-0.25, "Negative values detected")],
+    )
+    @pytest.mark.parametrize("strict_ingest", [False, True])
+    def test_float_tiff_with_invalid_samples_fails_closed(
+        self, tmp_path: Path, bad_value: float, issue: str, strict_ingest: bool
+    ) -> None:
+        samples = np.full((4, 5, 3), 0.5, dtype=np.float32)
+        samples[1, 2, 0] = bad_value
+        tiff_path = tmp_path / "bad.tif"
+        tifffile.imwrite(str(tiff_path), samples, photometric="rgb")
+        out_dir = tmp_path / "out"
+
+        with pytest.raises(RangeViolationError, match=issue):
+            LinearDecoder(gamma=1.0, strict_ingest=strict_ingest).decode(tiff_path, output_dir=out_dir, emit_provenance=True)
+
+        assert list(out_dir.iterdir()) == []
+
+    def test_float_tiff_with_hdr_samples_still_decodes(self, tmp_path: Path) -> None:
+        samples = np.full((4, 5, 3), 0.0, dtype=np.float32)
+        samples[0, 0] = [3.5, 1.25, 7.0]
+        tiff_path = tmp_path / "hdr.tif"
+        tifffile.imwrite(str(tiff_path), samples, photometric="rgb")
+
+        result = LinearDecoder(gamma=1.0, strict_ingest=True).decode(tiff_path)
+
+        assert np.array_equal(result.linear_rgb, samples)
+
+    def test_raw_subprocess_output_with_nan_fails_closed(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        raw_path = tmp_path / "test.cr2"
+        raw_path.write_text("dummy")
+        bad_linear = np.full((4, 5, 3), 0.25, dtype=np.float32)
+        bad_linear[3, 4, 2] = np.nan
+
+        def fake_run_raw_worker(*, python_executable, command_name, input_path, payload, start):
+            return bad_linear, {"input_size": [4, 5], "color_space": "linear_sRGB", "dtype": "float32"}
+
+        monkeypatch.setattr(
+            "transformation_portal.spatial_ai.ingest.linear_decoder.run_raw_worker",
+            fake_run_raw_worker,
+        )
+
+        decoder = LinearDecoder(gamma=1.0, raw_python_executable="./.venv-raw/bin/python")
+        with pytest.raises(RangeViolationError, match="NaN values detected"):
+            decoder.decode(raw_path)
+
+
+def _write_tiff_without_photometric(path: Path, samples: np.ndarray) -> None:
+    """Write an uncompressed little-endian uint16 TIFF that omits PhotometricInterpretation (tag 262).
+
+    ``samples`` is (H, W) or (H, W, C) uint16. tifffile always writes the tag,
+    so the single IFD is assembled by hand.
+    """
+    height, width = samples.shape[:2]
+    channels = 1 if samples.ndim == 2 else samples.shape[2]
+    pixels = samples.astype("<u2").tobytes()
+    entry_count = 8
+    bits_offset = 8 + 2 + 12 * entry_count + 4
+    pixel_offset = bits_offset + 2 * channels
+
+    def short(tag: int, value: int) -> bytes:
+        return struct.pack("<HHIHH", tag, 3, 1, value, 0)
+
+    def long(tag: int, value: int) -> bytes:
+        return struct.pack("<HHII", tag, 4, 1, value)
+
+    bits_per_sample = short(258, 16) if channels == 1 else struct.pack("<HHII", 258, 3, channels, bits_offset)
+    entries = (
+        long(256, width)
+        + long(257, height)
+        + bits_per_sample
+        + short(259, 1)  # no compression
+        + long(273, pixel_offset)  # strip offset
+        + short(277, channels)  # samples per pixel
+        + long(278, height)  # rows per strip
+        + long(279, len(pixels))  # strip byte count
+    )
+    path.write_bytes(
+        b"II"
+        + struct.pack("<HI", 42, 8)
+        + struct.pack("<H", entry_count)
+        + entries
+        + struct.pack("<I", 0)
+        + struct.pack(f"<{channels}H", *([16] * channels))
+        + pixels
+    )
+
+
+class TestStoredSampleInterpretation:
+    """Palette, MinIsWhite, CMYK and multi-page inputs decode correctly or fail (finding I-3)."""
+
+    def test_palette_png_decodes_palette_colours_not_indices(self, tmp_path: Path) -> None:
+        palette_image = Image.new("P", (4, 2))
+        palette_image.putpalette([255, 0, 0, 0, 255, 0, 0, 0, 255, 51, 102, 204] + [0] * (252 * 3))
+        palette_image.putdata([0, 1, 2, 3] * 2)
+        png_path = tmp_path / "palette.png"
+        palette_image.save(png_path)
+
+        result = decode(png_path)
+
+        expected_row = np.array([[255, 0, 0], [0, 255, 0], [0, 0, 255], [51, 102, 204]], dtype=np.float32) / 255.0
+        assert np.array_equal(result.linear_rgb, np.stack([expected_row, expected_row]))
+
+    def test_palette_png_with_transparency_drops_alpha(self, tmp_path: Path) -> None:
+        palette_image = Image.new("P", (2, 1))
+        palette_image.putpalette([10, 20, 30, 40, 50, 60] + [0] * (254 * 3))
+        palette_image.putdata([0, 1])
+        palette_image.info["transparency"] = 0
+        png_path = tmp_path / "palette_trns.png"
+        palette_image.save(png_path, transparency=0)
+
+        result = decode(png_path)
+
+        expected = np.array([[[10, 20, 30], [40, 50, 60]]], dtype=np.float32) / 255.0
+        assert np.array_equal(result.linear_rgb, expected)
+
+    def test_miniswhite_uint16_tiff_is_inverted(self, tmp_path: Path) -> None:
+        stored = np.array([[65535, 0], [32768, 1000]], dtype=np.uint16)
+        tiff_path = tmp_path / "miniswhite.tif"
+        tifffile.imwrite(str(tiff_path), stored, photometric="miniswhite")
+
+        result = decode(tiff_path, strict_ingest=True)
+
+        intensity = (65535 - stored).astype(np.float32) / 65535.0
+        assert np.array_equal(result.linear_rgb, np.stack([intensity] * 3, axis=-1))
+
+    def test_minisblack_tiff_is_unchanged(self, tmp_path: Path) -> None:
+        stored = np.array([[65535, 0], [32768, 1000]], dtype=np.uint16)
+        tiff_path = tmp_path / "minisblack.tif"
+        tifffile.imwrite(str(tiff_path), stored, photometric="minisblack")
+
+        result = decode(tiff_path, strict_ingest=True)
+
+        assert np.array_equal(result.linear_rgb, np.stack([stored.astype(np.float32) / 65535.0] * 3, axis=-1))
+
+    def test_multi_page_tiff_fails_closed(self, tmp_path: Path) -> None:
+        pages = np.arange(5 * 8 * 3, dtype=np.uint16).reshape(5, 8, 3)
+        tiff_path = tmp_path / "pages.tif"
+        tifffile.imwrite(str(tiff_path), pages, photometric="minisblack")
+
+        with pytest.raises(RuntimeError, match="stores 5 pages in one image series"):
+            decode(tiff_path)
+
+    def test_cmyk_tiff_fails_closed(self, tmp_path: Path) -> None:
+        cmyk = np.zeros((4, 4, 4), dtype=np.uint8)
+        cmyk[..., 0] = 255  # pure cyan, which an RGBA reading would turn into red
+        tiff_path = tmp_path / "cmyk.tif"
+        tifffile.imwrite(str(tiff_path), cmyk, photometric="separated")
+
+        with pytest.raises(RuntimeError, match="unsupported photometric interpretation SEPARATED"):
+            decode(tiff_path)
+
+    def test_palette_tiff_fails_closed(self, tmp_path: Path) -> None:
+        indices = np.array([[0, 1], [1, 0]], dtype=np.uint8)
+        colormap = np.zeros((3, 256), dtype=np.uint16)
+        colormap[0, 1] = 65535
+        tiff_path = tmp_path / "palette.tif"
+        tifffile.imwrite(str(tiff_path), indices, photometric="palette", colormap=colormap)
+
+        with pytest.raises(RuntimeError, match="unsupported photometric interpretation PALETTE"):
+            decode(tiff_path)
+
+    @pytest.mark.parametrize("channels", [1, 3], ids=["gray", "rgb"])
+    def test_tiff_without_photometric_tag_is_read_as_stored(self, tmp_path: Path, channels: int) -> None:
+        """A missing PhotometricInterpretation tag is not MinIsWhite: samples are neither inverted nor rejected."""
+        shape = (4, 5) if channels == 1 else (4, 5, 3)
+        stored = np.random.default_rng(262).integers(0, 65536, size=shape, dtype=np.uint16)
+        tiff_path = tmp_path / "no_photometric.tif"
+        _write_tiff_without_photometric(tiff_path, stored)
+        with tifffile.TiffFile(str(tiff_path)) as tif:
+            assert tif.pages[0].tags.get(262) is None
+
+        result = decode(tiff_path, strict_ingest=True)
+
+        intensity = stored.astype(np.float32) / 65535.0
+        expected = np.stack([intensity] * 3, axis=-1) if channels == 1 else intensity
+        assert np.array_equal(result.linear_rgb, expected)
+
+    def test_planes_behind_one_ifd_fail_closed_as_multi_page(self, tmp_path: Path) -> None:
+        """A stack stored as contiguous planes behind a single IFD is still a multi-page file."""
+        planes = np.arange(5 * 6 * 3, dtype=np.uint16).reshape(5, 6, 3)
+        tiff_path = tmp_path / "planes.tif"
+        tifffile.imwrite(str(tiff_path), planes, photometric="minisblack", truncate=True)
+        with tifffile.TiffFile(str(tiff_path)) as tif:
+            assert len(tif.pages) == 1
+            assert tif.series[0].shape == (5, 6, 3)
+
+        with pytest.raises(RuntimeError, match="stores 5 pages in one image series"):
+            decode(tiff_path)
 
 
 class TestLinearIngestIntegration:

@@ -117,3 +117,136 @@ def test_list_jobs(client: TestClient) -> None:
 def test_create_router_returns_none_without_fastapi(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(optimization_api, "FASTAPI_AVAILABLE", False)
     assert optimization_api.create_optimization_router() is None
+
+
+# --------------------------------------------------------------------------- #
+# Stop semantics and registry bounds (audit finding D12)
+# --------------------------------------------------------------------------- #
+
+
+def _patch_optimizer(monkeypatch: pytest.MonkeyPatch, optimizer_cls) -> None:
+    monkeypatch.setattr("transformation_portal.evals.auto_optimizer.AutoOptimizer", optimizer_cls)
+
+
+async def test_stop_before_worker_starts_is_not_overwritten(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    class _Optimizer:
+        def __init__(self, **kwargs):
+            self.run_fn = kwargs["run_fn"]
+
+        def optimize(self, pipeline):
+            calls.append("optimize")
+            raise AssertionError("a stopped job must not run")
+
+    _patch_optimizer(monkeypatch, _Optimizer)
+    mgr = OptimizationJobManager()
+    mgr.create_job("j", max_iterations=3)
+    mgr.get_job("j").status = "stopped"
+
+    job = await mgr.run_optimization("j", {}, lambda p: {"score": 0.5}, lambda r: 0.5, lambda p, r: {})
+
+    assert job.status == "stopped"
+    assert job.error is None
+    assert calls == []
+
+
+async def test_stop_during_run_interrupts_the_optimizer_and_stays_stopped(monkeypatch: pytest.MonkeyPatch) -> None:
+    runs: list[int] = []
+    events: list[dict] = []
+    mgr = OptimizationJobManager()
+
+    async def sink(evt):
+        events.append(evt)
+
+    mgr.set_broadcast(sink)
+
+    class _Result:
+        best_score = 0.9
+        iterations = 100
+        history: list = []
+
+    class _Optimizer:
+        def __init__(self, **kwargs):
+            self.run_fn = kwargs["run_fn"]
+            self.diff_fn = kwargs["diff_fn"]
+
+        def optimize(self, pipeline):
+            for i in range(100):
+                if i == 2:
+                    # The stop endpoint flips the status while the worker runs.
+                    mgr.get_job("j").status = "stopped"
+                self.diff_fn(pipeline, {})
+                self.run_fn(pipeline)
+                runs.append(i)
+            return _Result()
+
+    _patch_optimizer(monkeypatch, _Optimizer)
+    mgr.create_job("j", max_iterations=100)
+
+    job = await mgr.run_optimization("j", {}, lambda p: {"score": 0.5}, lambda r: 0.5, lambda p, r: {})
+
+    assert job.status == "stopped"
+    assert job.error is None
+    assert runs == [0, 1]
+    assert [e["type"] for e in events] == ["optimization_started", "optimization_stopped"]
+
+
+async def test_stop_racing_the_last_iteration_is_not_reported_completed(monkeypatch: pytest.MonkeyPatch) -> None:
+    mgr = OptimizationJobManager()
+
+    class _Result:
+        best_score = 0.9
+        iterations = 1
+        history: list = []
+
+    class _Optimizer:
+        def __init__(self, **kwargs):
+            pass
+
+        def optimize(self, pipeline):
+            mgr.get_job("j").status = "stopped"
+            return _Result()
+
+    _patch_optimizer(monkeypatch, _Optimizer)
+    mgr.create_job("j")
+
+    job = await mgr.run_optimization("j", {}, lambda p: {}, lambda r: 0.0, lambda p, r: {})
+
+    assert job.status == "stopped"
+
+
+def test_stop_does_not_rewrite_a_finished_job(client: TestClient) -> None:
+    job = optimization_api.optimization_manager.create_job("done")
+    job.status = "completed"
+
+    body = client.post("/optimize/stop/done").json()
+
+    assert body == {"job_id": "done", "status": "completed"}
+    assert job.status == "completed"
+
+
+def test_registry_evicts_finished_jobs_oldest_first(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(optimization_api, "MAX_RETAINED_JOBS", 3)
+    mgr = OptimizationJobManager()
+    for jid in ("a", "b", "c"):
+        mgr.create_job(jid).status = "completed"
+    mgr.get_job("a").status = "running"
+
+    mgr.create_job("d")
+
+    assert list(mgr.jobs) == ["a", "c", "d"]
+
+
+def test_registry_full_of_active_jobs_refuses_new_ones(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(optimization_api, "MAX_RETAINED_JOBS", 2)
+    mgr = optimization_api.optimization_manager
+    mgr.create_job("a").status = "running"
+    mgr.create_job("b").status = "running"
+
+    with pytest.raises(optimization_api.OptimizationCapacityError):
+        mgr.create_job("c")
+
+    resp = client.post("/optimize/start", json={"max_iterations": 1})
+    assert resp.status_code == 503
+    assert set(mgr.jobs) == {"a", "b"}

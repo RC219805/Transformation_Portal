@@ -125,8 +125,8 @@ python pro_pipeline.py batch INPUT_DIR [OPTIONS]
 
 **Options:**
 - Same as `process` command, plus:
-- `--workers, -w INTEGER` - Number of parallel workers (default: `4`)
-- `--pattern PATTERN` - File pattern to match (default: `*.{jpg,jpeg,png,tiff,tif}`)
+- `--workers, -w INTEGER` - Worker count recorded in the config (default: `4`); batch images are currently processed sequentially, so it does not change throughput
+- `--pattern PATTERN` - Glob pattern matched in `INPUT_DIR`; `{a,b}` alternations are expanded (default: `*.{jpg,jpeg,png,tiff,tif}`, which also matches the upper-case extensions)
 
 **Examples:**
 
@@ -134,8 +134,8 @@ python pro_pipeline.py batch INPUT_DIR [OPTIONS]
 # Batch process with preset
 python pro_pipeline.py batch ./renders --preset architectural-hero --out ./final
 
-# Process with multiple workers
-python pro_pipeline.py batch ./renders --preset interior-dramatic --workers 8 --out ./final
+# Batch process with another preset
+python pro_pipeline.py batch ./renders --preset interior-dramatic --out ./final
 
 # Process only TIFF files
 python pro_pipeline.py batch ./renders --pattern "*.tiff" --out ./final
@@ -173,7 +173,7 @@ python pro_pipeline.py version
 
 **Performance Tips:**
 1. Use `--no-ai` for faster processing when AI refinement isn't needed
-2. Increase `--workers` for batch processing (optimal: CPU cores - 2)
+2. Split large batches across several `batch` runs (`--workers` does not parallelise yet)
 3. Use `--quality standard` instead of `high` for drafts
 4. Enable CoreML on Apple Silicon for 3-5x depth processing speedup
 5. Use CUDA or MPS acceleration when available
@@ -449,7 +449,7 @@ A: Convert RAW to TIFF first using Adobe Camera Raw or similar. The pipeline wor
 A: Yes! The pipeline is cross-platform (Windows, macOS, Linux).
 
 **Q: Can I use multiple GPUs?**
-A: Currently single-GPU only. Use `--workers` for parallel CPU processing.
+A: Currently single-GPU only, and batch images are processed one at a time (`--workers` is recorded but not yet used).
 
 **Q: How do I customize a preset?**
 A: Create a custom config file based on `config/pro_pipeline_config.yaml` and modify the preset settings.

@@ -20,6 +20,10 @@ from ..depth.models.depth_anything_v2 import DepthAnythingV2Model, ModelBackend,
 
 logger = logging.getLogger(__name__)
 
+# Upper bound on the unfolded patch elements held at once by
+# DepthEstimator._compute_confidence (16M float32 values = 64 MiB).
+_CONFIDENCE_BAND_ELEMENTS = 16 * 1024 * 1024
+
 
 @dataclass
 class DepthConfig:
@@ -132,11 +136,9 @@ class DepthEstimator:
         device = self.substrate.get_device()
 
         if device.type == "mps":
-            # Check if CoreML ANE is available for production
-            try:
-                return ModelBackend.COREML  # Prefer ANE for inference
-            except ImportError:
-                return ModelBackend.PYTORCH_MPS
+            # Prefer CoreML (ANE) for inference; a CoreML load failure falls
+            # back to PyTorch MPS in _initialize_model().
+            return ModelBackend.COREML
         elif device.type == "cuda":
             return ModelBackend.PYTORCH_CPU  # Would be CUDA in future
         else:
@@ -155,6 +157,11 @@ class DepthEstimator:
             logger.info("✓ Depth model loaded successfully")
         except Exception as e:
             logger.error(f"Failed to load depth model: {e}")
+            # PyTorch MPS is only a fallback on an MPS substrate, and only when
+            # it was not the backend that just failed; elsewhere the load
+            # failure is the answer.
+            if self.config.backend == ModelBackend.PYTORCH_MPS or self.substrate.get_device().type != "mps":
+                raise
             logger.warning("Falling back to MPS backend")
             self.config.backend = ModelBackend.PYTORCH_MPS
             self.model = DepthAnythingV2Model(
@@ -255,15 +262,24 @@ class DepthEstimator:
         # Compute local variance as confidence metric
         kernel_size = 5
         padding = kernel_size // 2
+        height, width = depth.shape
 
-        # Unfold to get local patches
-        depth_unfold = torch.nn.functional.unfold(depth.unsqueeze(0).unsqueeze(0), kernel_size=kernel_size, padding=padding)
-
-        # Compute variance per patch
-        variance = depth_unfold.var(dim=1)
+        # Zero-pad once, then unfold the padded map in row bands: unfolding the
+        # whole frame materialises kernel_size**2 x H x W values (1.9 GiB at
+        # 6000x3375). Each band yields exactly the patches (and variances) the
+        # whole-frame unfold would for its output rows.
+        padded = torch.nn.functional.pad(depth.unsqueeze(0).unsqueeze(0), (padding, padding, padding, padding))
+        rows_per_band = max(1, _CONFIDENCE_BAND_ELEMENTS // (kernel_size * kernel_size * max(1, width)))
+        bands = []
+        for row_start in range(0, height, rows_per_band):
+            row_stop = min(height, row_start + rows_per_band)
+            band = padded[:, :, row_start : row_stop + 2 * padding, :]
+            band_unfold = torch.nn.functional.unfold(band, kernel_size=kernel_size)
+            # Compute variance per patch
+            bands.append(band_unfold.var(dim=1).view(row_stop - row_start, width))
 
         # Reshape back to image
-        confidence = variance.view(depth.shape)
+        confidence = torch.cat(bands, dim=0) if bands else depth.new_zeros(depth.shape)
 
         # Invert (low variance = high confidence)
         confidence = 1.0 - torch.clamp(confidence, 0, 1)

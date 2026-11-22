@@ -17,7 +17,10 @@ Implementation notes:
 
 Usage:
     python scripts/ci/check_no_tautological_tests.py [tests/]
-    # Exits 0 if no offenders, 1 otherwise.
+    # Exits 0 if no offenders, 1 otherwise, 2 if a given root does not exist.
+
+Scanned files are ``test_*.py`` plus ``conftest.py`` (pytest loads it for every
+test in its tree, so a tautological assert there is the same smell).
 """
 
 from __future__ import annotations
@@ -116,18 +119,29 @@ def find_tautological_asserts(path: Path) -> List[Tuple[int, str]]:
     return offenders
 
 
+def _is_scanned_test_file(path: Path) -> bool:
+    return path.suffix == ".py" and (path.name.startswith("test_") or path.name == "conftest.py")
+
+
 def iter_test_files(roots: Iterable[Path]) -> Iterable[Path]:
     for root in roots:
         if root.is_file():
-            if root.name.startswith("test_") and root.suffix == ".py":
+            if _is_scanned_test_file(root):
                 yield root
             continue
-        for path in root.rglob("test_*.py"):
-            yield path
+        for path in sorted(root.rglob("*.py")):
+            if _is_scanned_test_file(path):
+                yield path
 
 
 def main(argv: List[str]) -> int:
     roots = [Path(arg) for arg in argv[1:]] or [Path("tests")]
+    missing = [root for root in roots if not root.exists()]
+    if missing:
+        # A mistyped root would otherwise scan nothing and pass silently.
+        for root in missing:
+            print(f"ERROR: test root does not exist: {root}", file=sys.stderr)
+        return 2
     bad_files: List[Tuple[Path, List[Tuple[int, str]]]] = []
     for path in iter_test_files(roots):
         offenders = find_tautological_asserts(path)

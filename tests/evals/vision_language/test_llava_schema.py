@@ -10,6 +10,7 @@ from transformation_portal.evals.vision_language.llava_schema import (
     VQAResult,
     parse_vqa_result,
 )
+from transformation_portal.evals.vision_language.llava_scoring import compute_quality_gate_pass
 
 pytestmark = pytest.mark.unit
 
@@ -141,3 +142,26 @@ That's my evaluation.
         raw_text = '{"passes_basic_quality": true, "summary_score": -0.5, "issues": []}'
         result = parse_vqa_result("test_model", raw_text)
         assert result.summary_score == 0.0
+
+    @pytest.mark.regression
+    @pytest.mark.parametrize(
+        "raw_score",
+        ["NaN", "Infinity", "-Infinity", '"nan"', '"inf"', '"Infinity"', "true", "1e400"],
+    )
+    def test_non_finite_or_non_numeric_score_fails_closed(self, raw_score: str) -> None:
+        """NaN/inf/boolean scores must parse to 0.0 with parse_error, never clamp to 1.0 (M-01)."""
+        raw_text = '{"passes_basic_quality": true, "summary_score": ' + raw_score + ', "issues": []}'
+
+        result = parse_vqa_result("test_model", raw_text)
+
+        assert result.summary_score == 0.0
+        assert result.parse_error is not None
+        assert "summary_score" in result.parse_error
+        assert compute_quality_gate_pass(result) is False
+
+    def test_missing_score_defaults_without_parse_error(self) -> None:
+        """An absent summary_score keeps its 0.0 default and is not a parse error."""
+        result = parse_vqa_result("test_model", '{"passes_basic_quality": true, "issues": []}')
+
+        assert result.summary_score == 0.0
+        assert result.parse_error is None

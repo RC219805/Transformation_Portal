@@ -301,6 +301,60 @@ def test_prepared_batch_result_carries_snapshot_identity_and_dimensions(tmp_path
     assert combined.timing.total_seconds == pytest.approx(result["runtime_s"])
 
 
+@pytest.mark.regression
+@pytest.mark.parametrize(
+    "names",
+    [
+        ("kitchen/a.png", "kitchen-2/a.png"),
+        ("room/a.png", "room 2/a.png"),
+        ("shoot/a.png", "shoot.old/a.png"),
+        ("hero.png", "hero/detail.png"),
+    ],
+)
+def test_prepared_batch_follows_plan_order_for_sibling_names_sorting_before_separator(
+    tmp_path: Path,
+    names: tuple[str, str],
+) -> None:
+    """Plan order is string order; the runtime must not re-sort by path components.
+
+    ``kitchen-2/a.png`` sorts before ``kitchen/a.png`` as a string but after it
+    as a ``Path``.  The batch manifest is bound to the plan positionally, so a
+    component-wise re-sort made every such batch fail after all work was done.
+    """
+
+    input_root = tmp_path / "inputs"
+    image_paths: list[Path] = []
+    for index, name in enumerate(names):
+        image_path = input_root / name
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (4, 4), color=(index + 1, index + 2, index + 3)).save(image_path)
+        image_paths.append(image_path)
+    plan_order = sorted(names)
+    assert plan_order != [path.relative_to(input_root).as_posix() for path in sorted(image_paths)]
+
+    prepared = prepare_lux_execution(
+        EnhanceConfig(depth_backend="synthetic", enable_v2=False, emit_run_card=True),
+        input_root=input_root,
+        input_files=image_paths,
+    )
+    assert [item.path for item in prepared.plan.inputs] == plan_order
+    output_root = tmp_path / "output"
+    orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
+
+    # Exactly the CLI call shape: the frozen plan selection, no rescan.
+    results = orchestrator.enhance_batch(prepared.input_root)
+
+    assert [result["status"] for result in results] == ["ok", "ok"]
+    assert [Path(result["image"]) for result in results] == list(prepared.input_files)
+    batch_path = next((output_root / "manifests").glob("batch_*.json"))
+    batch = json.loads(batch_path.read_bytes())
+    assert [row["image"] for row in batch["results"]] == plan_order
+    evidence_path = next((output_root / "manifests").glob("execution_evidence_*.json"))
+    evidence = verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan)
+    require_required_artifacts(evidence)
+    assert [row["path"] for row in evidence["requested_inputs"]] == plan_order
+
+
 def test_prepared_rerun_preserves_prior_completion_carriers(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1874,6 +1928,108 @@ def test_relative_output_spelling_with_parent_component_is_rejected_before_fallb
             root.confined_relative_path(Path("out/../outside.bin"))
 
     assert exc_info.value.code == "path_escape"
+
+
+@pytest.mark.regression
+def test_root_relative_paths_never_consult_the_working_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A root-relative value must name one file wherever the process runs."""
+
+    import transformation_portal.lux_depth_v3.execution_evidence as evidence_module
+
+    output_root = tmp_path / "depth"
+    (output_root / "depth").mkdir(parents=True)
+    (output_root / "x_depth.png").write_bytes(b"root-level file")
+    (output_root / "depth" / "x_depth.png").write_bytes(b"nested file")
+
+    # Parent of a root named like its own sub-directory, the root, and a
+    # directory below the root: each used to re-home the same value.
+    for working_directory in (tmp_path, output_root, output_root / "depth"):
+        monkeypatch.chdir(working_directory)
+        with evidence_module._pin_output_root(output_root) as root:
+            assert root.confined_relative_path(Path("depth/x_depth.png"), root_relative=True) == "depth/x_depth.png"
+            data, relative_path, _identity = evidence_module._read_confined_artifact_bytes(
+                root,
+                Path("depth/x_depth.png"),
+                context="root-relative artifact",
+                root_relative=True,
+            )
+            assert (data, relative_path) == (b"nested file", "depth/x_depth.png")
+            capture = evidence_module._capture_artifact(
+                root,
+                Path("depth/x_depth.png"),
+                budget=evidence_module._CaptureBudget(),
+                root_relative=True,
+            )
+            assert capture.record["path"] == "depth/x_depth.png"
+            assert capture.record["sha256"] == hashlib.sha256(b"nested file").hexdigest()
+
+    # Writer-supplied paths keep the caller's relative output-root spelling:
+    # from the parent directory ``depth/x_depth.png`` is ``<root>/x_depth.png``.
+    monkeypatch.chdir(tmp_path)
+    with evidence_module._pin_output_root(output_root) as root:
+        assert root.confined_relative_path(Path("depth/x_depth.png")) == "x_depth.png"
+        assert root.confined_relative_path(Path("depth/depth/x_depth.png")) == "depth/x_depth.png"
+    snapshot = evidence_module.read_confined_artifact_snapshot(
+        Path("depth"),
+        Path("depth/depth/x_depth.png"),
+        context="writer-spelled artifact",
+        max_bytes=64,
+    )
+    assert (snapshot.data, snapshot.relative_path) == (b"nested file", "depth/x_depth.png")
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("root_name", ["depth", "manifests"])
+def test_prepared_run_accepts_relative_output_root_named_like_an_artifact_folder(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    root_name: str,
+) -> None:
+    """``--output-dir depth`` from the parent directory must not fail the run."""
+
+    prepared, image_path = _prepared(tmp_path, emit_run_card=True)
+    monkeypatch.chdir(tmp_path)
+    output_root = Path(root_name)
+    orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
+
+    results = orchestrator.enhance_batch(prepared.input_root, input_files=[image_path])
+
+    assert [result["status"] for result in results] == ["ok"]
+    evidence_path = next((output_root / "manifests").glob("execution_evidence_*.json"))
+    evidence = verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan)
+    require_required_artifacts(evidence)
+    produced_paths = {record["path"] for outcome in evidence["produced_artifacts"] for record in outcome["artifacts"]}
+    assert any(path.startswith("depth/") for path in produced_paths)
+    assert all((tmp_path / root_name / path).is_file() for path in produced_paths)
+
+
+@pytest.mark.regression
+def test_prepared_run_and_verification_do_not_depend_on_the_working_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unchanged run verifies identically from any working directory."""
+
+    prepared, image_path = _prepared(tmp_path, emit_run_card=True)
+    # An absolute root named like its own ``depth`` sub-directory, with the
+    # run itself launched from a directory below the root.
+    output_root = tmp_path / "depth"
+    (output_root / "manifests").mkdir(parents=True)
+    monkeypatch.chdir(output_root / "manifests")
+    orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
+
+    results = orchestrator.enhance_batch(prepared.input_root, input_files=[image_path])
+
+    assert [result["status"] for result in results] == ["ok"]
+    evidence_path = next((output_root / "manifests").glob("execution_evidence_*.json"))
+    expected = verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan)
+    require_required_artifacts(expected)
+    for working_directory in (tmp_path, tmp_path / "inputs", output_root, output_root / "depth"):
+        monkeypatch.chdir(working_directory)
+        assert verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan) == expected
 
 
 def test_execution_evidence_rejects_symlinked_artifact_path(tmp_path: Path) -> None:
@@ -5593,3 +5749,152 @@ def test_prepared_reconstruction_cache_relocation_preserves_historical_carriers(
     assert Path(first_results[0]["reconstruction_manifest_path"]) == Path(second_results[0]["reconstruction_manifest_path"])
     latest_manifest = json.loads(Path(second_results[0]["reconstruction_manifest_path"]).read_bytes())
     assert latest_manifest["dataset_root"] == str(roots[1])
+
+
+@pytest.mark.regression
+def test_prepared_run_card_reemission_hashes_each_settled_artifact_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Re-emitted prepared run cards reuse digests of unchanged artifacts with an identical index."""
+    import transformation_portal.lux_depth_v3.artifact_manager as artifact_manager
+    import transformation_portal.lux_depth_v3.orchestrator as orchestrator_module
+
+    # Every artifact of this tiny batch is younger than the production settle
+    # margin; remove the margin so the memo is exercised.
+    monkeypatch.setattr(artifact_manager, "ARTIFACT_DIGEST_REUSE_MARGIN_NS", 0, raising=False)
+    real_compute = artifact_manager.compute_file_sha256
+    reads: dict[Path, int] = {}
+
+    def counting_compute(path: Path, *args: Any, **kwargs: Any) -> str:
+        reads[Path(path)] = reads.get(Path(path), 0) + 1
+        return real_compute(path, *args, **kwargs)
+
+    monkeypatch.setattr(artifact_manager, "compute_file_sha256", counting_compute)
+    real_index = orchestrator_module._build_artifact_index
+    emitted_indexes: list[list[dict[str, Any]]] = []
+
+    def comparing_index(output_root: Path, artifact_paths: list[Path], **kwargs: Any) -> list[dict[str, Any]]:
+        index = real_index(output_root, artifact_paths, **kwargs)
+        # Byte identity: the memoised index equals a fresh uncached index.
+        saved_reads = dict(reads)
+        uncached = real_index(output_root, artifact_paths)
+        reads.clear()
+        reads.update(saved_reads)
+        assert canonicalize_json(index) == canonicalize_json(uncached)
+        emitted_indexes.append(index)
+        return index
+
+    monkeypatch.setattr(orchestrator_module, "_build_artifact_index", comparing_index)
+
+    prepared, image_path = _prepared(tmp_path, emit_run_card=True, save_float_depth=True, generate_pbr=True)
+    output_root = tmp_path / "output"
+    orchestrator = EnhanceOrchestrator.from_prepared(prepared, output_root)
+    results = orchestrator.enhance_batch(prepared.input_root, input_files=[image_path])
+
+    assert results[0]["status"] == "ok"
+    assert len(emitted_indexes) >= 2
+    first_by_path = {entry["path"]: entry for entry in emitted_indexes[0]}
+    final_by_path = {entry["path"]: entry for entry in emitted_indexes[-1]}
+    unchanged = sorted(
+        path for path, entry in final_by_path.items() if first_by_path.get(path, {}).get("sha256") == entry["sha256"]
+    )
+    assert any(path.startswith("depth/") for path in unchanged)
+    resolved_root = output_root.resolve()
+    for relative_path in unchanged:
+        assert reads[resolved_root / relative_path] == 1, relative_path
+    evidence_path = next((output_root / "manifests").glob("execution_evidence_*.json"))
+    verified = verify_execution_evidence_file(evidence_path, output_root=output_root, plan=prepared.plan)
+    require_required_artifacts(verified)
+
+
+class _IterationCountingList(list):
+    """A list that counts how often its rows are walked."""
+
+    iterations = 0
+
+    def __iter__(self):
+        type(self).iterations += 1
+        return super().__iter__()
+
+
+def _many_input_outcome_payload(input_count: int) -> dict[str, Any]:
+    kinds = ("depth_u16_png", "depth_metadata_json", "combined_manifest_json")
+    requested = [
+        {
+            "declaration_id": f"lux.test.output.{kind}",
+            "stage_registry_id": "lux.test.stage",
+            "artifact_kind": kind,
+            "scope": "per_input",
+            "cardinality": "one",
+            "required": True,
+        }
+        for kind in kinds
+    ]
+    produced: list[dict[str, Any]] = []
+    omitted: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+    for index in range(input_count):
+        input_id = f"input-{index + 1:06d}"
+        for declaration in requested:
+            row = {**declaration, "input_id": input_id}
+            if index % 7 == 3 and declaration["artifact_kind"] == "depth_metadata_json":
+                omitted.append({**row, "reason_code": "not_requested_for_input"})
+            elif index % 11 == 5 and declaration["artifact_kind"] == "depth_u16_png":
+                failed.append({**row, "reason_code": "stage_failed"})
+            else:
+                produced.append({**row, "artifacts": [{"path": f"depth/{input_id}_{declaration['artifact_kind']}"}]})
+    return {
+        "schema": EXECUTION_EVIDENCE_SCHEMA,
+        "requested_artifacts": requested,
+        "produced_artifacts": produced,
+        "omitted_artifacts": omitted,
+        "failed_artifacts": failed,
+    }
+
+
+@pytest.mark.regression
+def test_carrier_outcome_projection_validation_walks_outcome_rows_a_bounded_number_of_times() -> None:
+    """Validating N combined-manifest carriers must not rebuild a full projection per carrier (F-11)."""
+    import copy
+    from types import SimpleNamespace
+
+    from transformation_portal.lux_depth_v3 import execution_evidence as evidence_module
+
+    evidence_path = "manifests/execution_evidence.json"
+    input_count = 60
+    reference = _many_input_outcome_payload(input_count)
+    input_ids = [f"input-{index + 1:06d}" for index in range(input_count)]
+    carriers: list[tuple[str, Any, Any]] = [
+        (
+            "combined_manifest_json",
+            input_id,
+            build_manifest_outcome_projection(reference, evidence_path=evidence_path, input_id=input_id),
+        )
+        for input_id in input_ids
+    ]
+    execution_projection = build_manifest_outcome_projection(reference, evidence_path=evidence_path)
+    carriers.append(("batch_manifest_json", None, execution_projection))
+    carriers.append(("run_card_json", None, execution_projection))
+    assert any(projection["omitted_artifacts"] for _, _, projection in carriers[:input_count])
+    assert any(projection["failed_artifacts"] for _, _, projection in carriers[:input_count])
+
+    counted = dict(reference)
+    for field_name in ("produced_artifacts", "omitted_artifacts", "failed_artifacts"):
+        counted[field_name] = _IterationCountingList(reference[field_name])
+    context = SimpleNamespace(
+        carrier_outcome_projections=carriers,
+        projector=SimpleNamespace(evidence_path=evidence_path),
+    )
+    _IterationCountingList.iterations = 0
+
+    evidence_module._validate_carrier_outcome_projections(counted, context=context, require_all=True)
+
+    # One execution-scope projection plus one indexing pass, independent of the input count.
+    assert _IterationCountingList.iterations <= 12
+
+    tampered_projection = copy.deepcopy(carriers[17][2])
+    tampered_projection["produced_artifacts"][0]["artifact_count"] = 2
+    carriers[17] = (carriers[17][0], carriers[17][1], tampered_projection)
+    with pytest.raises(ArtifactEvidenceError, match="execution outcome projection does not match"):
+        evidence_module._validate_carrier_outcome_projections(counted, context=context, require_all=True)

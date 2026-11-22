@@ -17,6 +17,12 @@ from torch import Tensor
 
 logger = logging.getLogger(__name__)
 
+# PIL modes whose samples are 16-bit; "I" (32-bit signed) is how Pillow commonly
+# opens 16-bit PNG/TIFF data, so it is read on the same 0..65535 scale.
+_SIXTEEN_BIT_MODES = frozenset({"I;16", "I;16B", "I;16L", "I;16N"})
+_WIDE_INTEGER_MODES = _SIXTEEN_BIT_MODES | {"I"}
+_MODE_BIT_DEPTH = {"1": 1, "I": 32, "F": 32, **{mode: 16 for mode in _SIXTEEN_BIT_MODES}}
+
 
 class ImageType(Enum):
     """Types of architectural images."""
@@ -111,30 +117,56 @@ class ImageLoader:
 
         logger.info(f"Loading image: {image_path.name}")
 
-        # Load with PIL
-        pil_image = Image.open(image_path)
+        with Image.open(image_path) as source:
+            source.load()
+            # Source facts are read before any conversion: convert("RGB") drops the
+            # format, the mode (bit depth / colour space) and the band count.
+            source_mode = source.mode
+            source_format = source.format or "unknown"
+            source_channels = len(source.getbands())
+            source_info = dict(source.info)
 
-        # Convert to RGB if needed
-        if pil_image.mode != "RGB":
-            logger.debug(f"Converting from {pil_image.mode} to RGB")
-            pil_image = pil_image.convert("RGB")
+            if source_mode in _WIDE_INTEGER_MODES:
+                # 16-bit data would saturate in convert("RGB"): scale it onto the
+                # 8-bit float range instead and resize it in float.
+                rgb_float = self._wide_integer_to_rgb_float(source)
+                pil_image = None
+            else:
+                pil_image = source if source_mode == "RGB" else source.convert("RGB")
+                if source_mode != "RGB":
+                    logger.debug(f"Converting from {source_mode} to RGB")
+                rgb_float = np.asarray(pil_image, dtype=np.float32)
 
-        # Extract metadata before processing
-        metadata = self._extract_metadata(pil_image, image_path, image_type)
+            metadata = self._extract_metadata(
+                rgb_float,
+                image_path,
+                image_type,
+                mode=source_mode,
+                image_format=source_format,
+                channels=source_channels,
+                info=source_info,
+            )
 
-        # Resize if needed
-        if self.target_size is not None:
-            pil_image = self._resize_image(pil_image, self.target_size)
+            # Resize if needed
+            if self.target_size is not None:
+                if pil_image is not None:
+                    pil_image = self._resize_image(pil_image, self.target_size)
+                else:
+                    rgb_float = self._resize_float_rgb(rgb_float, self.target_size)
 
-        # Convert to tensor
-        tensor = self._pil_to_tensor(pil_image)
+            # Convert to a float tensor (C, H, W) on the 0..255 scale
+            if pil_image is not None:
+                tensor = self._pil_to_tensor(pil_image)
+            else:
+                tensor = torch.from_numpy(np.ascontiguousarray(rgb_float)).permute(2, 0, 1)
 
         # Move to device
         tensor = self.substrate.to_device(tensor)
 
-        # Normalize if requested
+        # Always hand float data downstream; normalize=False keeps the 0..255 scale.
+        tensor = tensor.float()
         if self.normalize:
-            tensor = tensor.float() / 255.0
+            tensor = tensor / 255.0
 
         logger.info(
             f"Loaded {metadata.image_type.value if metadata.image_type else 'unknown'} "
@@ -172,10 +204,40 @@ class ImageLoader:
 
         return tensors, metadatas
 
-    def _extract_metadata(self, pil_image: Image.Image, path: Path, image_type: Optional[ImageType]) -> ImageMetadata:
-        """Extract metadata from PIL image."""
-        # Convert to numpy for statistics
-        np_image = np.array(pil_image).astype(np.float32)
+    @staticmethod
+    def _wide_integer_to_rgb_float(source: Image.Image) -> np.ndarray:
+        """Read 16-bit (or ``I``-mode) data as float32 RGB (H, W, 3) on the 0..255 scale."""
+        samples = np.asarray(source, dtype=np.float32)
+        samples = np.clip(samples, 0.0, 65535.0) * np.float32(255.0 / 65535.0)
+        if samples.ndim == 2:
+            samples = np.repeat(samples[:, :, None], 3, axis=2)
+        return samples
+
+    def _resize_float_rgb(self, rgb_float: np.ndarray, target_size: tuple) -> np.ndarray:
+        """Resize a float32 (H, W, 3) array channel-wise in PIL ``F`` mode.
+
+        LANCZOS rings at edges and, unlike the 8-bit path, ``F`` mode does not
+        clamp, so the result is clipped back onto the 0..255 scale.
+        """
+        channels = [
+            self._resize_image(Image.fromarray(np.ascontiguousarray(rgb_float[:, :, c])), target_size) for c in range(3)
+        ]
+        resized = np.stack([np.asarray(ch, dtype=np.float32) for ch in channels], axis=2)
+        return np.clip(resized, 0.0, 255.0)
+
+    def _extract_metadata(
+        self,
+        np_image: np.ndarray,
+        path: Path,
+        image_type: Optional[ImageType],
+        *,
+        mode: str,
+        image_format: str,
+        channels: int,
+        info: Dict[str, Any],
+    ) -> ImageMetadata:
+        """Extract metadata from the source image facts and its RGB samples (0..255 scale)."""
+        np_image = np.asarray(np_image, dtype=np.float32)
 
         # Auto-detect image type if not provided
         if image_type is None:
@@ -190,20 +252,18 @@ class ImageLoader:
         file_stat = path.stat()
 
         # Extract EXIF/metadata tags
-        tags = {}
-        if hasattr(pil_image, "info"):
-            tags.update(pil_image.info)
+        tags: Dict[str, Any] = dict(info)
 
         metadata = ImageMetadata(
             path=path,
             image_type=image_type,
-            width=pil_image.width,
-            height=pil_image.height,
-            channels=len(pil_image.getbands()),
-            format=pil_image.format or "unknown",
+            width=int(np_image.shape[1]),
+            height=int(np_image.shape[0]),
+            channels=channels,
+            format=image_format,
             size_bytes=file_stat.st_size,
-            bit_depth=8 if pil_image.mode == "RGB" else 16,
-            color_space=pil_image.mode,
+            bit_depth=_MODE_BIT_DEPTH.get(mode, 8),
+            color_space=mode,
             mean_intensity=mean_intensity,
             std_intensity=std_intensity,
             dynamic_range=dynamic_range,

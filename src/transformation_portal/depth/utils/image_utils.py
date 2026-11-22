@@ -34,7 +34,9 @@ def load_image(
         path: Image file path
         color_space: Color space ('RGB', 'BGR', 'GRAY')
         dtype: Output dtype ('float32', 'float64', 'uint8')
-        normalize: Normalize to [0, 1] for float dtypes
+        normalize: Normalize to [0, 1] for float dtypes. The scale comes from the decoded dtype
+            (uint8 / 255, uint16 / 65535), never from the pixel values, so a near-black frame is
+            not stretched to full scale.
 
     Returns:
         Image as numpy array
@@ -72,9 +74,16 @@ def load_image(
 
     # Convert dtype
     if dtype in ["float32", "float64"]:
+        # Native byte order, so a big-endian 16-bit decode ('>u2') is still recognised as uint16.
+        source_dtype = image.dtype.newbyteorder("=")
         image = image.astype(dtype)
-        if normalize and image.max() > 1.0:
-            image = image / 255.0
+        if normalize:
+            if source_dtype == np.uint8:
+                image = image / 255.0
+            elif source_dtype == np.uint16:
+                image = image / 65535.0
+            elif image.max() > 1.0:
+                image = image / 255.0
     elif dtype == "uint8":
         if image.dtype != np.uint8:
             image = (image * 255).astype(np.uint8)
@@ -94,7 +103,8 @@ def save_image(
     Save image to file.
 
     Args:
-        image: Image array
+        image: Image array. uint8 is written as-is; float arrays are normalised [0, 1] data
+            (values outside it are clipped, never reinterpreted as 0..255); uint16 is scaled to 8 bit.
         path: Output path
         quality: JPEG quality (1-100)
         color_space: Input color space ('RGB', 'BGR')
@@ -105,8 +115,12 @@ def save_image(
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Convert to uint8 if needed
-    if image.dtype != np.uint8:
+    # Convert to uint8 if needed; the scale comes from the dtype, not from the pixel values
+    if np.issubdtype(image.dtype, np.floating):
+        image = (np.clip(image, 0.0, 1.0) * 255).astype(np.uint8)
+    elif image.dtype.newbyteorder("=") == np.uint16:
+        image = np.rint(image / 257.0).astype(np.uint8)
+    elif image.dtype != np.uint8:
         if image.max() <= 1.0:
             image = (image * 255).astype(np.uint8)
         else:

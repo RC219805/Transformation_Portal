@@ -52,6 +52,7 @@ Both versions use the existing `ApiEnvelope` with schema
 | `GET` at the prefix | Current scenes, variants, properties, decisions, presets and review version |
 | `GET /scenes` | Metadata-only scene pages, recorded review filters and related artifact summaries |
 | `GET /scene` | Verified photographic detail for one selected scene |
+| `GET /thumbnail` | Source-bound page navigation PNG, maximum edge 256 pixels and 1 MiB |
 | `GET /render` | Bounded fit view, maximum edge 1,600 pixels |
 | `GET /native-crop` | Exact source-grid crop, each dimension at most 2,048 pixels |
 | `GET /quality` | Reference-relative advisory diagnostics |
@@ -316,7 +317,7 @@ qualification. Presentation and processing-stage authority remain independent.
 
 The pure-data `native_resource_contract.py` freezes the profile's functional
 source closure, current `pyproject.toml` and `requirements/base.in` declarations,
-CPython executable, five native extensions, package versions and Darwin arm64
+CPython executable, compiled extension modules, package versions and Darwin arm64
 runtime. Qualification checks every active direct core requirement against the
 actual installed versions, using the host's requirement markers. Stale installed
 project metadata cannot authorize an older dependency floor. Missing, conflicting
@@ -329,11 +330,10 @@ another platform/build selects fallback. Set `OMP_NUM_THREADS`,
 contract cannot grant capacity. It is reviewed release data; never regenerate it
 merely to make a mismatched installation qualify.
 
-The recorded resource capsule remains historical after the Markdown parser
-security floor moves to `markdown-it-py>=4.3.0,<5`. Its source and direct-package
-identities do not authorize the updated dependency closure. Preserve the capsule
-and its measurements; the current installation uses conservative analytical
-costing until a separately reviewed successor is qualified. A dependency audit,
+The recorded resource capsule remains historical because the current source
+closure has changed. Preserve the capsule and its measurements. The current
+source selects conservative analytical costing until a separately reviewed
+successor is qualified. A dependency audit,
 parser regression test, or source-lock refresh does not establish native resource
 acceptance or enable additional capacity.
 
@@ -652,6 +652,98 @@ second source authority. A 50-scene synthetic workflow proves navigation and
 resource behavior; it does not establish photographic improvement or production
 acceptance of a new photographic set.
 
+### Bounded catalogue thumbnails
+
+Deploy matching backend and frontdoor code and complete fresh native CPU/resource
+qualification before setting `TP_PHOTO_REVIEW_THUMBNAILS_ENABLED=1` on the backend.
+This independent backend flag defaults to `0` and also requires
+`TP_PHOTO_REVIEW_ENABLED=1`. Signed bootstrap advertises
+`features.photographicCatalogueThumbnails` only for a current verified tenant
+context, a successful projection-provider/schema read, and both flags enabled.
+Disabling either flag rejects new thumbnail
+reads; existing scene metadata, inspection and approval contracts remain usable.
+
+Each `/scenes` summary adds an optional `thumbnail` metadata hint containing
+`url`, `artifact_path`, nullable `sha256`, nullable `source_identity_sha256` and
+nullable `presentation_policy_sha256`. This remains a metadata-only page: no
+source, header, companion or pixel reads are added. Missing identities never
+grant validation or browser-cache authority.
+
+`GET /v{1,2}/jobs/{id}/photographic-review/thumbnail` requires `scene_id` and the
+page's `catalogue_identity_sha256`, with `view=clip_srgb` (default) or `recorded`.
+The server selects the latest committed revision, otherwise the latest final,
+working master or original, in that order. Callers cannot select a physical
+path, rendition size or storage object. A changed catalogue returns
+`409 CATALOGUE_CHANGED`; discard the page and reload. Recorded presentation
+retains the existing exact-policy validation and unavailable error.
+
+The response is an sRGB PNG with a maximum edge of 256 pixels and a maximum body
+of 1 MiB. It uses `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`.
+Identity headers include `X-TP-Catalogue-Identity-SHA256`, URL-encoded
+`X-TP-Scene-ID` and `X-TP-Artifact-Path`, source byte/composite identities,
+presentation view/policy and display transform. `X-TP-Native-Width/Height` report
+source geometry; `X-TP-Thumbnail-Width/Height` report the bounded rendition.
+`X-TP-Thumbnail-Max-Edge`, `X-TP-Thumbnail-Max-Bytes` and
+`X-TP-Thumbnail-Renderer: tp.photo.thumbnail.v1` identify the fixed variant.
+
+The explicit `thumbnail` operation reserves the full source render memory,
+scratch, decode and I/O vector in the bulk lane. It cannot consume protected
+interactive inspection capacity. Small output dimensions do not authorize a
+cheaper source decode, and no existing ceiling increases. Only complete
+actor/tenant/job/binding/catalogue/source/composite/presentation/view/renderer
+identities may coalesce in-flight reads. Unresolved identities use separate
+admitted reads. Every subscriber revalidates access and catalogue identity after
+rendering; cancellation drains owned workers before releasing capacity. There
+is no backend bitmap cache, publication or approval effect.
+
+Validate with
+`./.venv/bin/pytest tests/orchestrator/test_photographic_thumbnails.py tests/orchestrator/test_photographic_scene_catalogue.py tests/orchestrator/test_photographic_admission.py -q`.
+These tests prove source and resource contracts; fresh retained CPU measurements
+and browser acceptance remain independent release gates.
+
+For fresh private contention evidence, add `--concurrent-thumbnails` to the
+existing managed qualification command for an explicitly authorized retained
+cohort. This opt-in mode requires the success scenario and concurrent
+inspection. It selects the retained source with the largest declared native
+allocation vector for pressure. Only its supervised child enables thumbnail reads. It proves that
+a thumbnail queues behind native work and its owned outer transport, that a
+stale queued catalogue returns 409, and that a refreshed thumbnail retains its
+decoded raster while protected native inspection completes. The report binds
+the real PNG's source/composite/catalogue/renderer identities and keeps only
+bounded metadata. It checks the same memory, scratch, timeout and RSS margins;
+missing mixed-contention evidence cannot qualify the run. Existing native
+profile hashes must be captured and measured from the frozen source closure;
+neither these synthetic tests nor a hash refresh supplies fresh measurements.
+
+## Review workspace and page thumbnails
+
+At widths of 1,200 pixels and above, the workspace places the photograph rail,
+inspection canvas and decision tools side by side. Tablet layouts place the
+decision tools below the canvas; smaller screens stack the workspace. Open
+**Image evidence and source properties** or **Lighting reference and quality
+signals** for their additional controls. Scene/version selection, comparison
+modes and native inspection remain available. The delivery summary shows the
+approved and excluded counts, selected products, set name and verified ZIP
+destination; export still revalidates every selected source.
+
+Paged thumbnails require the backend's `photographicCatalogueThumbnails`
+capability. Deploy the matching backend and enable both
+`TP_PHOTO_REVIEW_ENABLED=1` and the independent, default-off
+`TP_PHOTO_REVIEW_THUMBNAILS_ENABLED=1`; the authenticated backend must also verify
+the managed context and review store. Thumbnail hints in scene metadata alone
+do not enable requests. Without the capability, scene cards retain their text
+and navigation controls.
+
+The browser loads only visible cards from the current page, with at most two
+thumbnail requests at once and no adjacent-scene detail prefetch. Each verified
+PNG is at most 256 pixels on its longest edge and 1 MiB; thumbnails remain
+8-bit display aids, not precision or approval authority. The page-thumbnail
+cache is bounded to 16 entries and 16 MiB. Responses without complete indexed
+source and presentation identities are not reused across page renders. A failed
+thumbnail leaves its scene card navigable; a changed catalogue requires Refresh.
+Scope changes abort requests and release image URLs. Image bytes remain in
+memory and never enter browser storage.
+
 ## Inspect the actual version
 
 Choose the scene, primary variant and comparison variant. The workbench can
@@ -683,9 +775,10 @@ and the crop/pan controls. Existing portal routes, selectors and managed session
 behavior remain in use.
 
 Fit/native previews use an actor/job/source/presentation-scoped blob cache bounded to 12
-entries and 40 MiB. Contact-sheet thumbnails load lazily and retain at most 64
-entries of at most 1 MiB each. Scope changes abort outstanding requests and
-release their object URLs; no image bytes or API keys enter browser storage.
+entries and 40 MiB. Legacy unpaged contact-sheet thumbnails load lazily and retain
+at most 64 entries of at most 1 MiB each; paged thumbnails use the smaller bounds
+described above. Scope changes abort outstanding requests and release their
+object URLs; no image bytes or API keys enter browser storage.
 
 ## Recorded photographic presentation
 
@@ -917,6 +1010,16 @@ is bounded to ±0.5 EV, local RGB gains to 0.9–1.1, and overlapping adjustment
 have a bounded combined gain. These are manual regions, not inferred semantic
 masks. Preview the exact recipe before saving. Recipe/hash, reference identity,
 input/output hashes, precision and preview render remain in the receipt.
+
+In Side by side inspection, move a numbered region by dragging its rectangle or
+resize it with a corner handle. Arrow keys move the focused handle by one source
+pixel; Shift moves it by ten. Escape restores the rectangle from before the
+current drag. Left, Top, Right and Bottom numeric fields remain available, and
+**Hide region overlays** hides the handles without removing the recipe. Fit
+views and native crops share the same normalized source coordinates; resizing
+keeps a minimum one-source-pixel rectangle within the image. Wipe and blink hide
+the overlays. These controls edit the existing manual rectangle recipe and
+require the same source-bound preview before a revision can be saved.
 
 For representative evaluation, register exact, aligned reference/candidate
 TIFF/PNG/JPEG files outside Git using `tp.property.quality_evalset.v1`. Pairs
@@ -1182,7 +1285,8 @@ treat these dated measurements as performance acceptance.
 For the focused frontend units, from `web/secure-landing`:
 
 ```bash
-node --test tests/photographic-review.test.mjs tests/portal-photographic-profiles.test.mjs
+node --test tests/photographic-review.test.mjs tests/portal-photographic-profiles.test.mjs \
+  tests/photographic-workspace.test.mjs tests/photographic-thumbnails.test.mjs
 ```
 
 The real-HTTP browser fixture uses synthetic disposable photographs and actual

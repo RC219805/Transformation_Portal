@@ -143,7 +143,9 @@ def optimize_multi_agent(
         iterations,
     )
 
+    completed = 0  # steps actually taken; stays 0 when iterations <= 0
     for t in range(iterations):
+        completed = t + 1
         joint_actions: list[NodeAction] = []
 
         # Each agent selects action
@@ -152,7 +154,9 @@ def optimize_multi_agent(
                 continue
 
             s = states[node_id]
-            a_idx, logp, v = agent.model.act(torch.tensor(s).unsqueeze(0))
+            # Acting needs no graph: the trainer recomputes log-prob and value.
+            with torch.no_grad():
+                a_idx, _, _ = agent.model.act(torch.tensor(s).unsqueeze(0))
             action = agent.actions[a_idx]
 
             joint_actions.append(action)
@@ -162,7 +166,7 @@ def optimize_multi_agent(
                 bus.publish(node_id, {"intent": action.action_type})
 
             # Store for training
-            agent.last_transition = (s, a_idx, logp, v)
+            agent.last_transition = (s, a_idx)
 
         # Environment step
         result = env.step(joint_actions)
@@ -176,10 +180,13 @@ def optimize_multi_agent(
             if node_id not in result.states:
                 continue
 
-            s, a_idx, logp, v = agent.last_transition
+            s, a_idx = agent.last_transition
             s2 = result.states[node_id]
 
-            agent.replay.append((s, a_idx, reward, s2, result.done, logp, v))
+            # Only detached data is stored: the replay window below overlaps
+            # between updates, so graph-attached tensors would be backpropagated
+            # through twice.
+            agent.replay.append((s, a_idx, reward, s2, result.done))
 
         # Training updates
         for node_id, agent in agents.items():
@@ -224,7 +231,7 @@ def optimize_multi_agent(
     return MAOptimizationResult(
         best_pipeline=best_pipeline,
         best_score=best_score,
-        iterations=t + 1,
+        iterations=completed,
         total_reward=total_reward,
         score_history=score_history,
         loss_history=loss_history,
@@ -280,7 +287,13 @@ def optimize_with_central_critic(
 
     logger.info("Starting QMIX optimization: %d agents", n_agents)
 
+    # Train once a full batch is available; a run shorter than one batch trains
+    # on everything it collected by its last iteration instead of never training.
+    train_threshold = max(1, min(batch_size, iterations))
+
+    completed = 0  # steps actually taken; stays 0 when iterations <= 0
     for t in range(iterations):
+        completed = t + 1
         joint_actions: list[NodeAction] = []
         actions_dict: dict[str, int] = {}
 
@@ -314,7 +327,7 @@ def optimize_with_central_critic(
         total_reward += result.reward
 
         # Train
-        if len(replay) >= batch_size:
+        if len(replay) >= train_threshold:
             batch = replay[-batch_size:]
             loss = trainer.step(batch)
             loss_history.append(loss)
@@ -334,7 +347,7 @@ def optimize_with_central_critic(
     return MAOptimizationResult(
         best_pipeline=best_pipeline,
         best_score=best_score,
-        iterations=t + 1,
+        iterations=completed,
         total_reward=total_reward,
         score_history=score_history,
         loss_history=loss_history,

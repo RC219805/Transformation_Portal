@@ -20,6 +20,44 @@ test("concurrent refreshes coalesce the selected catalogue read and finish with 
   assert.match(h.root.find("photographic-review-status").textContent, /Review refreshed/);
 });
 
+test("contact rail resets both scroll axes only when ordered page membership changes", async (t) => {
+  const h = fixture();
+  t.after(() => h.api.show(null, null));
+  h.api.show(h.job, h.scenes[0].variants[0]); await settle();
+  const rail = h.root.find("photographic-contact-sheet");
+  rail.scrollTop = 683; rail.scrollLeft = 121;
+  h.server.stateVersion += 1; await h.api.refresh(); await settle();
+  assert.equal(rail.scrollTop, 683); assert.equal(rail.scrollLeft, 121);
+  await h.root.find("photographic-page-next").trigger();
+  assert.equal(selected(h), h.scenes[PAGE_SIZE].scene_id);
+  assert.equal(rail.scrollTop, 0); assert.equal(rail.scrollLeft, 0);
+  rail.scrollTop = 400; rail.scrollLeft = 80;
+  await h.root.find("photographic-page-previous").trigger();
+  assert.equal(rail.scrollTop, 0); assert.equal(rail.scrollLeft, 0);
+  rail.scrollTop = 300; rail.scrollLeft = 50;
+  const sort = h.root.find("photographic-scene-sort"); sort.value = "label"; await sort.trigger("change");
+  assert.equal(rail.scrollTop, 0); assert.equal(rail.scrollLeft, 0);
+});
+
+test("a reset starts a new contact rail scope even when the next job reuses scene IDs", async () => {
+  const h = fixture({ sceneCount: 1 });
+  const node = (tag, text = "", className = "", ui = "") => {
+    const element = new Element(tag); element.textContent = text; element.className = className; element.dataset.ui = ui; return element;
+  };
+  const pager = createPhotographicPagedCatalogue({ el: node, button: (text, ui, handler) => {
+    const control = node("button", text, "", ui); control.addEventListener("click", handler); return control;
+  }, field: (_label, control) => control, select: (ui) => node("select", "", "", ui), status() {}, hasEdits: () => false,
+  selection: () => ({ sceneId: "input-0000" }), apply() {}, request: async (path) => {
+    const url = new URL(path, "http://localhost");
+    return structuredClone(url.pathname === "/scenes" ? h.page(url.searchParams) : h.detail("input-0000"));
+  } });
+  const rail = node("div");
+  await pager.refresh(); pager.renderCards(rail, "input-0000");
+  rail.scrollTop = 683; rail.scrollLeft = 121;
+  pager.reset(); await pager.refresh(); pager.renderCards(rail, "input-0000");
+  assert.equal(rail.scrollTop, 0); assert.equal(rail.scrollLeft, 0);
+});
+
 test("next unreviewed follows the selected name sort across pages", async (t) => {
   const h = fixture();
   t.after(() => h.api.show(null, null));
@@ -790,11 +828,11 @@ test("a retained delivery choice whose approval was revoked can be explicitly ex
   t.after(() => h.api.show(null, null));
   h.api.show(h.job, h.scenes[0].variants[0]); await settle();
   const preset = h.root.find("photographic-preset"); preset.checked = true; await preset.trigger("change");
-  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /2 selected across all pages \(2 currently recorded approved\)/);
+  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /2 approved sources of 10.*2 selected for revalidation/);
   h.server.decisions[0].status = "needs_revision";
   h.server.stateVersion += 1; h.server.catalogueIdentitySha256 = NEXT_CATALOGUE_SHA;
   await h.api.refresh(); await settle();
-  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /2 selected across all pages \(1 currently recorded approved\)/, "Revocation must retain the operator's exact selection until explicit exclusion");
+  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /1 approved source of 10.*2 selected for revalidation/, "Revocation must retain the operator's exact selection until explicit exclusion");
   assert.equal(h.requests.some((request) => request.options.method === "POST"), false);
   await h.root.find("photographic-deliver-approved").trigger();
   assert.equal(requested(h, "/delivery").length, 0, "Revocation blocks export until the operator resolves the retained choice");
@@ -803,12 +841,12 @@ test("a retained delivery choice whose approval was revoked can be explicitly ex
   assert.equal(choice.value, "input-0000/delivery.tif");
   assert.equal(choice.options.some((option) => option.value === ""), true);
   choice.value = ""; await choice.trigger("change");
-  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /1 selected across all pages \(1 currently recorded approved\)/);
+  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /1 approved source of 10.*1 selected for revalidation/);
   assert.equal(requested(h, "/delivery").length, 0, "Explicit exclusion changes only the local delivery selection");
   await h.root.find("photographic-page-next").trigger();
   await h.root.find("photographic-scene-next").trigger();
   assert.equal(selected(h), "input-0009");
-  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /1 selected across all pages/);
+  assert.match(h.root.find("photographic-delivery-selection-summary").textContent, /1 selected for revalidation/);
   await h.root.find("photographic-deliver-approved").trigger();
   assert.equal(requested(h, "/delivery").length, 1);
   const body = JSON.parse(requested(h, "/delivery")[0].options.body);
@@ -831,7 +869,7 @@ test("flag-off review still clears revoked delivery choices automatically", asyn
   h.server.decisions[0].status = "needs_revision"; h.server.stateVersion += 1;
   await h.api.refresh(); await settle();
   assert.deepEqual(h.root.findAll("photographic-delivery-version").map((control) => control.value), ["input-0001/delivery.tif"], "Legacy review must not retain an exclusion control for the revoked source");
-  assert.equal(h.root.find("photographic-delivery-selection-summary").hidden, true);
+  assert.equal(h.root.find("photographic-delivery-selection-summary").hidden, false);
   const preset = h.root.find("photographic-preset"); preset.checked = true; await preset.trigger("change");
   assert.equal(requested(h, "/delivery").length, 0);
   await h.root.find("photographic-deliver-approved").trigger();

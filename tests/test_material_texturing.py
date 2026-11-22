@@ -241,3 +241,17 @@ def test_sky_environment_tints_exterior_region(tmp_path: Path) -> None:
 
     assert sky_region[..., 2].mean() > 0.2
     assert np.allclose(interior_region, rgb[5:, :4, :], atol=1e-2)
+
+
+@pytest.mark.skipif(not IMPORT_SUCCESS, reason="diffusers/torch incompatibility or missing dependencies")
+def test_16bit_greyscale_texture_keeps_its_levels(tmp_path: Path) -> None:
+    """Regression for H-05: a 16-bit grey texture (mode I;16) was clipped at 255 and loaded white."""
+    from transformation_portal.pipelines.lux_render_pipeline import _load_texture_base
+
+    texture_path = tmp_path / "roughness16.png"
+    Image.fromarray(np.array([[0, 16448], [32896, 65535]], dtype=np.uint16)).save(texture_path)
+
+    texture = _load_texture_base(str(texture_path))
+
+    assert texture.shape == (2, 2, 3)
+    assert np.allclose(texture[..., 0], np.array([[0, 64], [128, 255]]) / 255.0)

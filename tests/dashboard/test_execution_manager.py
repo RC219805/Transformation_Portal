@@ -21,6 +21,9 @@ so pipelines are kept to one or two nodes to stay sub-second.
 
 from __future__ import annotations
 
+import asyncio
+import threading
+import time
 from typing import Any, Dict, List
 
 import pytest
@@ -286,6 +289,85 @@ async def test_run_error_is_broadcast_when_scheduling_raises(manager: ExecutionM
     assert "traceback" in error_event
 
 
+class _CountingNode(DAGNode):
+    """Registry node counting its run() calls per tag (D1 regression)."""
+
+    calls: Dict[str, int] = {}
+
+    def __init__(self, tag: str = "n") -> None:
+        self.tag = tag
+
+    def run(self, **inputs: Any) -> Dict[str, Any]:  # type: ignore[override]
+        _CountingNode.calls[self.tag] = _CountingNode.calls.get(self.tag, 0) + 1
+        return {"ok": True}
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize(
+    ("nodes", "edges", "message"),
+    [
+        (["a", "b"], [{"source": "a", "target": "b"}, {"source": "b", "target": "a"}], "Cycle detected"),
+        (["a"], [{"source": "ghost", "target": "a"}], "missing node 'ghost'"),
+    ],
+    ids=["cycle", "dangling-dependency"],
+)
+async def test_invalid_pipeline_fails_instead_of_completing_empty(
+    nodes: List[str], edges: List[Dict[str, str]], message: str
+) -> None:
+    _CountingNode.calls = {}
+    manager = ExecutionManager(node_registry={"count": _CountingNode})
+    pipeline = {
+        "nodes": [{"id": n, "type": "count", "config": {"tag": n}} for n in nodes],
+        "edges": edges,
+    }
+    recorder = _Recorder()
+    run_id = await manager.run_pipeline(pipeline, recorder)
+
+    state = manager.get_run_state(run_id)
+    assert state.status == RunStatus.ERROR
+    assert message in state.error
+    assert "run_complete" not in recorder.types()
+    assert "execution_plan" not in recorder.types()
+    assert _CountingNode.calls == {}
+
+
+@pytest.mark.regression
+async def test_duplicated_plan_executes_each_node_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    from transformation_portal.execution_graph.scheduler import PriorityDAGScheduler
+
+    monkeypatch.setattr(PriorityDAGScheduler, "get_execution_order", lambda self: ["a", "b", "b", "c", "c", "c", "c"])
+    _CountingNode.calls = {}
+    manager = ExecutionManager(node_registry={"count": _CountingNode})
+    pipeline = {
+        "nodes": [{"id": n, "type": "count", "config": {"tag": n}} for n in ("a", "b", "c")],
+        "edges": [],
+    }
+    recorder = _Recorder()
+    run_id = await manager.run_pipeline(pipeline, recorder)
+
+    assert manager.get_run_state(run_id).status == RunStatus.COMPLETE
+    assert _CountingNode.calls == {"a": 1, "b": 1, "c": 1}
+    plan = next(e for e in recorder.events if e["type"] == "execution_plan")
+    assert plan["order"] == ["a", "b", "c"]
+    assert recorder.types().count("node_complete") == 3
+
+
+@pytest.mark.regression
+async def test_plan_missing_a_node_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    from transformation_portal.execution_graph.scheduler import PriorityDAGScheduler
+
+    monkeypatch.setattr(PriorityDAGScheduler, "get_execution_order", lambda self: ["a"])
+    _CountingNode.calls = {}
+    manager = ExecutionManager(node_registry={"count": _CountingNode})
+    pipeline = {"nodes": [{"id": n, "type": "count", "config": {"tag": n}} for n in ("a", "b")], "edges": []}
+    run_id = await manager.run_pipeline(pipeline, _Recorder())
+
+    state = manager.get_run_state(run_id)
+    assert state.status == RunStatus.ERROR
+    assert "['b']" in state.error
+    assert _CountingNode.calls == {}
+
+
 async def test_start_pipeline_background_returns_queryable_task(manager: ExecutionManager) -> None:
     run_id = manager.allocate_run_id()
     recorder = _Recorder()
@@ -324,6 +406,88 @@ async def test_cancellation_before_first_node_skips_all(manager: ExecutionManage
     assert "run_cancelled" in recorder.types()
     assert recorder.types().count("node_skipped") == 2
     assert "run_complete" not in recorder.types()
+
+
+class _BlockingNode(DAGNode):
+    """Registry node that blocks its thread until the test releases it (D11)."""
+
+    started = threading.Event()
+    release = threading.Event()
+    released_by_test: Dict[str, bool] = {}
+    calls: Dict[str, int] = {}
+
+    def __init__(self, tag: str = "n") -> None:
+        self.tag = tag
+
+    def run(self, **inputs: Any) -> Dict[str, Any]:  # type: ignore[override]
+        _BlockingNode.calls[self.tag] = _BlockingNode.calls.get(self.tag, 0) + 1
+        _BlockingNode.started.set()
+        _BlockingNode.released_by_test[self.tag] = _BlockingNode.release.wait(timeout=2.0)
+        return {"ok": True}
+
+
+@pytest.mark.regression
+async def test_cancel_during_running_node_skips_the_next_node() -> None:
+    # D11: node.run() ran synchronously on the event loop, so a cancel issued
+    # while node k ran was only served after node k+1 had already started.
+    _BlockingNode.started = threading.Event()
+    _BlockingNode.release = threading.Event()
+    _BlockingNode.released_by_test = {}
+    _BlockingNode.calls = {}
+    manager = ExecutionManager(node_registry={"block": _BlockingNode})
+    pipeline = {
+        "nodes": [{"id": n, "type": "block", "config": {"tag": n}} for n in ("n1", "n2")],
+        "edges": [{"source": "n1", "target": "n2"}],
+    }
+    recorder = _Recorder()
+    run_id = manager.allocate_run_id()
+    task = manager.start_pipeline_background(run_id, pipeline, recorder)
+    try:
+        deadline = time.monotonic() + 5.0
+        while not _BlockingNode.started.is_set() and time.monotonic() < deadline:
+            await asyncio.sleep(0.01)
+        assert _BlockingNode.started.is_set()
+
+        # The event loop is free while n1 runs: the cancel is served now.
+        assert await manager.cancel_run(run_id, recorder) == "cancelling"
+        _BlockingNode.release.set()
+        await asyncio.wait_for(task, timeout=5.0)
+    finally:
+        _BlockingNode.release.set()
+
+    state = manager.get_run_state(run_id)
+    assert _BlockingNode.released_by_test == {"n1": True}
+    assert _BlockingNode.calls == {"n1": 1}
+    assert state.status == RunStatus.CANCELLED
+    assert state.nodes["n1"].status == NodeStatus.COMPLETE
+    assert state.nodes["n2"].status == NodeStatus.SKIPPED
+
+
+@pytest.mark.regression
+async def test_cancel_just_before_node_invocation_skips_that_node() -> None:
+    # D11: cancellation is re-checked right before a node is invoked, so a
+    # cancel arriving after node_start (during the UI delay) prevents the run.
+    _CountingNode.calls = {}
+    manager = ExecutionManager(node_registry={"count": _CountingNode})
+    pipeline = {"nodes": [{"id": "a", "type": "count", "config": {"tag": "a"}}], "edges": []}
+    run_id = manager.allocate_run_id()
+    manager.prepare_run(run_id, pipeline)
+
+    class _CancelOnLog(_Recorder):
+        async def __call__(self, message: Dict[str, Any]) -> None:
+            await super().__call__(message)
+            if message["type"] == "log" and message.get("node") == "a":
+                await manager.cancel_run(run_id, _Recorder())
+
+    recorder = _CancelOnLog()
+    await manager._execute_pipeline(run_id, pipeline, recorder)
+
+    state = manager.get_run_state(run_id)
+    assert _CountingNode.calls == {}
+    assert state.status == RunStatus.CANCELLED
+    assert state.nodes["a"].status == NodeStatus.SKIPPED
+    assert "node_complete" not in recorder.types()
+    assert recorder.types()[-2:] == ["node_skipped", "run_cancelled"]
 
 
 # --------------------------------------------------------------------------- #

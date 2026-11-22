@@ -11,6 +11,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 DEFAULT_ENV_FILE="/tmp/tp-managed-staging.env"
+SERVICE_CONTRACT_RUNNER="scripts/validation/run_orchestrator_service_contracts.py"
 
 ENV_FILE="${DEFAULT_ENV_FILE}"
 EVIDENCE_OUT=""
@@ -25,7 +26,7 @@ Usage: scripts/validation/run_managed_paid_pilot_gate.sh [options]
 Options:
   --env-file PATH      Provider env file to source (default: /tmp/tp-managed-staging.env)
   --evidence-out PATH  Write a redacted managed-provider acceptance note outside the repository
-  --preflight-only     Validate the clean env and stop before migrations/tests
+  --preflight-only     Validate the clean env without contacting providers
   -h, --help           Show this help
 
 The env file must be outside the repository, mode 0600 or stricter, and contain
@@ -231,8 +232,11 @@ def _url_summary(name: str) -> str:
     raw = os.getenv(name, "").strip()
     if not raw:
         return "unset"
-    parsed = urlsplit(raw)
-    scheme = parsed.scheme or "unknown"
+    try:
+        parsed = urlsplit(raw)
+    except ValueError:
+        return "invalid"
+    scheme = parsed.scheme if parsed.scheme in {"postgresql+asyncpg", "redis", "rediss", "http", "https"} else "unknown"
     database_or_path = "set" if parsed.path.strip("/") else "unset"
     tls = "yes" if scheme.endswith("s") or scheme in {"https", "rediss"} else "no"
     return f"scheme={scheme}; tls={tls}; path={database_or_path}"
@@ -299,6 +303,7 @@ lines.extend(
         "",
         f"- `TP_DATABASE_URL`: `{_url_summary('TP_DATABASE_URL')}`",
         f"- `TP_TEST_POSTGRES_URL`: `{_url_summary('TP_TEST_POSTGRES_URL')}`",
+        f"- `TP_DISPATCH_TEST_DATABASE_URL`: `{_url_summary('TP_DISPATCH_TEST_DATABASE_URL')}`",
         f"- `TP_REDIS_URL`: `{_url_summary('TP_REDIS_URL')}`",
         f"- `TP_TEST_REDIS_URL`: `{_url_summary('TP_TEST_REDIS_URL')}`",
         f"- `TP_FRONTDOOR_REDIS_URL`: `{_url_summary('TP_FRONTDOOR_REDIS_URL')}`",
@@ -353,12 +358,13 @@ from __future__ import annotations
 
 import os
 import sys
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
+
+postgres_targets = ("TP_DATABASE_URL", "TP_TEST_POSTGRES_URL", "TP_DISPATCH_TEST_DATABASE_URL")
 
 required = {
     "TP_ORCHESTRATOR_STATE_BACKEND",
-    "TP_DATABASE_URL",
-    "TP_TEST_POSTGRES_URL",
+    *postgres_targets,
     "TP_ORCHESTRATOR_QUEUE_BACKEND",
     "TP_REDIS_URL",
     "TP_TEST_REDIS_URL",
@@ -403,13 +409,27 @@ def placeholder_like(value: str) -> bool:
     return any(token in normalized for token in placeholder_tokens)
 
 
-def postgres_identity(value: str) -> tuple[str, str, int, str]:
+def postgres_database(value: str) -> str:
+    if any(character.isspace() or ord(character) < 32 for character in value):
+        raise ValueError("invalid Postgres URL")
     parsed = urlsplit(value)
-    scheme = parsed.scheme.split("+", 1)[0]
-    host = (parsed.hostname or "").lower()
-    port = parsed.port or 5432
-    database = parsed.path.lstrip("/")
-    return (scheme, host, port, database)
+    host = (parsed.hostname or "").rstrip(".")
+    port = parsed.port
+    database = parsed.path.removeprefix("/")
+    query_names = {name.casefold() for name, _ in parse_qsl(parsed.query, keep_blank_values=True)}
+    if (
+        parsed.scheme != "postgresql+asyncpg"
+        or not host
+        or (port is not None and not 1 <= port <= 65535)
+        or parsed.netloc.endswith(":")
+        or not database
+        or "/" in database
+        or "%" in database
+        or parsed.fragment
+        or query_names & {"host", "port", "database", "dbname", "user", "db", "path"}
+    ):
+        raise ValueError("invalid Postgres URL")
+    return database
 
 
 provider_env_names = sorted(
@@ -417,15 +437,30 @@ provider_env_names = sorted(
 )
 missing = sorted(name for name in required if not os.getenv(name, "").strip())
 placeholder = sorted(name for name in provider_env_names if placeholder_like(os.getenv(name, "")))
-wrong = {name: os.getenv(name, "") for name, value in expected.items() if os.getenv(name) != value}
+wrong = {name: f"must be {value}" for name, value in expected.items() if os.getenv(name) != value}
 leaked = sorted(name for name in os.environ if name in forbidden or name.startswith(forbidden_prefixes))
+invalid: dict[str, str] = {}
+databases: dict[str, str] = {}
+for name in postgres_targets:
+    if name in missing:
+        continue
+    try:
+        databases[name] = postgres_database(os.environ[name])
+    except ValueError:
+        invalid[name] = "requires a postgresql+asyncpg URL with a host, valid port and plain database name"
+
 unsafe_overlap: dict[str, str] = {}
-db_url = os.getenv("TP_DATABASE_URL", "")
-test_db_url = os.getenv("TP_TEST_POSTGRES_URL", "")
-if db_url and test_db_url and postgres_identity(db_url) == postgres_identity(test_db_url):
-    unsafe_overlap["TP_TEST_POSTGRES_URL"] = (
-        "must not target the same Postgres host/port/database as TP_DATABASE_URL"
-    )
+staging = databases.get("TP_DATABASE_URL")
+reset_test = databases.get("TP_TEST_POSTGRES_URL")
+dispatch_target = "TP_DISPATCH_TEST_DATABASE_URL"
+dispatch_test = databases.get(dispatch_target)
+if staging is not None and staging == reset_test:
+    unsafe_overlap["TP_TEST_POSTGRES_URL"] = "database name must differ from TP_DATABASE_URL"
+if dispatch_test is not None:
+    if not dispatch_test.endswith("_test"):
+        invalid[dispatch_target] = "requires a dedicated database name ending in _test"
+    if dispatch_test in (staging, reset_test):
+        unsafe_overlap[dispatch_target] = "database name must differ from TP_DATABASE_URL and TP_TEST_POSTGRES_URL"
 if os.getenv("TP_ARTIFACT_BUCKET") and os.getenv("TP_ARTIFACT_BUCKET") == os.getenv("TP_TEST_S3_BUCKET"):
     unsafe_overlap["TP_TEST_S3_BUCKET"] = "must not equal TP_ARTIFACT_BUCKET"
 
@@ -433,9 +468,10 @@ print("missing:", missing)
 print("placeholder-like:", placeholder)
 print("wrong selectors:", wrong)
 print("leaked local-dev vars:", leaked)
+print("invalid Postgres targets:", invalid)
 print("unsafe managed/test overlap:", unsafe_overlap)
 
-raise SystemExit(1 if missing or placeholder or wrong or leaked or unsafe_overlap else 0)
+raise SystemExit(1 if missing or placeholder or wrong or leaked or invalid or unsafe_overlap else 0)
 PY
 
 validate_evidence_out
@@ -448,12 +484,14 @@ if [[ "${PREFLIGHT_ONLY}" == "1" ]]; then
 fi
 
 initialize_gate_plan() {
+    record_step "Destructive-test DB safety preflight" "python ${SERVICE_CONTRACT_RUNNER} provider-preflight" "not_run" ""
     record_step "Database migrations" "make db-upgrade" "not_run" ""
-    record_step "Orchestrator Postgres contract" "TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-orchestrator-postgres-contract" "not_run" ""
+    record_step "Orchestrator Postgres contract" "python ${SERVICE_CONTRACT_RUNNER} provider-plain" "not_run" ""
     record_step "Orchestrator Postgres app contract" "TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-orchestrator-postgres-app-contract" "not_run" ""
     record_step "Worker Redis contract" "TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-worker-redis-contract" "not_run" ""
     record_step "Artifact S3 contract" "make test-artifact-s3-contract" "not_run" ""
     record_step "Frontdoor Redis contract" "make test-frontdoor-redis-contract" "not_run" ""
+    record_step "Orchestrator service authority contracts" "python ${SERVICE_CONTRACT_RUNNER} provider" "not_run" ""
     record_step "Integrated paid-pilot smoke" "TP_RUN_PAID_PILOT_SERVICES_CONTRACT=1 python -m pytest -q tests/orchestrator/test_paid_pilot_services_contract.py -m unit" "not_run" ""
 }
 
@@ -479,11 +517,13 @@ run_gate_step() {
 }
 
 initialize_gate_plan
+run_gate_step "Destructive-test DB safety preflight" "python ${SERVICE_CONTRACT_RUNNER} provider-preflight" "${PYTHON_BIN}" "${SERVICE_CONTRACT_RUNNER}" provider-preflight
 run_gate_step "Database migrations" "make db-upgrade" make db-upgrade
-run_gate_step "Orchestrator Postgres contract" "TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-orchestrator-postgres-contract" env TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-orchestrator-postgres-contract
+run_gate_step "Orchestrator Postgres contract" "python ${SERVICE_CONTRACT_RUNNER} provider-plain" "${PYTHON_BIN}" "${SERVICE_CONTRACT_RUNNER}" provider-plain
 run_gate_step "Orchestrator Postgres app contract" "TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-orchestrator-postgres-app-contract" env TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-orchestrator-postgres-app-contract
 run_gate_step "Worker Redis contract" "TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-worker-redis-contract" env TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-worker-redis-contract
 run_gate_step "Artifact S3 contract" "make test-artifact-s3-contract" make test-artifact-s3-contract
 run_gate_step "Frontdoor Redis contract" "make test-frontdoor-redis-contract" make test-frontdoor-redis-contract
+run_gate_step "Orchestrator service authority contracts" "python ${SERVICE_CONTRACT_RUNNER} provider" "${PYTHON_BIN}" "${SERVICE_CONTRACT_RUNNER}" provider
 run_gate_step "Integrated paid-pilot smoke" "TP_RUN_PAID_PILOT_SERVICES_CONTRACT=1 python -m pytest -q tests/orchestrator/test_paid_pilot_services_contract.py -m unit" env TP_RUN_PAID_PILOT_SERVICES_CONTRACT=1 "${PYTHON_BIN}" -m pytest -q tests/orchestrator/test_paid_pilot_services_contract.py -m unit
 write_evidence_note "gate_passed"

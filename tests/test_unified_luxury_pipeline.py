@@ -457,6 +457,20 @@ class TestMetadataPreservation:
         assert "size" in metadata
         assert metadata["mode"] == "RGB"
 
+    def test_16bit_greyscale_png_is_scaled_not_clipped(self, temp_dir):
+        """Regression for H-05: a 16-bit grey PNG (mode I;16) loaded almost pure white."""
+        png_path = temp_dir / "grey16.png"
+        Image.fromarray(np.array([[0, 16448, 32896, 65535]], dtype=np.uint16)).save(png_path)
+
+        config = UnifiedPipelineConfig(output_dir=temp_dir, output_formats=[OutputFormat.MASTER_TIFF])
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        image, metadata = pipeline._load_image(png_path)
+
+        assert metadata["mode"] == "I;16"
+        assert image.mode == "RGB"
+        assert np.asarray(image)[0, :, 0].tolist() == [0, 64, 128, 255]
+
     @pytest.mark.skipif(not HAS_TIFFFILE, reason="tifffile fast TIFF path requires tifffile")
     def test_tiff_loading_uses_tifffile_fast_path_for_16bit_rgb(self, temp_dir):
         """Test 16-bit TIFF inputs use the tifffile loader path."""
@@ -497,6 +511,21 @@ class TestMetadataPreservation:
         assert metadata["load_backend"] == "PIL"
         assert metadata["tiff_photometric"] == "SEPARATED"
         assert metadata["tifffile_skip_reason"] == "unsupported_photometric"
+
+    @pytest.mark.regression
+    @pytest.mark.parametrize("name", ["render.exr", "RENDER.EXR"])
+    def test_exr_input_is_rejected_with_actionable_error(self, temp_dir, name):
+        """M-09: EXR cannot be decoded, so the loader must fail with a clear message."""
+
+        exr_path = temp_dir / name
+        # OpenEXR magic number followed by padding; Pillow has no decoder for it.
+        exr_path.write_bytes(b"\x76\x2f\x31\x01" + b"\0" * 100)
+
+        config = UnifiedPipelineConfig(output_dir=temp_dir, output_formats=[OutputFormat.MASTER_TIFF])
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        with pytest.raises(ValueError, match="cannot read OpenEXR"):
+            pipeline._load_image(exr_path)
 
 
 class TestGracefulDegradation:
@@ -763,6 +792,96 @@ class TestBatchProcessing:
         assert pipeline.stats.images_processed == 1
         assert pipeline.stats.images_failed == 1
 
+    @pytest.mark.parametrize("parallel_io", [False, True])
+    def test_batch_same_stem_inputs_do_not_overwrite_each_other(self, temp_dir, parallel_io):
+        """kitchen.png and kitchen.tif (both in the default pattern) keep separate deliverables."""
+        src = temp_dir / "in"
+        src.mkdir()
+        bright = src / "kitchen.png"
+        dark = src / "kitchen.tif"
+        other = src / "lounge.png"
+        Image.fromarray(np.full((32, 32, 3), 250, np.uint8)).save(bright)
+        Image.fromarray(np.full((32, 32, 3), 10, np.uint8)).save(dark)
+        Image.fromarray(np.full((32, 32, 3), 128, np.uint8)).save(other)
+
+        out = temp_dir / "out"
+        config = UnifiedPipelineConfig(
+            scene_type=SceneType.INTERIOR,
+            output_dir=out,
+            output_formats=[OutputFormat.WEB_4K],
+            enable_depth=False,
+            enable_material_response=False,
+            enable_color_grading=False,
+            parallel_io=parallel_io,
+        )
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        results = pipeline.batch_process([bright, dark, other], show_progress=False)
+
+        # Non-colliding and first-claimed names are unchanged; only the later collider moves.
+        assert results[bright]["web"] == out / "kitchen_WEB_4K.jpg"
+        assert results[dark]["web"] == out / "kitchen_tif_WEB_4K.jpg"
+        assert results[other]["web"] == out / "lounge_WEB_4K.jpg"
+        assert sorted(p.name for p in out.iterdir()) == [
+            "kitchen_WEB_4K.jpg",
+            "kitchen_tif_WEB_4K.jpg",
+            "lounge_WEB_4K.jpg",
+        ]
+        assert np.asarray(Image.open(results[bright]["web"])).mean() > 240
+        assert np.asarray(Image.open(results[dark]["web"])).mean() < 20
+        assert pipeline.stats.images_processed == 3
+
+    @pytest.mark.regression
+    @pytest.mark.parametrize("parallel_io", [False, True])
+    def test_batch_accepts_string_input_paths(self, temp_dir, parallel_io):
+        """M-02 follow-up: str inputs must find their output stem on the parallel I/O path too."""
+        src = temp_dir / "in"
+        src.mkdir()
+        first = src / "kitchen.png"
+        second = src / "kitchen.tif"
+        Image.fromarray(np.full((32, 32, 3), 250, np.uint8)).save(first)
+        Image.fromarray(np.full((32, 32, 3), 10, np.uint8)).save(second)
+
+        out = temp_dir / "out"
+        config = UnifiedPipelineConfig(
+            scene_type=SceneType.INTERIOR,
+            output_dir=out,
+            output_formats=[OutputFormat.WEB_4K],
+            enable_depth=False,
+            enable_material_response=False,
+            enable_color_grading=False,
+            parallel_io=parallel_io,
+        )
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        pipeline.batch_process([str(first), str(second)], show_progress=False)
+
+        assert pipeline.stats.images_processed == 2
+        assert pipeline.stats.images_failed == 0
+        assert sorted(p.name for p in out.iterdir()) == ["kitchen_WEB_4K.jpg", "kitchen_tif_WEB_4K.jpg"]
+
+    def test_failed_output_write_leaves_previous_deliverable_intact(self, temp_dir, sample_image):
+        """Outputs are written to a temp file and replaced, so a failed save keeps the old file."""
+        out = temp_dir / "out"
+        out.mkdir()
+        previous = out / "render_WEB_4K.jpg"
+        previous.write_bytes(b"previous deliverable")
+        config = UnifiedPipelineConfig(output_dir=out)
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        class _BrokenImage:
+            size = (10, 10)
+
+            def save(self, path, **kwargs):
+                Path(path).write_bytes(b"partial")
+                raise OSError("disk full")
+
+        with pytest.raises(OSError, match="disk full"):
+            pipeline._save_web_4k(_BrokenImage(), "render", None, out)
+
+        assert previous.read_bytes() == b"previous deliverable"
+        assert sorted(p.name for p in out.iterdir()) == ["render_WEB_4K.jpg"]
+
 
 class TestStatisticsSaving:
     """Test statistics tracking and saving."""
@@ -840,6 +959,24 @@ class TestConvenienceFunctions:
         assert input_dir / "b.tif" in input_paths
         assert input_dir / "c.jpg" in input_paths
         assert input_dir / "skip.ti" not in input_paths
+
+    @pytest.mark.regression
+    @patch("transformation_portal.pipelines.unified_luxury_pipeline.UnifiedLuxuryPipeline")
+    def test_batch_process_luxury_renders_default_skips_unreadable_exr(self, mock_pipeline_class, sample_image, temp_dir):
+        """M-09: the default pattern must not discover EXR files the loader cannot read."""
+        input_dir = temp_dir / "inputs"
+        input_dir.mkdir()
+        sample_image.save(input_dir / "keep.png")
+        (input_dir / "render.exr").write_bytes(b"\x76\x2f\x31\x01" + b"\0" * 100)
+
+        mock_instance = MagicMock()
+        mock_instance.batch_process.return_value = {}
+        mock_pipeline_class.return_value = mock_instance
+
+        batch_process_luxury_renders(input_dir, output_dir=temp_dir / "output")
+
+        input_paths = mock_instance.batch_process.call_args.args[0]
+        assert input_paths == [input_dir / "keep.png"]
 
     @patch("transformation_portal.pipelines.unified_luxury_pipeline.UnifiedLuxuryPipeline")
     def test_batch_process_luxury_renders_respects_custom_pattern(self, mock_pipeline_class, sample_image, temp_dir):
@@ -948,6 +1085,18 @@ class TestColorGrading:
 
         assert isinstance(result, Image.Image)
 
+    def test_grading_quantises_by_rounding(self, temp_dir):
+        """Regression for L-03: grading truncated ``arr * 255`` to uint8, darkening output by ~0.5 level."""
+        config = UnifiedPipelineConfig(output_dir=temp_dir, enable_depth=False, enable_material_response=False)
+        pipeline = UnifiedLuxuryPipeline(config)
+        rng = np.random.default_rng(3)
+        source = rng.integers(0, 256, (64, 64, 3), dtype=np.uint8)
+
+        params = {"exposure": 0.0, "contrast": 1.0, "saturation": 1.01}
+        result = np.asarray(pipeline._apply_color_grading(Image.fromarray(source, "RGB"), params)).astype(np.float64)
+
+        assert abs(result.mean() - source.mean()) < 0.2
+
 
 class TestMaterialResponse:
     """Test Material Response processing."""
@@ -962,6 +1111,27 @@ class TestMaterialResponse:
 
         assert isinstance(result, Image.Image)
         assert result.size == sample_image.size
+
+    def test_material_response_never_blurs_across_colour_channels(self, sample_image, temp_dir, monkeypatch):
+        """Regression for H-04: every Gaussian on an HxWx3 array must leave the channel axis alone."""
+        import scipy.ndimage
+
+        real_gaussian = scipy.ndimage.gaussian_filter
+        rgb_sigmas = []
+
+        def spy(input, sigma, *args, **kwargs):  # pylint: disable=redefined-builtin
+            if np.ndim(input) == 3:
+                rgb_sigmas.append(sigma)
+            return real_gaussian(input, sigma, *args, **kwargs)
+
+        monkeypatch.setattr(scipy.ndimage, "gaussian_filter", spy)
+        pipeline = UnifiedLuxuryPipeline(UnifiedPipelineConfig(output_dir=temp_dir, enable_material_response=True))
+
+        pipeline._apply_material_response(sample_image, {"material_strength": 0.7}, SceneType.INTERIOR)
+
+        assert rgb_sigmas, "material response should blur the RGB array at least once"
+        for sigma in rgb_sigmas:
+            assert np.ndim(sigma) == 1 and len(sigma) == 3 and sigma[-1] == 0, sigma
 
 
 class TestEdgeCases:
@@ -1018,3 +1188,26 @@ class TestEdgeCases:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestDeliverableResizeTargets:
+    """Downscaled deliverables must hit their long-edge target exactly (finding L-06)."""
+
+    @pytest.mark.parametrize(
+        ("method", "size", "expected"),
+        [
+            ("_save_web_4k", (4269, 12), (3840, 11)),
+            ("_save_web_4k", (12, 4269), (11, 3840)),
+            ("_save_print_8k", (8538, 10), (7680, 9)),
+            ("_save_social", (2140, 12), (1080, 6)),
+            ("_save_magazine", (4269, 12), (2048, 6)),
+        ],
+    )
+    def test_long_edge_hits_target(self, temp_dir, method, size, expected):
+        pipeline = UnifiedLuxuryPipeline(UnifiedPipelineConfig(output_dir=temp_dir))
+        image = Image.new("RGB", size, (120, 90, 60))
+
+        output_path = getattr(pipeline, method)(image, "edge", None)
+
+        with Image.open(output_path) as loaded:
+            assert loaded.size == expected

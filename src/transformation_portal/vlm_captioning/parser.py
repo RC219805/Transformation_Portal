@@ -32,6 +32,10 @@ _KEY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _TAG_RE = re.compile(r"<[^>]+>")
+# A line that starts (after indentation) with "Prompt:". The indentation class
+# excludes the newline: "^\s*" also ran across blank lines, which made the search
+# quadratic in their number (seconds for 64 Ki blank lines) with the same matches.
+_PROMPT_ECHO_RE = re.compile(r"(?m)^[^\S\n]*Prompt:")
 
 
 @dataclass(frozen=True)
@@ -79,7 +83,7 @@ def _caption_candidate(raw_text: str) -> str:
     if assistant_marker in text:
         text = text.rsplit(assistant_marker, 1)[1].split("<|im_end|>", 1)[0]
         text = re.split(r"(?m)^={5,}\s*$", text, maxsplit=1)[0]
-    elif "<|im_start|>" in text or re.search(r"(?m)^\s*Prompt:", text):
+    elif "<|im_start|>" in text or _PROMPT_ECHO_RE.search(text):
         return ""
     no_tags = _TAG_RE.sub(" ", text)
     no_tags = no_tags.replace("|", ";")

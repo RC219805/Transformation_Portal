@@ -599,6 +599,13 @@ class EnhanceConfig:
     native_materials_policy: Optional[Path] = None
     native_materials_binding: Optional[dict] = None
 
+    # Private marker recording that the operator requested the ``apex-strict``
+    # sentinel. ``__post_init__`` canonicalises the sentinel to ``fail``, which is
+    # indistinguishable from the default; the marker keeps re-construction via
+    # ``dataclasses.replace`` from re-applying the APEX ``v2-auto`` upgrade.
+    # Excluded from repr/equality; never serialised.
+    _apex_strict_requested: bool = field(default=False, repr=False, compare=False)
+
     def __post_init__(self) -> None:
         """Normalize backend identifiers and compatibility fields."""
         validate_geometry_recipe(self.geometry_recipe)
@@ -731,9 +738,15 @@ class EnhanceConfig:
         # tier auto-upgrade below. Canonicalize to "fail" so all downstream
         # branches (orchestrator runtime, manifest serializer, validator) only
         # ever see the documented {fail, skip, v2-auto} value set.
-        apex_strict_explicit = self.depth_fallback == "apex-strict"
-        if apex_strict_explicit:
+        # A config rebuilt from an already-normalised one (``dataclasses.replace``)
+        # carries the private marker with a canonical ``fail``; honour it unless
+        # the caller replaced the policy with a different value.
+        if self.depth_fallback == "apex-strict":
+            self._apex_strict_requested = True
             self.depth_fallback = "fail"
+        elif self.depth_fallback != "fail":
+            self._apex_strict_requested = False
+        apex_strict_explicit = bool(self._apex_strict_requested)
 
         # APEX tier auto-upgrade: when DA3 + DA2 both fail their depth gates on
         # genuinely flat scenes (e.g. uniform sky / glare), recover via the V2

@@ -124,3 +124,99 @@ def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch, c
         else:
             pipelines_package.__dict__.pop("lux_render_pipeline", None)
         portal_module._lux_render = original_cached_pipeline
+
+
+def test_lux_render_batch_exits_nonzero_when_every_file_fails(monkeypatch, tmp_path) -> None:
+    """M-08: a batch in which every input fails must not exit 0."""
+    pipeline_module = importlib.import_module(PIPELINE_MODULE)
+
+    class _StubPipeline:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def enhance(self, **kwargs):  # pragma: no cover - unreadable inputs fail before enhance
+            raise AssertionError("enhance must not run for unreadable inputs")
+
+    monkeypatch.setattr(pipeline_module, "_require_lux_render_runtime_dependencies", lambda: None)
+    monkeypatch.setattr(pipeline_module, "LuxuryRenderPipeline", _StubPipeline)
+    (tmp_path / "a.png").write_bytes(b"not an image")
+    (tmp_path / "b.png").write_bytes(b"also not an image")
+
+    result = CliRunner().invoke(
+        pipeline_module.app,
+        ["--input-glob", str(tmp_path / "*.png"), "--out", str(tmp_path / "out"), "--prompt", "luxury interior"],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "all 2 file(s) failed" in (result.stdout or "") + (result.stderr or "")
+    assert not list((tmp_path / "out").glob("*"))
+
+
+def test_lux_render_batch_same_stem_inputs_keep_separate_outputs(monkeypatch, tmp_path) -> None:
+    """M-02: kitchen.png and kitchen.jpg must not both write kitchen_lux.png."""
+    from PIL import Image
+
+    pipeline_module = importlib.import_module(PIPELINE_MODULE)
+
+    class _IdentityPipeline:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def enhance(self, **kwargs):
+            return kwargs["init_image"]
+
+    monkeypatch.setattr(pipeline_module, "_require_lux_render_runtime_dependencies", lambda: None)
+    monkeypatch.setattr(pipeline_module, "LuxuryRenderPipeline", _IdentityPipeline)
+    src = tmp_path / "in"
+    src.mkdir()
+    Image.new("RGB", (8, 8), color=(250, 250, 250)).save(src / "kitchen.jpg")
+    Image.new("RGB", (8, 8), color=(10, 10, 10)).save(src / "kitchen.png")
+    out = tmp_path / "out"
+
+    result = CliRunner().invoke(
+        pipeline_module.app,
+        ["--input-glob", f"{src / '*.jpg'},{src / '*.png'}", "--out", str(out), "--prompt", "luxury interior"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert sorted(p.name for p in out.iterdir()) == ["kitchen_lux.png", "kitchen_png_lux.png"]
+    with Image.open(out / "kitchen_lux.png") as bright, Image.open(out / "kitchen_png_lux.png") as dark:
+        assert bright.getpixel((0, 0))[0] > 200
+        assert dark.getpixel((0, 0))[0] < 50
+
+
+def test_overlay_caption_uses_intended_font_size_and_translucent_box(monkeypatch) -> None:
+    """L-02: the caption asks for arial.ttf, keeps its size on fallback and blends its box at 60% alpha."""
+
+    np = pytest.importorskip("numpy")
+    from PIL import Image, ImageFont
+
+    from transformation_portal.pipelines import lux_render_pipeline as lux
+
+    requested: list[str] = []
+    real_truetype = ImageFont.truetype
+
+    def _missing_truetype(font, *args, **kwargs):
+        if isinstance(font, str):
+            requested.append(font)
+            raise OSError("cannot open resource")
+        # Pillow's sized load_default() loads its bundled font from bytes.
+        return real_truetype(font, *args, **kwargs)
+
+    # Force the fallback path so the result does not depend on installed system fonts.
+    monkeypatch.setattr(ImageFont, "truetype", _missing_truetype)
+
+    grey = 128
+    img = Image.new("RGB", (3840, 2160), (grey, grey, grey))
+    out_img = lux.overlay_logo_caption(img, None, "The Veridian | Penthouse 21B")
+    out = np.array(out_img)
+
+    assert requested == ["arial.ttf"]
+    assert out_img.mode == "RGB"
+    ys, xs = np.nonzero((out != grey).any(axis=2))
+    intended_size = 2160 // 40
+    # Box height = text height + 2 * 14 px padding; the tiny bitmap default gave 40 px.
+    assert ys.max() - ys.min() + 1 >= intended_size
+    box_corner = out[ys.min() + 2, xs.min() + 2]
+    expected = round(grey * (255 - 160) / 255)
+    assert np.all(np.abs(box_corner.astype(int) - expected) <= 1)

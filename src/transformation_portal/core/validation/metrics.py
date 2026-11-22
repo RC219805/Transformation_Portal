@@ -47,11 +47,16 @@ class MetricsComputer:
         # Cast before arithmetic so uint8 differences and squares cannot wrap.
         mse = float(np.mean((target.astype(float) - prediction.astype(float)) ** 2))
 
+        # Handle data range: the full span of an integer type, 0-1 for floats.
+        # Assuming 1.0 for every non-uint8 input rated 16-bit images absurdly low.
+        if np.issubdtype(prediction.dtype, np.integer):
+            dtype_info = np.iinfo(prediction.dtype)
+            data_range = float(dtype_info.max) - float(dtype_info.min)
+        else:
+            data_range = 1.0
+
         # Use skimage if available (Robust)
         if SKIMAGE_AVAIL:
-            # Handle data range
-            data_range = 255 if prediction.dtype == np.uint8 else 1.0
-
             # Multichannel must be explicitly set for SSIM in new skimage versions
             channel_axis = -1 if prediction.ndim == 3 else None
 
@@ -63,7 +68,6 @@ class MetricsComputer:
         if mse == 0:
             return QualityMetrics(100.0, 1.0, 0.0)
 
-        max_pixel = 255.0 if prediction.dtype == np.uint8 else 1.0
-        psnr_val = 20 * math.log10(max_pixel / math.sqrt(mse))
+        psnr_val = 20 * math.log10(data_range / math.sqrt(mse))
 
         return QualityMetrics(psnr_val, 0.0, mse)  # SSIM hard to implement manually efficiently

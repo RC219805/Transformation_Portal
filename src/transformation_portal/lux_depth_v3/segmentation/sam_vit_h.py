@@ -9,9 +9,15 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from ..material_confidence_contract import HEURISTIC_MATERIAL_SCORE_TYPE
 from ..protocols.segmentation_backend import SegmentationBackendInfo
 
 logger = logging.getLogger(__name__)
+
+# Material labels come from a mean-colour rule, not a semantic classifier, so
+# they carry the same fixed heuristic confidence as EfficientSAM's heuristic
+# path. SAM's predicted_iou measures mask geometry and is reported separately.
+_HEURISTIC_MATERIAL_CONFIDENCE = 0.5
 
 try:
     import torch
@@ -89,6 +95,8 @@ class SAMVitHBackend:
         self._device: Optional[str] = None
         self._mask_generator: Any = None
         self._runtime_metadata: Optional[Dict[str, Any]] = None
+        self._material_confidence_evidence: Dict[str, Dict[str, Any]] = {}
+        self._material_mask_predicted_iou: Dict[str, float] = {}
 
     @property
     def info(self) -> SegmentationBackendInfo:
@@ -174,7 +182,9 @@ class SAMVitHBackend:
         Returns:
             Dict mapping material names to (mask, confidence) tuples:
             - mask: (H, W) float32 [0.0-1.0]
-            - confidence: predicted_iou of the best matching mask [0.0-1.0]
+            - confidence: fixed heuristic material confidence (0.5); the
+              labels come from a colour rule, and the best mask predicted_iou
+              is exposed separately as geometry metadata
 
         Raises:
             RuntimeError: If model not loaded or inference fails
@@ -286,8 +296,11 @@ class SAMVitHBackend:
         Applies the same material taxonomy as EfficientSAMBackend._heuristic_segmentation()
         but on a per-mask basis: the mean color of each masked region determines the label.
         Masks below confidence_threshold (predicted_iou) are discarded.
-        Masks for the same material are merged via np.maximum; the best predicted_iou
-        for each material is reported as the material's confidence score.
+        Masks for the same material are merged via np.maximum. The reported
+        material confidence is the fixed heuristic value (0.5) with
+        ``heuristic_material_confidence_v1`` evidence: predicted_iou describes
+        mask geometry, not the label, and is kept as ``material_mask_predicted_iou``
+        runtime metadata (best IoU per material).
 
         Material taxonomy:
         - glass:   high brightness (>0.6) + blue tint
@@ -299,7 +312,7 @@ class SAMVitHBackend:
         img_float = image.astype(np.float32) / 255.0
 
         material_masks: Dict[str, np.ndarray] = {}
-        material_confidences: Dict[str, float] = {}
+        material_mask_iou: Dict[str, float] = {}
 
         for mask_dict in raw_masks:
             iou = float(mask_dict.get("predicted_iou", 0.0))
@@ -327,12 +340,24 @@ class SAMVitHBackend:
             float_mask = seg.astype(np.float32)
             if label in material_masks:
                 material_masks[label] = np.maximum(material_masks[label], float_mask)
-                material_confidences[label] = max(material_confidences[label], iou)
+                material_mask_iou[label] = max(material_mask_iou[label], iou)
             else:
                 material_masks[label] = float_mask
-                material_confidences[label] = iou
+                material_mask_iou[label] = iou
 
-        return {mat: (material_masks[mat], material_confidences[mat]) for mat in material_masks}
+        self._material_mask_predicted_iou = dict(material_mask_iou)
+        self._material_confidence_evidence = {
+            mat: {
+                "material_confidence": _HEURISTIC_MATERIAL_CONFIDENCE,
+                "confidence_score_type": HEURISTIC_MATERIAL_SCORE_TYPE,
+                "raw_clip_similarity": None,
+                "clip_softmax_probability": None,
+                "clip_top2_margin": None,
+                "calibration_version": None,
+            }
+            for mat in material_masks
+        }
+        return {mat: (material_masks[mat], _HEURISTIC_MATERIAL_CONFIDENCE) for mat in material_masks}
 
     @staticmethod
     def _heuristic_label(r: float, g: float, b: float, brightness: float) -> Optional[str]:
@@ -353,4 +378,12 @@ class SAMVitHBackend:
         return None
 
     def get_runtime_metadata(self) -> Optional[Dict[str, Any]]:
-        return self._runtime_metadata
+        if self._runtime_metadata is None and not self._material_confidence_evidence:
+            return None
+        metadata: Dict[str, Any] = dict(self._runtime_metadata or {})
+        if self._material_confidence_evidence:
+            metadata["material_confidence_evidence"] = {
+                material: dict(values) for material, values in self._material_confidence_evidence.items()
+            }
+            metadata["material_mask_predicted_iou"] = dict(self._material_mask_predicted_iou)
+        return metadata

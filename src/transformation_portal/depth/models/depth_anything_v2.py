@@ -366,7 +366,7 @@ class DepthAnythingV2Model:
         elif self.backend in [ModelBackend.PYTORCH_CPU, ModelBackend.PYTORCH_MPS]:
             self._load_pytorch_model()
         else:
-            raise NotImplementedError(f"Backend {self.backend} not implemented")
+            raise NotImplementedError(f"Backend {self.backend} not implemented (@specialist)")
 
     def _load_pytorch_model(self) -> None:
         """Load PyTorch model using transformers."""
@@ -815,11 +815,20 @@ def safe_depth_estimation(
         if "out of memory" in str(e).lower():
             logger.warning("OOM error, falling back to %spx resolution", fallback_size)
 
-            # Downscale image
+            # Record the caller's size before downscaling; the depth map is
+            # upscaled back to it.
+            original_size = image.shape[:2] if isinstance(image, np.ndarray) else image.size[::-1]
+
+            # Downscale a private copy: thumbnail() resizes in place and must
+            # never shrink the caller's image.
             if isinstance(image, np.ndarray):
-                image_pil = Image.fromarray(image)
+                array = image
+                if array.dtype in (np.float32, np.float64):
+                    # Same [0, 1] float convention as estimate_depth().
+                    array = (array * 255).astype(np.uint8)
+                image_pil = Image.fromarray(array)
             else:
-                image_pil = image
+                image_pil = image.copy()
 
             image_pil.thumbnail((fallback_size, fallback_size), Image.Resampling.LANCZOS)
 
@@ -827,7 +836,6 @@ def safe_depth_estimation(
             result = model.estimate_depth(image_pil)
 
             # Upscale depth map to original size
-            original_size = image.shape[:2] if isinstance(image, np.ndarray) else image.size[::-1]
             if not SKIMAGE_AVAILABLE:
                 raise ImportError("scikit-image is required for resizing. " "Install with: pip install scikit-image") from None
 

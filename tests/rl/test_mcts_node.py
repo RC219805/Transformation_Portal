@@ -267,3 +267,45 @@ class TestDepthAndPath:
         """__repr__ returns a string without error."""
         node = _root()
         assert isinstance(repr(node), str)
+
+
+class TestGetPolicyVisitCountSemantics:
+    """Regression tests for R13: visit-count policy, not a softmax over raw counts."""
+
+    def _root_with_visits(self, counts: list[int]) -> MCTSNode:
+        root = _expanded_root(n_actions=len(counts))
+        for action, n in enumerate(counts):
+            if n:
+                child = root.add_child(action, f"s{action}")
+                for _ in range(n):
+                    child.update(0.5)
+        return root
+
+    def test_temperature_one_is_proportional_to_visits(self):
+        """temperature=1 gives N(a) / sum(N)."""
+        policy = self._root_with_visits([30, 20]).get_policy(temperature=1.0)
+        assert policy[0] == pytest.approx(0.6)
+        assert policy[1] == pytest.approx(0.4)
+
+    def test_temperature_half_squares_visit_counts(self):
+        """temperature=0.5 gives N(a)**2 normalised."""
+        policy = self._root_with_visits([2, 1]).get_policy(temperature=0.5)
+        assert policy[0] == pytest.approx(0.8)
+        assert policy[1] == pytest.approx(0.2)
+
+    def test_temperature_zero_splits_ties(self):
+        """temperature=0 with tied visit counts still sums to 1."""
+        policy = _expanded_root(n_actions=3).get_policy(temperature=0)
+        assert sum(policy.values()) == pytest.approx(1.0)
+        assert all(p == pytest.approx(1.0 / 3) for p in policy.values())
+
+    def test_small_temperature_does_not_overflow(self):
+        """A tiny temperature approaches greedy without overflowing."""
+        policy = self._root_with_visits([50, 30]).get_policy(temperature=0.001)
+        assert policy[0] == pytest.approx(1.0)
+        assert sum(policy.values()) == pytest.approx(1.0)
+
+    def test_no_visits_is_uniform(self):
+        """With no visits the policy is uniform for temperature > 0."""
+        policy = _expanded_root(n_actions=4).get_policy(temperature=1.0)
+        assert all(p == pytest.approx(0.25) for p in policy.values())

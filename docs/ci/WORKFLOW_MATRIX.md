@@ -2,13 +2,13 @@
 
 **Purpose**: Canonical reference for all GitHub Actions workflows. Tracks the full inventory and the consolidation roadmap.
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-11-15 UTC
+**Last Updated**: 2026-11-18
 
 ---
 
 ## Status Snapshot
 
-- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,508 lines total
+- **Workflow files**: 31 (`.github/workflows/*.yml`), 8,587 lines total
 - **Required PR check snapshot (2026-11-15 UTC)**: GitHub main protection requires `CI Gate` and `Dependency Security`, both bound to GitHub Actions app `15368`, with strict up-to-date checking. Re-read remote settings before merge.
 - **Additional remote rules**: active default-branch ruleset `9331244` configures Copilot review, code quality (`all`), and CodeQL scanning (both alert thresholds `all`); status contexts alone are not the entire merge policy. The Code Quality setup API currently reports that the feature is unavailable; configured severity is not proof of analysis or zero findings.
 - **Historical consolidation target**: 31 → ~19 workflows; the [roadmap](#consolidation-roadmap) is a proposal, not current authorization to remove gates.
@@ -25,7 +25,7 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 | 1 | `build.yml` | CI (Lint, Tests & Manifest) | push, PR, manual | Aggregated by CI Gate | 1517 | **Keep** — primary PR gate; aggregated `CI Gate` check; conditional native amd64 CPU/full GPU image builds and offline software probes; lightweight documentation catalog, maintained-link and editorial lock validation; declared npm ownership and root/Worker compilation/dry-run coverage in the existing Frontdoor gate |
 | 2 | `ci.yml` | CI Quality Firewall (push) | push (main, develop) | Post-merge | 614 | **Investigate → Selective port into `build.yml`** — overlaps with `build.yml` on `lint`, `typecheck`, `test-core`, `test-ml`, but has **unique jobs** that build.yml does not currently provide: `security` (bandit + pip-audit on the push commit range), `coverage-gate`, `build` (packaging artifact), `repo-hygiene`, `quality-summary`. **Before retiring, port each unique job into `build.yml`** (or confirm it's shadowed by `security-unified.yml` / `enforcement.yml`) and **expand `build.yml`'s push branches to include `develop`** so post-merge coverage on `develop` isn't dropped. Naive deletion would lose real signal. |
 | 3 | `ci-quality-firewall.yml` | CI Quality Firewall (post-CI) | workflow_run | Post-CI trusted push/manual | 971 | **Keep pending equivalence proof** — trusted `workflow_run` verification includes resolution, isolation, security, coverage, and flake-analysis evidence. A passing upstream `CI Gate` alone does not prove this workflow redundant. |
-| 4 | `enforcement.yml` | Enforcement | push, PR, schedule | ⚠️ Partial | 255 | **Keep** — owns action-pin, banned-deps, HF-revision, artifact-boundary, full non-ML Layer 1, conditional ML, and explicit Golden contracts. Distinct from `build.yml` test surface. |
+| 4 | `enforcement.yml` | Enforcement | push, PR, schedule | ⚠️ Partial | 334 | **Keep** — owns action-pin, banned-deps, HF-revision, artifact-boundary, full non-ML Layer 1, conditional ML, explicit Golden contracts, and an advisory Postgres/Redis service job on PRs and pushes. |
 | 5 | `quality-gate.yml` | Quality Gate | PR, push | ⚠️ Advisory | 41 | **Investigate → Replace with pre-commit** — runs `scripts/lint_runner.sh advisory` and `scripts/setup/pre-commit-check.sh --all`. If those advisory lint and pre-commit checks are run by devs locally and by `build.yml`'s lint job, this duplicates. |
 | 6 | `codeql.yml` | CodeQL Advanced | push, PR, schedule | Analysis and SARIF upload | 114 | **Keep** — GitHub semantic SAST for Actions, Python, and JavaScript/TypeScript; includes frontdoor and Worker source. |
 | 7 | `security-unified.yml` | Security Unified | schedule, push, PR, manual | Dependency Security required on main | 279 | **Keep** — pip-audit + checkpoint-loading source gates; distinct from CodeQL. Unfiltered main PR trigger, read-only dependency job, no secret dependency or soft failure. |
@@ -59,6 +59,12 @@ by branch protection. Only the dated GitHub snapshot above establishes remote
 required checks. `continue-on-error`, `warn-only`, conditional jobs, and gate
 aggregation must be inspected separately; the source-behavior column is not a
 claim that every listed workflow blocks merge.
+
+The advisory service job uses Python 3.11 and disposable Postgres 16 and Redis
+7 services. Repository reset tests use a plain database, and authority and
+receipt tests use a separate migrated database. Failed tests or missing service
+evidence fail the job. Its sanitized report records the exercised backends and
+test outcomes independently of CI Gate and the post-CI firewall.
 
 The post-CI firewall remains `workflow_run`-only and verifies the exact upstream
 SHA after a successful same-repository push/manual run. It is not redundant

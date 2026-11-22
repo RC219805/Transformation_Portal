@@ -162,6 +162,18 @@ def test_revalidates_frozen_geometry_and_admission_limits(completed):
         validate_source(replace(source, inventory=source.inventory[:-1]))
 
 
+def test_grade_pixel_ceiling_is_applied_before_the_v5_parent_replay(completed, monkeypatch):
+    # LN-8: SourceLimits admits max_pixels up to 200 M (standalone Depth Pro), but GradePlan's fixed
+    # ceiling must reject an oversized retained frame before the expensive V5 semantic replay runs.
+    def _replay_must_not_run(*_args, **_kwargs):
+        raise AssertionError("V5 parent replay ran for a frame GradePlan cannot admit")
+
+    monkeypatch.setattr(source_module, "MAX_GRADE_IMAGE_PIXELS", 29 * 43 - 1, raising=False)
+    monkeypatch.setattr(source_module, "verify_execution_evidence_v3", _replay_must_not_run)
+    with pytest.raises(ValueError, match="pixel ceiling"):
+        prepare_source(completed.result.output_root, limits=SourceLimits(max_pixels=200_000_000))
+
+
 def test_rejects_added_undeclared_source_artifact(completed):
     source = prepare_source(completed.result.output_root)
     (source.root / "unadmitted.txt").write_text("new artifact")
@@ -186,3 +198,35 @@ def test_source_geometry_is_admitted_before_independent_replay(completed, monkey
     monkeypatch.setattr(source_module, "verify_execution_evidence_v3", unexpected)
     with pytest.raises(ValueError, match="geometry must agree"):
         prepare_source(root)
+
+
+def test_frozen_plan_and_inventory_are_parsed_once_per_source(completed, monkeypatch):
+    """LN-4: per-image loads must not re-parse the whole frozen plan and evidence."""
+    source = prepare_source(completed.result.output_root)
+    fresh = replace(source)
+    expected_master = load_master(fresh, "input-0000")
+    expected_original, expected_depth, expected_proxy = load_depth_inputs(fresh, "input-0000")
+    calls = {"plan": 0, "evidence": 0}
+    parse_plan, decode_evidence = source_module.parse_plan_v4, source_module._decode_evidence
+
+    def counted_plan(*args, **kwargs):
+        calls["plan"] += 1
+        return parse_plan(*args, **kwargs)
+
+    def counted_evidence(*args, **kwargs):
+        calls["evidence"] += 1
+        return decode_evidence(*args, **kwargs)
+
+    monkeypatch.setattr(source_module, "parse_plan_v4", counted_plan)
+    monkeypatch.setattr(source_module, "_decode_evidence", counted_evidence)
+    for _ in range(3):
+        master = load_master(source, "input-0000")
+        original, depth, proxy = load_depth_inputs(source, "input-0000")
+        np.testing.assert_array_equal(master.pixels, expected_master.pixels)
+        np.testing.assert_array_equal(original.pixels, expected_original.pixels)
+        assert depth.content_hash() == expected_depth.content_hash()
+        assert depth.to_payload() == expected_depth.to_payload()
+        assert proxy.transform == expected_proxy.transform
+    assert calls == {"plan": 1, "evidence": 1}
+    with pytest.raises(ValueError, match="pixel budget"):
+        load_master(replace(source, limits=SourceLimits(max_pixels=1)), "input-0000")

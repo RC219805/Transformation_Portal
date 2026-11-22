@@ -654,3 +654,47 @@ class TestCoreMLFloat32Conversion:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestHighBitDepthGrayscaleInput:
+    """Regression for LC-03: 16-bit grayscale reaches the model scaled, not clipped."""
+
+    @staticmethod
+    def _engine(mock_torch):
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+        engine = DA3InferenceEngine(config="cpu")
+        engine._model_loaded = True
+        engine.model = MagicMock()
+        return engine
+
+    @staticmethod
+    def _mock_result():
+        depth = _create_mock_depth(28, 56)
+        return {"depth": depth, "depth_raw": depth, "metadata": {"shape": (28, 56)}}
+
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
+    def test_uint16_pil_image_and_png_path_are_scaled(self, mock_torch, tmp_path):
+        engine = self._engine(mock_torch)
+        samples = np.tile(np.linspace(0, 65535, 56).round().astype(np.uint16), (28, 1))
+        expected = ((samples.astype(np.uint32) + 128) // 257).astype(np.uint8)
+        path = tmp_path / "gray16.png"
+        Image.fromarray(samples).save(path)
+
+        with patch.object(engine, "_estimate_depth_pytorch", return_value=self._mock_result()):
+            from_pil = engine.infer(Image.fromarray(samples))
+            from_path = engine.infer_from_path(path)
+
+        for result in (from_pil, from_path):
+            assert result.original_image.dtype == np.uint8
+            for channel in range(3):
+                assert np.array_equal(result.original_image[..., channel], expected)
+
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
+    def test_float_pil_image_is_rejected(self, mock_torch):
+        engine = self._engine(mock_torch)
+        with patch.object(engine, "_estimate_depth_pytorch", return_value=self._mock_result()):
+            with pytest.raises(ValueError, match="Floating-point grayscale"):
+                engine.infer(Image.fromarray(np.zeros((28, 56), dtype=np.float32)))

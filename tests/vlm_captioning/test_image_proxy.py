@@ -74,3 +74,34 @@ def test_output_hash_changes_when_input_changes(tmp_path: Path) -> None:
     assert first.source_sha256 != second.source_sha256
     assert first.proxy_sha256 != second.proxy_sha256
     assert first.proxy_path != second.proxy_path
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(0, 0), (300, 1), (0x8000, 128), (65535, 255)],
+)
+@pytest.mark.parametrize("suffix", [".tif", ".png"])
+def test_sixteen_bit_grayscale_source_scales_to_eight_bit_proxy(
+    tmp_path: Path, suffix: str, value: int, expected: int
+) -> None:
+    # D-16: convert("RGB") clipped I;16 samples at 255, so every 16-bit grayscale master gave a white proxy.
+    source = tmp_path / f"gray16{suffix}"
+    _write_tiff(source, size=(16, 16), value=value)
+    with Image.open(source) as reopened:
+        assert reopened.mode == "I;16"
+
+    proxy = build_vlm_image_proxy(source, tmp_path / "out")
+
+    with Image.open(proxy.proxy_path) as image:
+        assert image.mode == "RGB"
+        assert image.getpixel((0, 0)) == (expected, expected, expected)
+
+
+def test_eight_bit_proxy_bytes_unchanged_by_sixteen_bit_scaling(tmp_path: Path) -> None:
+    source = tmp_path / "gray8.png"
+    Image.new("L", (16, 16), 77).save(source)
+
+    proxy = build_vlm_image_proxy(source, tmp_path / "out")
+
+    with Image.open(proxy.proxy_path) as image:
+        assert image.getpixel((0, 0)) == (77, 77, 77)

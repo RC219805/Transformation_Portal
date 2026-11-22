@@ -10,6 +10,25 @@ from typing import Optional
 import numpy as np
 
 
+def split_alpha(image: np.ndarray) -> "tuple[np.ndarray, Optional[np.ndarray]]":
+    """Split an HxWx4 image into its RGB channels and its HxWx1 alpha channel.
+
+    Depth processors operate on colour only; alpha is coverage, not light, and
+    must pass through untouched. Any other layout is returned unchanged with
+    ``None`` for alpha.
+    """
+    if image.ndim == 3 and image.shape[-1] == 4:
+        return image[..., :3], image[..., 3:]
+    return image, None
+
+
+def merge_alpha(rgb: np.ndarray, alpha: Optional[np.ndarray]) -> np.ndarray:
+    """Re-attach an alpha channel produced by :func:`split_alpha`, in ``rgb``'s dtype."""
+    if alpha is None:
+        return rgb
+    return np.concatenate([rgb, alpha.astype(rgb.dtype, copy=False)], axis=-1)
+
+
 class DepthProcessorMixin:
     """
     Mixin for depth processors with config override support.
@@ -80,18 +99,23 @@ class DepthProcessorMixin:
             Processed image
         """
         if config:
-            # Temporarily override parameters
+            # Temporarily override parameters. Snapshot every attribute the
+            # override may touch (the declared config params plus any other
+            # existing attribute named in ``config``) and restore them even
+            # when ``process`` or an override raises, so one call can never
+            # leak its overrides into later calls.
             old_params = self._get_config_params()
+            for key in config:
+                if key not in old_params and hasattr(self, key):
+                    old_params[key] = getattr(self, key)
 
-            for key, value in config.items():
-                self._apply_config_override(key, value)
+            try:
+                for key, value in config.items():
+                    self._apply_config_override(key, value)
 
-            result = self.process(image, depth)
-
-            # Restore parameters
-            for key, value in old_params.items():
-                setattr(self, key, value)
-
-            return result
+                return self.process(image, depth)
+            finally:
+                for key, value in old_params.items():
+                    setattr(self, key, value)
         else:
             return self.process(image, depth)

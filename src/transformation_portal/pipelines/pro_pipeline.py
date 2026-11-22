@@ -44,6 +44,14 @@ import typer
 from PIL import Image
 from tqdm import tqdm
 
+from transformation_portal.utils.image_utils import (
+    OutputStemAllocator,
+    atomic_output_path,
+    convert_to_rgb,
+    extract_output_metadata,
+    quantize_unit_float,
+)
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger("pro_pipeline")
@@ -78,6 +86,42 @@ _OUTPUT_FORMAT_ALIASES: Dict[str, str] = {
     "tif": "tif",
     "tiff": "tif",
 }
+_DEFAULT_BATCH_PATTERN = "*.{jpg,jpeg,png,tiff,tif}"
+_DEFAULT_BATCH_EXTENSIONS = ("jpg", "jpeg", "png", "tif", "tiff")
+
+
+def _expand_braces(pattern: str) -> List[str]:
+    """Expand ``{a,b}`` alternations in a glob pattern (``pathlib`` globs do not support them)."""
+    start = pattern.find("{")
+    end = pattern.find("}", start + 1) if start != -1 else -1
+    if start == -1 or end == -1:
+        return [pattern]
+    head, body, tail = pattern[:start], pattern[start + 1 : end], pattern[end + 1 :]
+    expanded: List[str] = []
+    for alternative in body.split(","):
+        expanded.extend(_expand_braces(head + alternative + tail))
+    return expanded
+
+
+def _discover_batch_inputs(input_dir: Path, pattern: str = _DEFAULT_BATCH_PATTERN) -> List[Path]:
+    """Return the files in ``input_dir`` matching ``pattern`` (``{a,b}`` alternations allowed).
+
+    The default pattern keeps the historical discovery: the five image extensions
+    in both lower and upper case.
+    """
+    if pattern == _DEFAULT_BATCH_PATTERN:
+        globs = [f"*.{ext}" for ext in _DEFAULT_BATCH_EXTENSIONS]
+        globs += [f"*.{ext.upper()}" for ext in _DEFAULT_BATCH_EXTENSIONS]
+    else:
+        globs = _expand_braces(pattern)
+    found: List[Path] = []
+    seen = set()
+    for glob_pattern in globs:
+        for path in input_dir.glob(glob_pattern):
+            if path.is_file() and path not in seen:
+                seen.add(path)
+                found.append(path)
+    return found
 
 
 def _parse_yaml_bool(value: Any, *, field: str) -> bool:
@@ -566,12 +610,14 @@ class ProPipeline:
                 self._material_response = None
         return self._material_response
 
-    def process_image(self, image_path: Path) -> Optional[Path]:
+    def process_image(self, image_path: Path, *, output_stem: Optional[str] = None) -> Optional[Path]:
         """
         Process a single image through the full pipeline.
 
         Args:
             image_path: Path to input image
+            output_stem: Base name of the output file (default: ``image_path.stem``);
+                batch processing passes a name no other input of the batch uses
 
         Returns:
             Path to output image, or None if processing failed
@@ -581,7 +627,9 @@ class ProPipeline:
 
         try:
             # Load image
-            image = Image.open(image_path).convert("RGB")
+            image = convert_to_rgb(Image.open(image_path))
+            # ICC profile / DPI / EXIF of the source, re-attached to the output
+            source_metadata = extract_output_metadata(image) if self.config.preserve_metadata else {}
             log.info(f"  Image size: {image.size[0]}x{image.size[1]}")
 
             # Stage 1: Depth-aware processing
@@ -605,7 +653,7 @@ class ProPipeline:
                 image = self._apply_finishing_stage(image, image_path)
 
             # Save output
-            output_path = self._save_output(image, image_path)
+            output_path = self._save_output(image, image_path, source_metadata=source_metadata, output_stem=output_stem)
 
             # Update statistics
             elapsed = time.time() - start_time
@@ -638,12 +686,13 @@ class ProPipeline:
             # (placeholder - would use actual depth estimation in production)
             clarity_boost = self.config.depth_stage.config.get("clarity", 0.15)
 
-            # Apply unsharp mask for clarity
-            blurred = gaussian_filter(img_array, sigma=2.0)
+            # Apply unsharp mask for clarity (spatial axes only: blurring across
+            # the colour-channel axis greys the base and saturates flat colour)
+            blurred = gaussian_filter(img_array, sigma=(2.0, 2.0, 0) if img_array.ndim == 3 else 2.0)
             detail = img_array - blurred
             enhanced = np.clip(img_array + detail * clarity_boost, 0, 1)
 
-            result = Image.fromarray((enhanced * 255).astype(np.uint8))
+            result = Image.fromarray(quantize_unit_float(enhanced))
 
             elapsed = time.time() - stage_start
             self.stats["stage_times"]["depth"] = self.stats["stage_times"].get("depth", 0) + elapsed
@@ -673,7 +722,7 @@ class ProPipeline:
             # Enhance contrast slightly
             img_array = np.clip((img_array - 0.5) * (1 + strength * 0.2) + 0.5, 0, 1)
 
-            result = Image.fromarray((img_array * 255).astype(np.uint8))
+            result = Image.fromarray(quantize_unit_float(img_array))
 
             elapsed = time.time() - stage_start
             self.stats["stage_times"]["ai"] = self.stats["stage_times"].get("ai", 0) + elapsed
@@ -701,12 +750,12 @@ class ProPipeline:
 
             img_array = np.array(image).astype(np.float32) / 255.0
 
-            # Enhance micro-contrast
-            blurred = gaussian_filter(img_array, sigma=1.0)
+            # Enhance micro-contrast (spatial axes only, never across channels)
+            blurred = gaussian_filter(img_array, sigma=(1.0, 1.0, 0) if img_array.ndim == 3 else 1.0)
             detail = img_array - blurred
             enhanced = np.clip(img_array + detail * strength * 0.08, 0, 1)
 
-            result = Image.fromarray((enhanced * 255).astype(np.uint8))
+            result = Image.fromarray(quantize_unit_float(enhanced))
 
             elapsed = time.time() - stage_start
             self.stats["stage_times"]["material"] = self.stats["stage_times"].get("material", 0) + elapsed
@@ -743,7 +792,7 @@ class ProPipeline:
             enhanced = gray + (img_array - gray) * saturation
             enhanced = np.clip(enhanced, 0, 1)
 
-            result = Image.fromarray((enhanced * 255).astype(np.uint8))
+            result = Image.fromarray(quantize_unit_float(enhanced))
 
             elapsed = time.time() - stage_start
             self.stats["stage_times"]["grading"] = self.stats["stage_times"].get("grading", 0) + elapsed
@@ -768,11 +817,12 @@ class ProPipeline:
 
             # Sharpening
             sharpen_amount = self.config.finishing_stage.config.get("sharpen", 0.14)
-            blurred = gaussian_filter(img_array, sigma=1.0)
+            # Unsharp mask over the spatial axes only, never across channels
+            blurred = gaussian_filter(img_array, sigma=(1.0, 1.0, 0) if img_array.ndim == 3 else 1.0)
             sharpened = img_array + (img_array - blurred) * sharpen_amount
             sharpened = np.clip(sharpened, 0, 1)
 
-            result = Image.fromarray((sharpened * 255).astype(np.uint8))
+            result = Image.fromarray(quantize_unit_float(sharpened))
 
             elapsed = time.time() - stage_start
             self.stats["stage_times"]["finishing"] = self.stats["stage_times"].get("finishing", 0) + elapsed
@@ -784,12 +834,25 @@ class ProPipeline:
             log.warning(f"    ⚠ Finishing stage failed: {e}, using original")
             return image
 
-    def _save_output(self, image: Image.Image, input_path: Path) -> Path:
-        """Save the processed image with appropriate format and metadata."""
+    def _save_output(
+        self,
+        image: Image.Image,
+        input_path: Path,
+        source_metadata: Optional[Dict[str, Any]] = None,
+        output_stem: Optional[str] = None,
+    ) -> Path:
+        """Save the processed image with appropriate format and metadata.
+
+        ``source_metadata`` (from :func:`extract_output_metadata`) is re-attached to the
+        output. The linear TIFF keeps only the DPI: its pixels are no longer encoded in
+        the source colour space, so the source ICC profile would mis-describe them.
+        """
         import numpy as np
 
+        metadata = source_metadata or {}
+
         # Determine output filename
-        stem = input_path.stem
+        stem = output_stem or input_path.stem
         ext = _normalize_output_format(self.config.output_format)
 
         # Add preset suffix
@@ -818,30 +881,46 @@ class ProPipeline:
 
                 # Scale to bit depth
                 if self.config.bit_depth == 16:
-                    output_array = (linear_array * 65535).astype(np.uint16)
+                    output_array = quantize_unit_float(linear_array, np.uint16)
                 elif self.config.bit_depth == 32:
                     output_array = linear_array.astype(np.float32)
                 else:
-                    output_array = (linear_array * 255).astype(np.uint8)
+                    output_array = quantize_unit_float(linear_array)
 
                 # Save with tifffile
-                tifffile.imwrite(
-                    output_path, output_array, compression="deflate", photometric="rgb", metadata={"colorspace": "linear"}
-                )
+                tiff_kwargs: Dict[str, Any] = {}
+                if "dpi" in metadata:
+                    tiff_kwargs["resolution"] = (float(metadata["dpi"][0]), float(metadata["dpi"][1]))
+                    tiff_kwargs["resolutionunit"] = "INCH"
+                with atomic_output_path(output_path) as temp_path:
+                    tifffile.imwrite(
+                        temp_path,
+                        output_array,
+                        compression="deflate",
+                        photometric="rgb",
+                        metadata={"colorspace": "linear"},
+                        **tiff_kwargs,
+                    )
 
                 log.info(f"  ✓ Saved as {self.config.bit_depth}-bit linear TIFF")
 
             except ImportError:
                 log.warning("  ⚠ tifffile not available, saving as standard TIFF")
-                self._save_standard(image, output_path, ext)
+                self._save_standard(image, output_path, ext, metadata)
         else:
-            self._save_standard(image, output_path, ext)
+            self._save_standard(image, output_path, ext, metadata)
 
         return output_path
 
-    def _save_standard(self, image: Image.Image, output_path: Path, ext: str):
-        """Save image in standard gamma-encoded format."""
-        save_kwargs = {}
+    def _save_standard(
+        self,
+        image: Image.Image,
+        output_path: Path,
+        ext: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
+        """Save image in standard gamma-encoded format, re-attaching source metadata."""
+        save_kwargs: Dict[str, Any] = dict(metadata or {})
         if ext.lower() in ["jpg", "jpeg"]:
             save_kwargs["quality"] = 95
             save_kwargs["optimize"] = True
@@ -850,7 +929,8 @@ class ProPipeline:
         elif ext.lower() in {"tif", "tiff"}:
             save_kwargs["compression"] = "tiff_adobe_deflate"
 
-        image.save(output_path, **save_kwargs)
+        with atomic_output_path(output_path) as temp_path:
+            image.save(temp_path, **save_kwargs)
 
     def batch_process(self, input_paths: List[Path]) -> Dict[str, Any]:
         """
@@ -872,8 +952,10 @@ class ProPipeline:
 
         # Process images
         results = []
+        # Same-stem inputs (kitchen.png, kitchen.tif) would overwrite each other's output.
+        stem_allocator = OutputStemAllocator()
         for image_path in tqdm(input_paths, desc="Processing images"):
-            result = self.process_image(image_path)
+            result = self.process_image(image_path, output_stem=stem_allocator.claim(image_path))
             results.append(result)
 
         # Print statistics
@@ -947,7 +1029,7 @@ def process(
     color_grading: bool = typer.Option(True, "--color-grading/--no-grading", help="Enable color grading"),
     finishing: bool = typer.Option(True, "--finishing/--no-finishing", help="Enable finishing"),
     # Output options
-    output_format: str = typer.Option("tif", "--format", "-", help="Output format (jpg, png, tiff)"),
+    output_format: str = typer.Option("tif", "--format", "-f", help="Output format (jpg, png, tiff)"),
     bit_depth: int = typer.Option(16, "--bits", help="Bit depth for TIFF (8, 16, 32)"),
     linear_output: bool = typer.Option(True, "--linear/--gamma", help="Save in linear colorspace (recommended)"),
     # Performance
@@ -1018,19 +1100,23 @@ def batch(
         "--config",
         help="YAML config file (e.g. config/pro_pipeline_config.yaml). CLI flags override YAML when explicitly set.",
     ),
-    pattern: str = typer.Option("*.{jpg,jpeg,png,tiff,tif}", "--pattern", help="File pattern to match"),
+    pattern: str = typer.Option(
+        _DEFAULT_BATCH_PATTERN, "--pattern", help="File pattern to match in INPUT_DIR ({a,b} alternations allowed)"
+    ),
     # Same options as process command
     depth_aware: bool = typer.Option(True, "--depth-aware/--no-depth"),
     ai_enhance: bool = typer.Option(True, "--ai-enhance/--no-ai"),
     material_response: bool = typer.Option(True, "--material-response/--no-material"),
     color_grading: bool = typer.Option(True, "--color-grading/--no-grading"),
     finishing: bool = typer.Option(True, "--finishing/--no-finishing"),
-    output_format: str = typer.Option("tif", "--format", "-"),
+    output_format: str = typer.Option("tif", "--format", "-f"),
     bit_depth: int = typer.Option(16, "--bits"),
     linear_output: bool = typer.Option(True, "--linear/--gamma"),
     device: str = typer.Option("auto", "--device"),
     quality: str = typer.Option("high", "--quality", "-q"),
-    num_workers: int = typer.Option(4, "--workers", "-w", help="Number of parallel workers"),
+    num_workers: int = typer.Option(
+        4, "--workers", "-w", help="Recorded in the config only: batch images are currently processed sequentially"
+    ),
     keep_intermediates: bool = typer.Option(False, "--keep-intermediates"),
     dry_run: bool = typer.Option(False, "--dry-run"),
 ):
@@ -1042,13 +1128,10 @@ def batch(
         python -m transformation_portal.pipelines.pro_pipeline batch ./renders --config config/pro_pipeline_config.yaml
     """
     # Find input images
-    input_paths = []
-    for ext in ["jpg", "jpeg", "png", "tif", "tiff"]:
-        input_paths.extend(input_dir.glob(f"*.{ext}"))
-        input_paths.extend(input_dir.glob(f"*.{ext.upper()}"))
+    input_paths = _discover_batch_inputs(input_dir, pattern)
 
     if not input_paths:
-        typer.echo(f"No images found in {input_dir}", err=True)
+        typer.echo(f"No images matching {pattern!r} found in {input_dir}", err=True)
         raise typer.Exit(code=1)
 
     config = _build_config_with_yaml_overrides(
@@ -1085,6 +1168,9 @@ def batch(
 
     if stats["failed"] == 0:
         typer.echo(f"\n✓ All {stats['processed']} images processed successfully!")
+    elif stats["processed"] == 0:
+        typer.echo(f"\n✗ Processing failed: all {stats['failed']} images failed", err=True)
+        raise typer.Exit(code=1)
     else:
         typer.echo(f"\n⚠ Completed with {stats['failed']} failures out of {stats['processed'] + stats['failed']} images")
 

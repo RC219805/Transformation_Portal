@@ -6,6 +6,7 @@ and exploring Merkle DAG lineage.
 
 from __future__ import annotations
 
+import codecs
 import logging
 from typing import TYPE_CHECKING, Optional
 
@@ -25,6 +26,9 @@ except ImportError:
     FASTAPI_AVAILABLE = False
     APIRouter = None
 
+
+# Upper bound for preview reads, so one request cannot load a whole object.
+_MAX_PREVIEW_BYTES = 65536
 
 # Global references (injected at runtime)
 _global_cas: Optional["ArtifactStore"] = None  # type: ignore
@@ -65,8 +69,8 @@ def create_artifact_router() -> "APIRouter":
     @router.get("/")
     async def list_artifacts(
         prefix: Optional[str] = None,
-        limit: int = Query(default=100, le=1000),
-        offset: int = 0,
+        limit: int = Query(default=100, ge=1, le=1000),
+        offset: int = Query(default=0, ge=0),
     ):
         """List artifacts in the CAS.
 
@@ -114,7 +118,6 @@ def create_artifact_router() -> "APIRouter":
                             "hash_short": obj_hash[:8],
                             "size_bytes": stat.st_size,
                             "size_human": _human_size(stat.st_size),
-                            "path": str(obj_path),
                         }
                     )
                 except Exception as exc:
@@ -170,7 +173,7 @@ def create_artifact_router() -> "APIRouter":
         )
 
     @router.get("/{hash}/preview")
-    async def preview_artifact(hash: str, max_bytes: int = 1024):
+    async def preview_artifact(hash: str, max_bytes: int = Query(default=1024, ge=1, le=_MAX_PREVIEW_BYTES)):
         """Get a preview of artifact contents.
 
         Args:
@@ -192,9 +195,10 @@ def create_artifact_router() -> "APIRouter":
             with obj.path.open("rb") as f:
                 data = f.read(max_bytes)
 
-            # Try UTF-8 decode
+            # Try UTF-8 decode. An incremental decoder tolerates a multi-byte
+            # character split by the read boundary when the object is longer.
             try:
-                text = data.decode("utf-8")
+                text = codecs.getincrementaldecoder("utf-8")().decode(data, final=obj.size_bytes <= len(data))
                 return JSONResponse(
                     {
                         "hash": hash,

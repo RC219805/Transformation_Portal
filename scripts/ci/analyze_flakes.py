@@ -18,12 +18,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 LEDGER_PATH = REPO_ROOT / "tests" / "flake_ledger.json"
 
 
-def load_ledger() -> dict[str, Any]:
-    """Load the flake tracking ledger."""
-    if not LEDGER_PATH.exists():
+def load_ledger(ledger_path: Path | None = None) -> dict[str, Any]:
+    """Load the flake tracking ledger (``ledger_path`` defaults to ``LEDGER_PATH``)."""
+    path = LEDGER_PATH if ledger_path is None else Path(ledger_path)
+    if not path.exists():
         return {"tests": {}, "config": {}}
 
-    with open(LEDGER_PATH) as f:
+    with open(path) as f:
         return json.load(f)
 
 
@@ -89,10 +90,7 @@ def format_text(stats: dict[str, Any]) -> str:
         for i, test in enumerate(stats["flaky_tests"], 1):
             status_icon = "🔴" if test["status"] == "quarantined" else "🟡"
             lines.append(f"{i}. {status_icon} {test['test_id']}")
-            lines.append(
-                f"   Flake rate: {test['flake_rate']*100:.2f}% "
-                f"({test['flake_count']}/{test['total_runs']} runs)"
-            )
+            lines.append(f"   Flake rate: {test['flake_rate']*100:.2f}% " f"({test['flake_count']}/{test['total_runs']} runs)")
             lines.append(f"   Last: {test['last_outcome']}")
             lines.append("")
     else:
@@ -174,7 +172,7 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    ledger = load_ledger()
+    ledger = load_ledger(args.ledger)
     stats = analyze_ledger(ledger)
 
     if args.format == "text":

@@ -43,7 +43,7 @@ from PIL import Image
 
 from transformation_portal.core.security import ModelLockError, resolve_model_lock_revision
 from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
-from transformation_portal.spatial_ai.segmentation.metadata import make_mask_metadata, metadata_from_mask
+from transformation_portal.spatial_ai.segmentation.metadata import make_mask_metadata, mask_bbox_xywh, metadata_from_mask
 from transformation_portal.spatial_ai.segmentation.tiling.config import SegmentationTilingConfig
 from transformation_portal.spatial_ai.segmentation.tiling.engine import TiledSegmentationEngine
 from transformation_portal.spatial_ai.segmentation.tiling.merger import BinaryUnionTileMerger
@@ -517,14 +517,19 @@ class SAM2Backend:
 
         instances = []
         for idx in range(seg_result.masks.shape[0]):
-            mask = seg_result.masks[idx].astype(np.float32, copy=False)
+            # Keep only the mask's tight bbox in its own (bool) dtype: a full-tile
+            # float32 patch per instance costs ~9 MB at 1536 px and defeats the
+            # merger's bbox prefilter. The merger is crop invariant. The copy
+            # releases the (N, H, W) stack of the whole tile.
+            x0, y0, bw, bh = mask_bbox_xywh(seg_result.masks[idx])
+            mask = seg_result.masks[idx, y0 : y0 + bh, x0 : x0 + bw].copy()
             instances.append(
                 TileInstance(
                     local_id=f"{tile_spec.tile_id}:{idx}",
                     score=float(np.clip(seg_result.scores[idx], 0.0, 1.0)),
                     stability_score=float(seg_result.metadata[idx].stability_score),
                     soft_mask=SoftMaskPatch(
-                        bbox=BBox(0, 0, int(mask.shape[1]), int(mask.shape[0])),
+                        bbox=BBox(int(x0), int(y0), int(x0 + mask.shape[1]), int(y0 + mask.shape[0])),
                         values=mask,
                         space="prob",
                     ),
@@ -940,14 +945,11 @@ class SAM2Backend:
             # Create metadata for each mask
             metadata_list = []
             for m, stab_score in zip(masks_data, stability_scores):
-                bbox_raw = m["bbox"]  # SAM2 format: [x, y, w, h]
-                # SAM2 returns bbox in [x, y, width, height] format already
-                bbox_xywh = (
-                    int(bbox_raw[0]),
-                    int(bbox_raw[1]),
-                    int(bbox_raw[2]),
-                    int(bbox_raw[3]),
-                )
+                # SAM2's own "bbox" is XYWH with w = xmax - xmin over inclusive
+                # pixel edges: one pixel short, and 0 for a 1-pixel-wide mask,
+                # which MaskMetadata rejects. Use the true pixel extent instead,
+                # as every other path does.
+                bbox_xywh = mask_bbox_xywh(np.asarray(m["segmentation"]))
                 metadata_list.append(
                     self._make_mask_metadata(area=int(m["area"]), bbox=bbox_xywh, stability_score=float(stab_score))
                 )

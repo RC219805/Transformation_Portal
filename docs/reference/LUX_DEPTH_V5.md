@@ -130,9 +130,10 @@ managed artifact delivery behavior is described in the
 [portal quickstart](../guides/PORTAL_ORCHESTRATOR_QUICKSTART.md#endpoints).
 V3 remains the default pipeline.
 
-Enable managed V5 only after applying `make db-upgrade` through
-`0007_photography_bindings` and deploying matching API and worker code. Configure
-both hosts with Postgres/Redis authority, the same protected shared execution
+Before deploying matching API and worker code for managed V5, apply
+`make db-upgrade` to the current head, at least `0010_upload_receipts`. V5 uses
+the physical bindings introduced in `0007_photography_bindings`. Configure both
+hosts with Postgres/Redis authority, the same protected shared execution
 root, and the governed runtime selections:
 
 ```bash

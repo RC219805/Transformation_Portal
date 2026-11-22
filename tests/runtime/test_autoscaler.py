@@ -603,3 +603,84 @@ class TestAutoscalerScalingApplication:
                 if decision:
                     assert decision.action == "scale_up"
                     assert len(autoscaler.history.decisions) == 1
+
+
+class _FakeRay:
+    """Minimal Ray resource API: total GPUs and currently free GPUs."""
+
+    def __init__(self, total: int, free: int) -> None:
+        self.total, self.free = total, free
+
+    def cluster_resources(self) -> dict:
+        return {"GPU": self.total}
+
+    def available_resources(self) -> dict:
+        return {"GPU": self.free}
+
+
+class TestGPUAutoscalerReachableScaleUp:
+    """Decisions from metrics _get_metrics can actually produce (T-15)."""
+
+    @staticmethod
+    def _autoscaler(total: int, free: int, **policy_kwargs) -> GPUAutoscaler:
+        autoscaler = GPUAutoscaler(_FakeRay(total, free), AutoscalePolicy(cooldown_sec=0, **policy_kwargs))
+        autoscaler.gpu_monitor = MagicMock()
+        autoscaler.gpu_monitor.get_utilization.return_value = 0.0
+        return autoscaler
+
+    def test_restores_min_workers_from_zero(self) -> None:
+        autoscaler = self._autoscaler(0, 0, min_workers=2, max_workers=8)
+
+        decision = autoscaler._decide(autoscaler._get_metrics())
+
+        assert decision.action == "scale_up"
+        assert (decision.current_workers, decision.target_workers) == (0, 2)
+
+    def test_min_workers_floor_is_capped_at_max_workers(self) -> None:
+        autoscaler = self._autoscaler(1, 1, min_workers=5, max_workers=3)
+
+        decision = autoscaler._decide(autoscaler._get_metrics())
+
+        assert decision.action == "scale_up"
+        assert decision.target_workers == 3
+
+    def test_queue_backlog_scales_up_from_zero_workers(self) -> None:
+        autoscaler = self._autoscaler(0, 0, min_workers=0, max_workers=8)
+        autoscaler.set_queue_depth_callback(lambda: 3)
+
+        metrics = autoscaler._get_metrics()
+        decision = autoscaler._decide(metrics)
+
+        assert metrics.queue_depth == 3
+        assert decision.action == "scale_up"
+        assert decision.target_workers == 1
+
+    def test_queue_backlog_scales_up_busy_cluster(self) -> None:
+        autoscaler = self._autoscaler(2, 0, max_workers=8, max_pending_per_gpu=4)
+        autoscaler.set_queue_depth_callback(lambda: 7)  # 2 in flight + 7 waiting > 2 * 4
+
+        decision = autoscaler._decide(autoscaler._get_metrics())
+
+        assert decision.action == "scale_up"
+        assert decision.target_workers == 3
+
+    def test_waiting_tasks_block_scale_down(self) -> None:
+        autoscaler = self._autoscaler(4, 4, min_workers=1, max_workers=8)
+        autoscaler.set_queue_depth_callback(lambda: 1)
+
+        decision = autoscaler._decide(autoscaler._get_metrics())
+
+        assert decision.action == "none"
+
+    def test_failing_queue_depth_callback_is_treated_as_unknown(self) -> None:
+        autoscaler = self._autoscaler(4, 4, min_workers=1, max_workers=8)
+
+        def _broken() -> int:
+            raise RuntimeError("queue unavailable")
+
+        autoscaler.set_queue_depth_callback(_broken)
+
+        metrics = autoscaler._get_metrics()
+
+        assert metrics.queue_depth == 0
+        assert metrics.current_workers == 4

@@ -33,7 +33,9 @@ async def test_signed_tenants_isolate_real_external_worker_artifacts(tmp_path: P
     redis_url = os.getenv("TP_DISPATCH_TEST_REDIS_URL")
     if not database_url or not redis_url:
         pytest.skip("dedicated migrated tenant Postgres and Redis are required")
-    database_name = database_url.rsplit("/", 1)[-1]
+    from sqlalchemy.engine import make_url
+
+    database_name = make_url(database_url).database or ""
     if database_name != "tp_signed_tenant" and not database_name.endswith("_test"):
         pytest.fail("tenant integration evidence requires a dedicated test database")
 

@@ -189,7 +189,10 @@ dispatch; it tests durable route authority rather than executing a model.
   Telemetry persistence can contain gaps; it remains operational recovery
   rather than complete audit evidence. Distributed terminal events commit
   with their authoritative outcome. See [bounded event replay](../deployment/paid_pilot_services.md#bounded-event-replay).
-- Job deletion removes its event history and counter. Orphan event namespaces
+- Job deletion removes its event history and counter. The Postgres repository
+  delete cascades in its own transaction; retention cleanup additionally calls
+  `JobEventStore.purge(job_id)`, which is what releases the memory event
+  store's per-job history (the memory repository does not cascade). Orphan event namespaces
   remain independently bounded by the same per-job cap; operators should
   monitor the number of orphan namespaces as well as total replay storage.
 
@@ -263,6 +266,10 @@ can renew the database fence. An independent monotonic deadline signals
 cancellation when either Redis or Postgres stalls; it does not wait for socket
 cancellation to finish. Pending network work prevents another lease acquisition,
 and connection/command timeouts bound cleanup after transport failures.
+A worker that stops its child because the lease could not be confirmed
+terminalizes the attempt as retriable `worker_lost`
+(`worker_lost_via_lease_reclaim`) while its fence is still valid; `canceled`
+is reserved for a requested cancel.
 Database-clock expiration terminalizes the attempt as `worker_lost` and releases its counters once. Expired locators are
 removed from Redis rather than requeued, and tombstones reject duplicate or
 late deliveries. An explicit retry submits a new job. API startup never

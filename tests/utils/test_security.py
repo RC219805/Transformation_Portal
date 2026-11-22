@@ -30,6 +30,8 @@ import pytest
 from transformation_portal.utils.security import (
     CONFIG_EXTENSIONS,
     DANGEROUS_SHELL_CHARS,
+    FFMPEG_UNCONFINABLE_FILTERS,
+    FILTER_GRAPH_REJECTED_CHARS,
     IMAGE_EXTENSIONS,
     MAX_CONFIG_SIZE,
     MAX_IMAGE_SIZE,
@@ -170,6 +172,16 @@ class TestValidateFilepath:
         nonexistent = temp_workspace / "data" / "new_output.jpg"
         result = validate_filepath(nonexistent, allowed_dirs, must_exist=False)
         assert result.parent == (temp_workspace / "data").resolve()
+
+    @pytest.mark.parametrize("relative", ["loop", "loop/missing/new_output.jpg"])
+    def test_symlink_loop_is_unresolvable_with_must_exist_false(
+        self, temp_workspace: Path, allowed_dirs: list[Path], relative: str
+    ) -> None:
+        """A symlink loop inside an allowed directory is never a valid output path."""
+        (temp_workspace / "data" / "loop").symlink_to("loop")
+
+        with pytest.raises(SecurityError, match="Cannot resolve path"):
+            validate_filepath(temp_workspace / "data" / relative, allowed_dirs, must_exist=False)
 
     def test_file_size_limit_enforcement(self, temp_workspace: Path, allowed_dirs: list[Path]) -> None:
         """Test that file size limits are enforced."""
@@ -610,8 +622,9 @@ class TestValidateFilterGraph:
             validate_filter_graph("scale=1920; rm -rf /")
 
     def test_rejects_all_dangerous_chars(self) -> None:
-        """Test rejection of all dangerous characters in filter graph."""
-        for char in DANGEROUS_SHELL_CHARS:
+        """Test rejection of all filter-graph rejected characters (parentheses excluded, see below)."""
+        assert FILTER_GRAPH_REJECTED_CHARS == DANGEROUS_SHELL_CHARS - {"(", ")"}
+        for char in FILTER_GRAPH_REJECTED_CHARS:
             with pytest.raises(SecurityError):
                 validate_filter_graph(f"scale=1920{char}1080")
 
@@ -621,6 +634,150 @@ class TestValidateFilterGraph:
             validate_filter_graph("scale=1920;1080")
         except SecurityError as e:
             assert ";" in str(e)
+
+    @pytest.mark.parametrize(
+        "graph",
+        [
+            "scale='min(1920,iw)':-2",
+            "scale=w='if(gt(iw,ih),1920,-2)':h=-2,fps=30",
+            "select='eq(n\\,0)'",
+        ],
+    )
+    def test_accepts_expressions_with_parentheses(self, graph: str) -> None:
+        """M-19: FFmpeg expressions need parentheses; the argv command has no shell to inject into."""
+        assert validate_filter_graph(graph) == graph
+
+
+class TestFilterGraphFileConfinement:
+    """M-19: path-valued filter options must stay inside allowed_dirs (fail closed)."""
+
+    @pytest.fixture
+    def allowed(self, tmp_path: Path) -> Path:
+        work = tmp_path / "work"
+        work.mkdir()
+        (work / "caption.txt").write_text("hello")
+        (tmp_path / "secret.txt").write_text("TOP-SECRET")
+        return work
+
+    @pytest.mark.parametrize(
+        "template",
+        [
+            "drawtext=textfile={secret}:fontcolor=white",
+            "drawtext=textfile='{secret}'",
+            "drawtext=textfile=\\{secret}",
+            "drawtext@label=fontcolor=white:textfile={secret}",
+            " drawtext = text=x : textfile = {secret}",
+            "Drawtext=textfile={secret}",
+            "drawtext=fontfile={secret}",
+            "drawtext={secret}",  # first positional argument of drawtext is fontfile
+            "scale=1920:1080,subtitles={secret}",
+            "subtitles=filename={secret}",
+            "movie={secret}",
+            "lut3d=file={secret}",
+            "metadata=mode=print:file={secret}",
+            "drawtext=text=x:/text={secret}",  # FFmpeg >= 7 option-from-file syntax
+        ],
+    )
+    def test_rejects_paths_outside_allowed_dirs(self, allowed: Path, template: str) -> None:
+        graph = template.format(secret=allowed.parent / "secret.txt")
+        with pytest.raises(SecurityError):
+            validate_filter_graph(graph, allowed_dirs=[allowed])
+
+    def test_rejects_traversal_out_of_allowed_dir(self, allowed: Path) -> None:
+        with pytest.raises(SecurityError, match="not confined"):
+            validate_filter_graph(f"drawtext=textfile={allowed}/../secret.txt", allowed_dirs=[allowed])
+
+    def test_rejects_url_protocols(self, allowed: Path) -> None:
+        with pytest.raises(SecurityError, match="URL/protocol"):
+            # Graph-level quotes keep the backslash; option-level unescaping yields "file:/etc/passwd".
+            validate_filter_graph("drawtext=textfile='file\\:/etc/passwd'", allowed_dirs=[allowed])
+
+    def test_rejects_file_path_without_allowed_dirs(self, allowed: Path) -> None:
+        with pytest.raises(SecurityError, match="no allowed_dirs"):
+            validate_filter_graph(f"drawtext=textfile={allowed}/caption.txt")
+
+    @pytest.mark.parametrize("name", sorted(FFMPEG_UNCONFINABLE_FILTERS))
+    def test_rejects_unconfinable_filters(self, allowed: Path, name: str) -> None:
+        with pytest.raises(SecurityError, match="not allowed"):
+            validate_filter_graph(f"{name}=x", allowed_dirs=[allowed])
+
+    def test_accepts_confined_paths(self, allowed: Path) -> None:
+        graph = f"drawtext=textfile={allowed / 'caption.txt'}:fontcolor=white:x='(w-tw)/2'"
+        assert validate_filter_graph(graph, allowed_dirs=[allowed]) == graph
+
+    def test_build_ffmpeg_command_confines_filter_paths(self, allowed: Path) -> None:
+        (allowed / "in.mp4").write_bytes(b"x")
+        secret = allowed.parent / "secret.txt"
+        with pytest.raises(SecurityError, match="not confined"):
+            build_ffmpeg_command(
+                allowed / "in.mp4",
+                allowed / "out.mp4",
+                filters=[f"drawtext=textfile={secret}:fontcolor=white"],
+                allowed_dirs=[allowed],
+            )
+        cmd = build_ffmpeg_command(
+            allowed / "in.mp4",
+            allowed / "out.mp4",
+            filters=[f"drawtext=textfile={allowed / 'caption.txt'}", "scale='min(1920,iw)':-2"],
+            allowed_dirs=[allowed],
+        )
+        assert cmd[cmd.index("-vf") + 1] == f"drawtext=textfile={allowed / 'caption.txt'},scale='min(1920,iw)':-2"
+
+    @pytest.mark.parametrize("option", ["-vf", "-af", "-filter:v", "-filter_complex", "-lavfi", "-i", "-/vf"])
+    def test_build_ffmpeg_command_rejects_filters_in_additional_args(self, allowed: Path, option: str) -> None:
+        (allowed / "in.mp4").write_bytes(b"x")
+        with pytest.raises(SecurityError, match="additional_args"):
+            build_ffmpeg_command(
+                allowed / "in.mp4",
+                allowed / "out.mp4",
+                additional_args=[option, "drawtext=textfile=/etc/passwd"],
+                allowed_dirs=[allowed],
+            )
+
+    @pytest.mark.parametrize(
+        "template",
+        [
+            # FFmpeg tokenises "name@instance" with quotes/escapes, so these are
+            # all drawtext with textfile=<secret> (verified with ffmpeg -loglevel debug).
+            "drawtext@a\\=b=textfile={secret}",
+            "drawtext@a'=b'=textfile={secret}",
+            "drawte'xt'=textfile={secret}",
+            # Escaped ']' inside a link label does not end the label.
+            "[in\\]x]drawtext=textfile={secret}",
+            # Unclosed quote: FFmpeg trims the trailing whitespace ("<allowed>/..").
+            "drawtext=textfile=\\'{allowed}/..\\ ",
+            # Write/read path options of filters added to the table.
+            "curves=plot={secret}",
+            "curves=vintage:a:b:c:d:e:x:{secret}",  # positional slot 7 is plot
+            "paletteuse=debug_kdtree={secret}",
+            "firequalizer=dumpfile={secret}",
+            "deshake=filename={secret}",
+            "nnedi=weights={secret}",
+            "life=f={secret}",
+            "showcqt=axisfile={secret}",
+            "ssim360=stats_file={secret}",
+            "metadata=print:k:v:f:0:{secret}",  # positional slot 5 is file
+            "metadata=print:k:v:f:0:x:extra",  # positional beyond the path slot
+        ],
+    )
+    def test_rejects_parser_differentials_and_more_path_options(self, allowed: Path, template: str) -> None:
+        graph = template.format(secret=allowed.parent / "secret.txt", allowed=allowed)
+        with pytest.raises(SecurityError):
+            validate_filter_graph(graph, allowed_dirs=[allowed])
+
+    @pytest.mark.parametrize(
+        "graph",
+        [
+            "curves=vintage",
+            "curves=preset=vintage:interp=pchip",
+            "metadata=print",
+            "metadata=mode=print:key=lavfi.signalstats.YAVG",
+            "paletteuse=dither=bayer",
+            "[in]scale=1920:-2[out]",
+        ],
+    )
+    def test_accepts_positional_arguments_before_path_slots(self, allowed: Path, graph: str) -> None:
+        assert validate_filter_graph(graph, allowed_dirs=[allowed]) == graph
 
 
 # =============================================================================
@@ -692,6 +849,61 @@ class TestTimeout:
         # seconds; this should be 0 if the timeout context cleared it.
         remaining = signal.alarm(0)
         assert remaining == 0
+
+    @pytest.mark.skipif(
+        not hasattr(signal, "SIGALRM"),
+        reason="SIGALRM not available on this platform (Windows)",
+    )
+    def test_nested_timeout_preserves_outer_alarm(self) -> None:
+        """L-11: a nested timeout() must not cancel the enclosing alarm."""
+        import time
+
+        started = time.monotonic()
+        with pytest.raises(SecurityTimeoutError, match="exceeded 1s timeout"):
+            with timeout(1):
+                with timeout(5):
+                    pass
+                time.sleep(3)
+        assert time.monotonic() - started < 2.5
+
+    @pytest.mark.skipif(
+        not hasattr(signal, "SIGALRM"),
+        reason="SIGALRM not available on this platform (Windows)",
+    )
+    def test_nested_longer_timeout_does_not_extend_outer_deadline(self) -> None:
+        """L-11: the earlier outer deadline still fires inside a longer inner timeout."""
+        import time
+
+        started = time.monotonic()
+        with pytest.raises(SecurityTimeoutError, match="exceeded 1s timeout"):
+            with timeout(1):
+                with timeout(10):
+                    time.sleep(3)
+        assert time.monotonic() - started < 2.5
+        assert signal.alarm(0) == 0
+
+    @pytest.mark.skipif(
+        not hasattr(signal, "SIGALRM"),
+        reason="SIGALRM not available on this platform (Windows)",
+    )
+    def test_inner_deadline_survives_enclosing_handler_that_returns(self) -> None:
+        """L-11 follow-up: an earlier enclosing alarm whose handler returns must not disarm timeout()."""
+        import time
+
+        calls = []
+        previous = signal.signal(signal.SIGALRM, lambda signum, frame: calls.append(signum))
+        try:
+            signal.setitimer(signal.ITIMER_REAL, 0.3)
+            started = time.monotonic()
+            with pytest.raises(SecurityTimeoutError, match="exceeded 1s timeout"):
+                with timeout(1):
+                    time.sleep(3)
+            assert time.monotonic() - started < 2.0
+            time.sleep(0.05)
+            assert calls == [signal.SIGALRM]  # delivered once, not re-armed on exit
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous)
 
 
 # =============================================================================

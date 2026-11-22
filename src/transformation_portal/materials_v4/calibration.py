@@ -26,7 +26,7 @@ from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.lux_depth_v4.io import directory_path, snapshot
 
 from .artifacts import _calibration, _mask_array, _object, _relative_path, load_evidence
-from .contracts import CalibrationReceipt, MaterialLimits, MaterialsError, validate_digest
+from .contracts import CalibrationReceipt, MaterialEvidence, MaterialLimits, MaterialsError, validate_digest
 from .evaluation import _parse, _score
 from .semantics import SEMANTIC_SCORE_TYPE
 from .taxonomy import MATERIAL_LABELS, TAXONOMY_VERSION
@@ -373,6 +373,17 @@ def fit_calibration(payload: Mapping[str, Any], *, source_root: Path, data_root:
     if set(bindings) != {record["record_id"] for record in records}:
         raise MaterialsError("Fitting binding IDs differ from calibration record IDs")
     recipe, provenance, pairs, properties, observed_regions = None, [], defaultdict(list), defaultdict(set), set()
+    # Records commonly share one photograph, one evidence bundle and one
+    # annotation mask. Consecutive records reuse the verified input, keyed on
+    # its path and declared digest. Only the most recent bundle and annotation
+    # mask are retained, so peak memory stays that of one record however many
+    # distinct inputs a fit binds. An input that was reused instead of re-read
+    # gets one final hash-only re-snapshot, which still fails closed if it
+    # changed while fitting; an input used once costs no extra read.
+    source_shapes: dict[str, tuple[int, int]] = {}
+    bundle_slot: tuple[tuple[str, str, str, tuple[int, int]], tuple[dict, MaterialEvidence]] | None = None
+    mask_slot: tuple[tuple[str, str, tuple[int, int]], tuple[dict, np.ndarray]] | None = None
+    reread: dict[tuple[str, str, str], tuple[Path, Path, int, str, str]] = {}
     for record in records:
         membership_item = sources.get(record["source_sha256"])
         if (
@@ -413,23 +424,50 @@ def fit_calibration(payload: Mapping[str, Any], *, source_root: Path, data_root:
             raise MaterialsError(
                 "Annotation requires matching source/label/group and distinct declared human review identities"
             )
-        source_data, _ = _read(source_root, membership_item["source_path"], 1024**3)
-        if hashlib.sha256(source_data).hexdigest() != record["source_sha256"]:
-            raise MaterialsError("Calibration source changed during fitting")
-        with Image.open(io.BytesIO(source_data)) as image:
-            width, height = image.size
-            if image.getexif().get(274) in {5, 6, 7, 8}:
-                height, width = width, height
-        shape = (height, width)
+        source_relative = _relative_path(membership_item["source_path"])
+        cached_shape = source_shapes.get(record["source_sha256"])
+        if cached_shape is None:
+            source_data, _ = _read(source_root, source_relative, 1024**3)
+            if hashlib.sha256(source_data).hexdigest() != record["source_sha256"]:
+                raise MaterialsError("Calibration source changed during fitting")
+            with Image.open(io.BytesIO(source_data)) as image:
+                width, height = image.size
+                if image.getexif().get(274) in {5, 6, 7, 8}:
+                    height, width = width, height
+            del source_data
+            cached_shape = source_shapes[record["source_sha256"]] = (height, width)
+        else:
+            reread[("source", str(source_root / source_relative), record["source_sha256"])] = (
+                source_root,
+                source_root / source_relative,
+                1024**3,
+                record["source_sha256"],
+                "Calibration source changed during fitting",
+            )
+        shape = cached_shape
         if annotation["shape"] != list(shape):
             raise MaterialsError("Annotation frame differs from orientation-normalized photographic geometry")
         evidence_path = data_root / _relative_path(binding["evidence_path"])
-        evidence_data, evidence_file = snapshot(data_root, evidence_path, maximum_bytes=1024 * 1024)
-        if evidence_file["sha256"] != validate_digest(binding["evidence_sha256"], "evidence_sha256"):
-            raise MaterialsError("Inference evidence bytes differ from fitting binding")
-        evidence_content = decode_bounded_json_object(evidence_data).get("content_sha256")
-        validate_digest(evidence_content, "evidence content_sha256")
-        evidence = load_evidence(evidence_path, record["source_sha256"], shape, expected_content_hash=evidence_content)
+        declared_evidence = validate_digest(binding["evidence_sha256"], "evidence_sha256")
+        bundle_key = (str(evidence_path), declared_evidence, record["source_sha256"], shape)
+        if bundle_slot is None or bundle_slot[0] != bundle_key:
+            bundle_slot = None  # release the previous bundle before loading the next one
+            evidence_data, evidence_file = snapshot(data_root, evidence_path, maximum_bytes=1024 * 1024)
+            if evidence_file["sha256"] != declared_evidence:
+                raise MaterialsError("Inference evidence bytes differ from fitting binding")
+            evidence_content = decode_bounded_json_object(evidence_data).get("content_sha256")
+            validate_digest(evidence_content, "evidence content_sha256")
+            loaded = load_evidence(evidence_path, record["source_sha256"], shape, expected_content_hash=evidence_content)
+            bundle_slot = (bundle_key, (evidence_file, loaded))
+        else:
+            reread[("evidence", str(evidence_path), declared_evidence)] = (
+                data_root,
+                evidence_path,
+                1024 * 1024,
+                declared_evidence,
+                "Inference evidence bytes differ from fitting binding",
+            )
+        evidence_file, evidence = bundle_slot[1]
         region = next((item for item in evidence.regions if item.region_id == binding["region_id"]), None)
         if (
             region is None
@@ -451,12 +489,27 @@ def fit_calibration(payload: Mapping[str, Any], *, source_root: Path, data_root:
             raise MaterialsError("Duplicate inference region cannot increase calibration support")
         observed_regions.add(evidence_key)
         annotation_root = directory_path((data_root / _relative_path(binding["annotation_path"])).parent)
-        mask_data, mask_file = _read(annotation_root, annotation["mask_path"], MaterialLimits().max_mask_bytes)
-        if mask_file["sha256"] != validate_digest(annotation["mask_sha256"], "mask_sha256"):
-            raise MaterialsError("Annotation mask bytes differ from their declaration")
-        mask = _mask_array(mask_data, shape, MaterialLimits())
-        if not np.any(mask) or np.any((mask != 0) & (mask != 1)):
-            raise MaterialsError("Reviewed annotation requires a nonempty binary source-frame mask")
+        mask_relative = _relative_path(annotation["mask_path"])
+        declared_mask = validate_digest(annotation["mask_sha256"], "mask_sha256")
+        mask_key = (str(annotation_root / mask_relative), declared_mask, shape)
+        if mask_slot is None or mask_slot[0] != mask_key:
+            mask_slot = None  # release the previous mask before reading the next one
+            mask_data, mask_file = _read(annotation_root, mask_relative, MaterialLimits().max_mask_bytes)
+            if mask_file["sha256"] != declared_mask:
+                raise MaterialsError("Annotation mask bytes differ from their declaration")
+            parsed = _mask_array(mask_data, shape, MaterialLimits())
+            if not np.any(parsed) or np.any((parsed != 0) & (parsed != 1)):
+                raise MaterialsError("Reviewed annotation requires a nonempty binary source-frame mask")
+            mask_slot = (mask_key, (mask_file, parsed))
+        else:
+            reread[("mask", str(annotation_root / mask_relative), declared_mask)] = (
+                annotation_root,
+                annotation_root / mask_relative,
+                MaterialLimits().max_mask_bytes,
+                declared_mask,
+                "Annotation mask bytes differ from their declaration",
+            )
+        mask_file, mask = mask_slot[1]
         predicted = region.mask > 0
         intersection, union = int(np.count_nonzero(predicted & (mask > 0))), int(np.count_nonzero(predicted | (mask > 0)))
         predicted_pixels = int(np.count_nonzero(predicted))
@@ -478,6 +531,10 @@ def fit_calibration(payload: Mapping[str, Any], *, source_root: Path, data_root:
         if region.label not in {"unknown", "mixed"} and region.semantic_confidence is not None:
             pairs[region.label].append((region.semantic_confidence, region.label == record["true_label"]))
             properties[region.label].add(record["property_group"])
+    for root, path, maximum, expected, message in reread.values():
+        _, observed = snapshot(root, path, maximum_bytes=maximum, retain_bytes=False)
+        if observed["sha256"] != expected:
+            raise MaterialsError(message)
     classes, excluded = {}, {}
     minimum = max(5, settings["min_class_support"])
     for label, observations in sorted(pairs.items()):

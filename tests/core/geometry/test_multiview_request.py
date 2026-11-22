@@ -46,6 +46,15 @@ class TestCoreCameraParams:
         with pytest.raises(ValueError, match="Focal lengths must be positive"):
             CoreCameraParams(fx=-800.0, fy=800.0, cx=512.0, cy=384.0, width=1024, height=768)
 
+    @pytest.mark.parametrize("field", ["fx", "fy", "cx", "cy"])
+    @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")], ids=["nan", "inf", "-inf"])
+    def test_non_finite_intrinsics_rejected(self, field, value):
+        """NaN passes a plain sign check, so finiteness is checked explicitly."""
+        intrinsics = {"fx": 800.0, "fy": 800.0, "cx": 512.0, "cy": 384.0, field: value}
+
+        with pytest.raises(ValueError, match="intrinsics must be finite"):
+            CoreCameraParams(**intrinsics, width=1024, height=768, source="explicit")
+
     def test_invalid_dimensions_rejected(self):
         """Non-positive dimensions raise ValueError."""
         with pytest.raises(ValueError, match="dimensions must be positive"):

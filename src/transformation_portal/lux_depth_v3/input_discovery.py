@@ -5,9 +5,15 @@ Prevents processing depth artifacts as RGB inputs.
 This module provides intelligent input discovery that excludes:
 - Depth maps (*_depth.png, *_depthpro_depth16.png)
 - PBR maps (*_normal.png, *_roughness.png, *_ao.png)
-- Output directories (depth/, pbr/, v2/, manifests/, logs/)
+- Output directories (depth/, pbr/, v2/, manifests/, logs/, temp/,
+  reconstruction/, captioning/)
 - Hidden files/directories (.DS_Store, .cache/)
 - Non-source directories (_non_source/)
+
+Directory and hidden-name rules are evaluated on each file's path below the
+input directory. Where the input directory itself lives, and whether it is
+spelled absolutely, relatively, as ``.`` or through ``..``, never changes the
+result.
 
 Usage:
     from .input_discovery import discover_images, DiscoveryConfig
@@ -34,10 +40,12 @@ class DiscoveryConfig:
     """Input discovery configuration.
 
     Attributes:
-        exclude_path_patterns: Path segments to exclude
-            (matched anywhere in path).
+        exclude_path_patterns: Path segments to exclude (matched anywhere in
+            the path below the input directory, which is rendered with a
+            leading ``/`` so ``/depth/`` also matches a top-level folder).
         exclude_stem_suffixes: Filename suffixes to exclude (before extension).
-        exclude_hidden: Skip hidden files/directories (starting with '.').
+        exclude_hidden: Skip hidden files/directories (starting with '.')
+            below the input directory.
         strict_mode: Fail with error if excluded files found (validation mode).
     """
 
@@ -52,6 +60,12 @@ class DiscoveryConfig:
             "/logs/",
             "/.depth_cache/",
             "/checkpoints/",
+            # Kept Materials V3 hand-off images (--keep-intermediates),
+            # reconstruction bundles with their debug copies of the inputs,
+            # and advisory captioning proxies.
+            "/temp/",
+            "/reconstruction/",
+            "/captioning/",
         ]
     )
     exclude_stem_suffixes: List[str] = field(
@@ -183,8 +197,15 @@ def discover_images(
         if candidate.suffix.lower() not in allowed_exts:
             continue
 
+        # Hygiene rules describe what lies below the input directory. Applying
+        # them to the full path made the result depend on the root's own
+        # location and spelling: a root under ``.../output/`` or reached via
+        # ``..`` yielded nothing, while ``--input-dir .`` had no leading
+        # separator to match ``/v2/`` and let derived artifacts through.
+        relative_candidate = candidate.relative_to(input_dir)
+
         # Check for hidden files/directories
-        if config.exclude_hidden and any(part.startswith(".") for part in candidate.parts):
+        if config.exclude_hidden and any(part.startswith(".") for part in relative_candidate.parts):
             reason = "hidden file/directory"
             excluded_artifacts.append((candidate, reason))
             logger.debug(
@@ -195,7 +216,7 @@ def discover_images(
             continue
 
         # Check for excluded path patterns
-        candidate_str = candidate.as_posix().lower()
+        candidate_str = "/" + relative_candidate.as_posix().lower()
         matched_pattern = None
         for pattern in config.exclude_path_patterns:
             if pattern.lower() in candidate_str:

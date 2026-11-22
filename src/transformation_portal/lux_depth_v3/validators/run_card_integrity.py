@@ -580,8 +580,11 @@ def verify_run_card_integrity(
         return [run_card_load_error]
     if not isinstance(raw_run_card_payload, dict):
         return [f"Run card root must be a JSON object: {run_card_path}"]
-    run_card_payload = with_inferred_run_card_version(raw_run_card_payload)
-    run_card_version = infer_run_card_version(run_card_payload)
+    try:
+        run_card_payload = with_inferred_run_card_version(raw_run_card_payload)
+        run_card_version = infer_run_card_version(run_card_payload)
+    except ValueError as exc:
+        return [str(exc)]
 
     try:
         _validate_bounded_collections(
@@ -668,7 +671,12 @@ def verify_run_card_integrity(
     artifact_tree = run_card_payload.get("artifact_tree")
     if artifact_tree is not None:
         if isinstance(artifact_tree, dict) and not any("artifact_index[" in error for error in errors):
-            errors.extend(verify_artifact_tree_payload(artifact_tree, artifact_index=artifact_index))
+            # Schema errors are rendered as ``artifact_index.<n>.<field>``, so a
+            # leaf the tree builder rejects can still reach it: report it.
+            try:
+                errors.extend(verify_artifact_tree_payload(artifact_tree, artifact_index=artifact_index))
+            except (ValueError, TypeError, KeyError, RuntimeError) as exc:
+                errors.append(f"artifact_tree could not be recomputed from artifact_index: {exc}")
         elif not isinstance(artifact_tree, dict):
             errors.append("artifact_tree must be an object")
     else:
@@ -676,11 +684,16 @@ def verify_run_card_integrity(
         if not isinstance(expected_merkle_root, str) or not SHA256_HEX_RE.fullmatch(expected_merkle_root):
             errors.append("artifact_merkle_root must be a lowercase 64-char hex digest")
         elif not any("artifact_index[" in error for error in errors):
-            recomputed_merkle_root = compute_artifact_merkle_root(artifact_index)
-            if recomputed_merkle_root != expected_merkle_root:
-                errors.append(
-                    f"artifact_merkle_root mismatch: expected={expected_merkle_root}, recomputed={recomputed_merkle_root}"
-                )
+            try:
+                recomputed_merkle_root = compute_artifact_merkle_root(artifact_index)
+            except (ValueError, TypeError, KeyError, RuntimeError) as exc:
+                errors.append(f"artifact_merkle_root could not be recomputed from artifact_index: {exc}")
+            else:
+                if recomputed_merkle_root != expected_merkle_root:
+                    errors.append(
+                        "artifact_merkle_root mismatch: "
+                        f"expected={expected_merkle_root}, recomputed={recomputed_merkle_root}"
+                    )
 
     if errors.stop_if_full():
         return list(errors)

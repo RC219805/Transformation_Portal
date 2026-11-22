@@ -497,6 +497,15 @@ async def test_list_for_job_sorts_by_relative_path(store: ArtifactStore) -> None
     ]
 
 
+async def test_list_for_job_orders_by_relative_path_string_not_path_components(store: ArtifactStore) -> None:
+    """ORCH-05: ``scene/`` beside ``scene.json`` must list in string order on every backend."""
+    for relative_path in ("scene/depth.png", "scene.json", "scene-preview.png", "scene 2/x.png"):
+        await store.write_bytes("job-order", relative_path, b"x")
+
+    listed = [item.relative_path for item in await store.list_for_job("job-order")]
+    assert listed == ["scene 2/x.png", "scene-preview.png", "scene.json", "scene/depth.png"]
+
+
 async def test_list_for_job_empty_when_no_writes(store: ArtifactStore) -> None:
     assert await store.list_for_job("ghost-job") == []
 
@@ -548,6 +557,51 @@ async def test_s3_bulk_delete_raises_on_per_key_errors() -> None:
     store = S3ArtifactStore(bucket="bucket", prefix="tp/test", client=ErroringBulkDeleteClient())
     with pytest.raises(ArtifactStoreError, match="S3 delete_objects failed"):
         await store.delete("job-bulk")
+
+
+async def test_s3_bulk_delete_wraps_listing_failure_in_artifact_store_error() -> None:
+    """ORCH-06: a failing listing inside bulk delete raises the store's own error, as list_for_job does."""
+    from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
+
+    class ListingFailure(Exception):
+        pass
+
+    class FailingListClient:
+        def list_objects_v2(self, **_kwargs):
+            raise ListingFailure("NoSuchBucket")
+
+        def delete_objects(self, **_kwargs):
+            pytest.fail("nothing may be deleted when the listing failed")
+
+    store = S3ArtifactStore(bucket="bucket", prefix="tp/test", client=FailingListClient())
+    with pytest.raises(ArtifactStoreError, match="S3 list_objects_v2 failed") as caught:
+        await store.delete("job-bulk")
+    assert isinstance(caught.value.__cause__, ListingFailure)
+    with pytest.raises(ArtifactStoreError, match="S3 list_objects_v2 failed"):
+        await store.list_for_job("job-bulk")
+
+
+async def test_s3_bulk_delete_wraps_request_level_delete_failure_in_artifact_store_error() -> None:
+    """ORCH-06: a ``delete_objects`` call that raises is wrapped like its per-key ``Errors`` are."""
+    from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
+
+    class DeleteRequestFailure(Exception):
+        pass
+
+    class FailingDeleteClient:
+        def list_objects_v2(self, **_kwargs):
+            return {
+                "Contents": [{"Key": "tp/test/jobs/job-bulk/a.txt"}, {"Key": "tp/test/jobs/job-bulk/b.txt"}],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, **_kwargs):
+            raise DeleteRequestFailure("AccessDenied")
+
+    store = S3ArtifactStore(bucket="bucket", prefix="tp/test", client=FailingDeleteClient())
+    with pytest.raises(ArtifactStoreError, match="S3 delete_objects failed for 2 keys under tp/test") as caught:
+        await store.delete("job-bulk")
+    assert isinstance(caught.value.__cause__, DeleteRequestFailure)
 
 
 async def test_s3_bulk_delete_counts_confirmed_deletions() -> None:
@@ -786,6 +840,108 @@ async def test_s3_fingerprint_bounds_actual_get_body(
     assert metadata.sha256_hex == (hashlib.sha256(b"x" * body_size).hexdigest() if expected_status == "ok" else None)
     assert body.bytes_read == expected_bytes_read
     assert all(0 < size <= 17 for size in body.read_sizes)
+
+
+async def test_s3_head_downloads_each_stored_version_once(store: ArtifactStore) -> None:
+    """Looking an unchanged object up again must not pull its bytes through the host again."""
+    if store.backend != "s3":
+        pytest.skip("S3-only: the local store has no remote body to download")
+    from collections import Counter
+
+    client = await store._get_client()  # noqa: SLF001 - observe the real request stream
+    calls: Counter[str] = Counter()
+    client.meta.events.register("before-call.s3", lambda model, **_kwargs: calls.update([model.name]))
+
+    written = await store.write_bytes("job-memo", "preview.png", b"1" * 4096)
+    assert await store.head("job-memo", "preview.png") == written
+    assert calls["GetObject"] == 1  # the fingerprint is still an observation of the stored bytes
+
+    calls.clear()
+    for _ in range(3):
+        assert await store.head("job-memo", "preview.png") == written
+    assert await store.list_for_job("job-memo") == [written]
+    assert calls["HeadObject"] == 4
+    assert calls["GetObject"] == 0
+
+    # A rewrite is a new stored version, even at the same size: observe it again.
+    rewritten = await store.write_bytes("job-memo", "preview.png", b"2" * 4096)
+    assert rewritten.sha256_hex != written.sha256_hex
+    calls.clear()
+    assert await store.head("job-memo", "preview.png") == rewritten
+    assert calls["GetObject"] == 1
+
+
+class _VersionedS3Client:
+    """One object whose stored version can be swapped between requests."""
+
+    def __init__(self, *, identified: bool = True) -> None:
+        self.identified = identified
+        self.stored = ("v1", b"a" * 8)
+        self.replace_before_next_get: tuple[str, bytes] | None = None
+        self.gets = 0
+
+    def _describe(self) -> dict:
+        name, body = self.stored
+        described = {"ContentLength": len(body), "ContentType": "application/octet-stream"}
+        if self.identified:
+            described.update(ETag=f'"{name}"', LastModified=f"written-{name}")
+        return described
+
+    def head_object(self, **_kwargs):
+        return self._describe()
+
+    def get_object(self, **_kwargs):
+        self.gets += 1
+        if self.replace_before_next_get is not None:
+            self.stored, self.replace_before_next_get = self.replace_before_next_get, None
+        return {**self._describe(), "Body": io.BytesIO(self.stored[1])}
+
+
+async def test_s3_remembered_fingerprint_is_bound_to_the_version_that_was_hashed() -> None:
+    from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
+
+    def sha(body: bytes) -> str:
+        return hashlib.sha256(body).hexdigest()
+
+    client = _VersionedS3Client()
+    store = S3ArtifactStore(bucket="audit", client=client)
+
+    assert (await store.head("job", "artifact.bin")).sha256_hex == sha(b"a" * 8)
+    assert (await store.head("job", "artifact.bin")).sha256_hex == sha(b"a" * 8)
+    assert client.gets == 1
+
+    # Rewritten between HeadObject (still naming v2) and GetObject (already v3):
+    # the bytes hashed were v3's, so nothing may be remembered for v2.
+    client.stored = ("v2", b"b" * 8)
+    client.replace_before_next_get = ("v3", b"c" * 8)
+    assert (await store.head("job", "artifact.bin")).sha256_hex == sha(b"c" * 8)
+    assert client.gets == 2
+    assert (await store.head("job", "artifact.bin")).sha256_hex == sha(b"c" * 8)
+    assert client.gets == 2  # HeadObject now names v3, the version that was hashed
+
+    client.stored = ("v2", b"b" * 8)
+    observed = await store.head("job", "artifact.bin")
+    assert (observed.sha256_hex, observed.fingerprint_status) == (sha(b"b" * 8), "ok")
+    assert client.gets == 3
+
+
+async def test_s3_fingerprint_is_never_remembered_without_a_version_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    from transformation_portal.orchestrator.artifact_store import s3 as s3_module
+
+    anonymous = _VersionedS3Client(identified=False)
+    store = s3_module.S3ArtifactStore(bucket="audit", client=anonymous)
+    for expected_gets in (1, 2):
+        assert (await store.head("job", "artifact.bin")).fingerprint_status == "ok"
+        assert anonymous.gets == expected_gets
+
+    # The memory is bounded: the least recently used object is observed again.
+    monkeypatch.setattr(s3_module, "_FINGERPRINT_MEMO_ENTRIES", 2)
+    client = _VersionedS3Client()
+    store = s3_module.S3ArtifactStore(bucket="audit", client=client)
+    for name in ("one.bin", "two.bin", "three.bin", "three.bin", "one.bin"):
+        assert (await store.head("job", name)).fingerprint_status == "ok"
+    assert client.gets == 4
+    assert len(store._fingerprints) == 2  # noqa: SLF001 - the bound is the regression
 
 
 async def test_s3_fingerprint_closes_body_on_cancellation() -> None:

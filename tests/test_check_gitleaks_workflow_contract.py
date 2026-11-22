@@ -16,6 +16,15 @@ gitleaks_contract = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(gitleaks_contract)
 
 
+def historical_seed_fixture_pattern() -> str:
+    config = tomllib.loads((PROJECT_ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
+    rule = next(rule for rule in config["rules"] if rule["id"] == gitleaks_contract.EXPECTED_RULE_ID)
+    exception = next(
+        item for item in rule["allowlists"] if item["paths"] == [gitleaks_contract.EXPECTED_SEED_FIXTURE_PATH_REGEX]
+    )
+    return exception["regexes"][0]
+
+
 def valid_config_text() -> str:
     return f"""
 title = "Transformation Portal gitleaks config"
@@ -59,11 +68,19 @@ paths = [
 ]
 
 [[rules.allowlists]]
-description = "Ignore one public source SHA256 split across a scanner chunk boundary"
+description = "Ignore two public source SHA256 values split across scanner chunk boundaries"
 condition = "AND"
 regexTarget = "secret"
 regexes = ['''{gitleaks_contract.EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX}''']
 paths = ['''{gitleaks_contract.EXPECTED_CATALOG_PATH_REGEX}''']
+
+[[rules.allowlists]]
+description = "Ignore two verified historical inline seed-user test fixtures"
+condition = "AND"
+regexTarget = "line"
+commits = ["{gitleaks_contract.EXPECTED_SEED_FIXTURE_COMMIT}"]
+paths = ['''{gitleaks_contract.EXPECTED_SEED_FIXTURE_PATH_REGEX}''']
+regexes = ['''{historical_seed_fixture_pattern()}''']
 """
 
 
@@ -385,11 +402,18 @@ def test_native_resource_contract_exception_rejects_new_secret_context(context: 
 
 
 def test_chunk_exception_digest_is_the_public_catalog_source_hash() -> None:
-    source = PROJECT_ROOT / "src/transformation_portal/portal/photographic_review_access.py"
-    digest = hashlib.sha256(source.read_bytes()).hexdigest()
-    assert gitleaks_contract.EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX == f"^{digest}$"
+    sources = [
+        "src/transformation_portal/portal/photographic_review_access.py",
+        "tests/orchestrator/test_managed_photography_api.py",
+    ]
+    digests = [hashlib.sha256((PROJECT_ROOT / source).read_bytes()).hexdigest() for source in sources]
+    assert gitleaks_contract.EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX == "^(?:" + "|".join(digests) + ")$"
 
 
+@pytest.mark.parametrize(
+    "source",
+    ["src/transformation_portal/portal/photographic_review_access.py", "tests/orchestrator/test_managed_photography_api.py"],
+)
 @pytest.mark.parametrize(
     "path,mutation,expected",
     [
@@ -404,11 +428,13 @@ def test_chunk_exception_digest_is_the_public_catalog_source_hash() -> None:
         ("docs/governance/documentation_catalog.json.backup", "exact", False),
     ],
 )
-def test_chunk_exception_matches_only_exact_public_digest_and_catalog(path: str, mutation: str, expected: bool) -> None:
+def test_chunk_exception_matches_only_exact_public_digest_and_catalog(
+    source: str, path: str, mutation: str, expected: bool
+) -> None:
     config = tomllib.loads((PROJECT_ROOT / ".gitleaks.toml").read_text(encoding="utf-8"))
     rule = next(rule for rule in config["rules"] if rule["id"] == "generic-api-key")
     allowlist = next(item for item in rule["allowlists"] if item["regexTarget"] == "secret")
-    digest = gitleaks_contract.EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX[1:-1]
+    digest = hashlib.sha256((PROJECT_ROOT / source).read_bytes()).hexdigest()
     if mutation == "nearby_hex":
         digest = ("0" if digest[0] != "0" else "1") + digest[1:]
     elif mutation == "prefix":
@@ -424,13 +450,24 @@ def test_chunk_exception_matches_only_exact_public_digest_and_catalog(path: str,
     assert bool(matches) is expected
 
 
-@pytest.mark.parametrize("mutation", ["digest", "path", "target", "condition", "rule"])
+@pytest.mark.parametrize("mutation", ["digest", "additional_digest", "unanchored", "path", "target", "condition", "rule"])
 def test_chunk_exception_cannot_be_widened_or_applied_to_another_rule(mutation: str) -> None:
     config = valid_config_text()
-    index = config.index('description = "Ignore one public source SHA256')
+    index = config.index('description = "Ignore two public source SHA256')
     prefix, chunk = config[:index], config[index:]
     if mutation == "digest":
         chunk = chunk.replace(gitleaks_contract.EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX, "[0-9a-f]{64}")
+    elif mutation == "additional_digest":
+        extra = hashlib.sha256(b"unrelated public source fixture").hexdigest()
+        chunk = chunk.replace(
+            gitleaks_contract.EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX,
+            gitleaks_contract.EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX[:-2] + "|" + extra + ")$",
+        )
+    elif mutation == "unanchored":
+        chunk = chunk.replace(
+            gitleaks_contract.EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX,
+            gitleaks_contract.EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX[1:-1],
+        )
     elif mutation == "path":
         chunk = chunk.replace(gitleaks_contract.EXPECTED_CATALOG_PATH_REGEX, "docs/governance/.*")
     elif mutation == "target":
@@ -443,3 +480,66 @@ def test_chunk_exception_cannot_be_widened_or_applied_to_another_rule(mutation: 
         prefix + chunk, valid_ci_workflow_text(), valid_firewall_workflow_text()
     )
     assert errors
+
+
+def test_chunk_exception_cannot_be_copied_to_an_additional_rule() -> None:
+    config = tomllib.loads(valid_config_text())
+    chunk_allowlist = next(item for item in config["rules"][0]["allowlists"] if item["regexTarget"] == "secret")
+    config["rules"].append({"id": "unrelated-secret-rule", "allowlists": [chunk_allowlist]})
+    assert "public catalog chunk digest exceptions must belong only to generic-api-key" in gitleaks_contract._validate_config(
+        config
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "unbound_commit",
+        "additional_commit",
+        "different_commit",
+        "path_only",
+        "broader_path",
+        "broader_line",
+        "other_target",
+        "or_condition",
+        "additional_match_field",
+        "global_exception",
+        "global_commit",
+        "legacy_rule_allowlist",
+        "additional_rule",
+    ],
+)
+def test_historical_fixture_exception_cannot_be_widened(mutation: str) -> None:
+    config = tomllib.loads(valid_config_text())
+    rule = config["rules"][0]
+    fixture = next(item for item in rule["allowlists"] if "commits" in item)
+    assert not gitleaks_contract._validate_config(config)
+
+    if mutation == "unbound_commit":
+        fixture.pop("commits")
+    elif mutation == "additional_commit":
+        fixture["commits"].append("a" * 40)
+    elif mutation == "different_commit":
+        fixture["commits"] = ["a" * 40]
+    elif mutation == "path_only":
+        fixture.pop("regexes")
+    elif mutation == "broader_path":
+        fixture["paths"] = [r"^web/secure-landing/tests/.*$"]
+    elif mutation == "broader_line":
+        fixture["regexes"] = [r'.*"']
+    elif mutation == "other_target":
+        fixture["regexTarget"] = "secret"
+    elif mutation == "or_condition":
+        fixture["condition"] = "OR"
+    elif mutation == "additional_match_field":
+        fixture["stopwords"] = ["password"]
+    elif mutation == "global_exception":
+        config["allowlists"] = [fixture]
+    elif mutation == "global_commit":
+        config["allowlist"]["commits"] = fixture["commits"]
+    elif mutation == "legacy_rule_allowlist":
+        rule["allowlist"] = {"paths": fixture["paths"]}
+    else:
+        config["rules"].append({"id": "unrelated-secret-rule", "allowlists": [fixture]})
+
+    assert gitleaks_contract._validate_config(config)

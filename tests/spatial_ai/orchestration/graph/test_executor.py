@@ -500,6 +500,147 @@ class TestExecutor:
         out2 = result2.outputs["numpy.processed"]
         np.testing.assert_array_equal(out1, out2)
 
+    def test_corrupt_committed_artifact_is_repaired(self, executor: Executor, store: ArtifactStore, output_dir: Path):
+        """A committed entry whose payload cannot be loaded is evicted and rewritten (G-1)."""
+        calls = {"n": 0}
+
+        def transform(x):
+            calls["n"] += 1
+            return np.arange(1000) + x
+
+        graph = ExecutionGraph()
+        graph.add_stage("stage1", MockStage("stage1", transform_fn=transform), inputs={})
+
+        result1 = executor.execute(graph=graph, inputs={"value": 1}, output_dir=output_dir)
+        cache_key = result1.stage_results[0].cache_key
+        payload = store._artifact_path(cache_key)
+        payload.write_bytes(payload.read_bytes()[:40])  # truncate the committed payload
+
+        result2 = executor.execute(graph=graph, inputs={"value": 1}, output_dir=output_dir)
+        assert result2.stage_results[0].cache_hit is False
+        np.testing.assert_array_equal(result2.outputs["stage1.output"], np.arange(1000) + 1)
+
+        # The re-execution must have rewritten the entry, so the next run is a valid hit.
+        result3 = executor.execute(graph=graph, inputs={"value": 1}, output_dir=output_dir)
+        assert result3.stage_results[0].cache_hit is True
+        np.testing.assert_array_equal(result3.outputs["stage1.output"], np.arange(1000) + 1)
+        assert calls["n"] == 2
+
+    def test_cache_lock_timeout_does_not_evict(self, executor: Executor, store: ArtifactStore, output_dir: Path, monkeypatch):
+        """A lock timeout on load says nothing about the payload, so the entry is kept."""
+        from transformation_portal.spatial_ai.orchestration.graph.artifact_store import CacheLockTimeout
+
+        graph = ExecutionGraph()
+        graph.add_stage("stage1", MockStage("stage1"), inputs={})
+        result1 = executor.execute(graph=graph, inputs={"value": 2}, output_dir=output_dir)
+        cache_key = result1.stage_results[0].cache_key
+
+        def timeout(_key):
+            raise CacheLockTimeout("busy")
+
+        evicted = []
+        monkeypatch.setattr(store, "load", timeout)
+        monkeypatch.setattr(store, "evict", evicted.append)
+        result2 = executor.execute(graph=graph, inputs={"value": 2}, output_dir=output_dir)
+
+        assert result2.stage_results[0].cache_hit is False
+        assert evicted == []
+        assert store.exists(cache_key)
+
+    def test_uncacheable_output_does_not_fail_successful_stage(
+        self, executor: Executor, store: ArtifactStore, output_dir: Path
+    ):
+        """A store failure after a successful stage costs only the cache entry (G-3)."""
+        calls = {"n": 0}
+
+        def transform(x):
+            calls["n"] += 1
+            return {"label": "wood", "value": x}  # dict -> object array, not cacheable
+
+        graph = ExecutionGraph()
+        graph.add_stage("stage1", MockStage("stage1", transform_fn=transform), inputs={})
+
+        result1 = executor.execute(graph=graph, inputs={"value": 3}, output_dir=output_dir)
+        assert result1.outputs["stage1.output"] == {"label": "wood", "value": 3}
+        assert result1.stage_results[0].cache_hit is False
+        assert not store.exists(result1.stage_results[0].cache_key)
+
+        result2 = executor.execute(graph=graph, inputs={"value": 3}, output_dir=output_dir)
+        assert result2.outputs["stage1.output"] == {"label": "wood", "value": 3}
+        assert result2.stage_results[0].cache_hit is False
+        assert calls["n"] == 2
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            (480, 640),
+            ["a", "b"],
+            [],
+            [[1, 2], [3, 4]],
+            np.array(7, dtype=np.int16),
+            np.float32(0.5),
+            [np.zeros((2, 2), dtype=np.float32), np.ones((2, 2), dtype=np.float32)],
+        ],
+        ids=["tuple", "str_list", "empty_list", "nested_list", "zero_d_array", "numpy_scalar", "list_of_arrays"],
+    )
+    def test_cache_hit_returns_same_types_as_fresh_run(self, executor: Executor, output_dir: Path, value: Any):
+        """A cache hit returns the value types the stage returned on the fresh run (G-3)."""
+        graph = ExecutionGraph()
+        graph.add_stage("stage1", MockStage("stage1", transform_fn=lambda _x: value), inputs={})
+
+        fresh = executor.execute(graph=graph, inputs={"value": 0}, output_dir=output_dir)
+        cached = executor.execute(graph=graph, inputs={"value": 0}, output_dir=output_dir)
+
+        assert cached.stage_results[0].cache_hit is True
+        fresh_value = fresh.outputs["stage1.output"]
+        cached_value = cached.outputs["stage1.output"]
+        assert type(cached_value) is type(fresh_value)
+        if isinstance(fresh_value, (list, tuple)) and fresh_value and isinstance(fresh_value[0], np.ndarray):
+            assert len(cached_value) == len(fresh_value)
+            for got, want in zip(cached_value, fresh_value):
+                assert type(got) is np.ndarray and got.dtype == want.dtype
+                np.testing.assert_array_equal(got, want)
+        elif isinstance(fresh_value, (np.ndarray, np.generic)):
+            assert cached_value.dtype == fresh_value.dtype
+            np.testing.assert_array_equal(cached_value, fresh_value)
+        else:
+            assert cached_value == fresh_value
+
+    def test_lossy_sequence_output_is_not_cached(self, executor: Executor, output_dir: Path):
+        """A list NumPy would coerce ([1, 'x'] -> ['1', 'x']) is recomputed, never served altered (G-3)."""
+        graph = ExecutionGraph()
+        graph.add_stage("stage1", MockStage("stage1", transform_fn=lambda _x: [1, "x"]), inputs={})
+
+        executor.execute(graph=graph, inputs={"value": 0}, output_dir=output_dir)
+        second = executor.execute(graph=graph, inputs={"value": 0}, output_dir=output_dir)
+
+        assert second.stage_results[0].cache_hit is False
+        assert second.outputs["stage1.output"] == [1, "x"]
+
+    @pytest.mark.parametrize("value", [range(3), bytearray(b"abc")], ids=["range", "bytearray"])
+    def test_array_like_output_is_never_committed(
+        self, executor: Executor, store: ArtifactStore, output_dir: Path, caplog, value: Any
+    ):
+        """An array-like that is not a list, tuple or array is not cached at all (G-3).
+
+        Such a value converts to a multi-element array but was recorded as a scalar, so
+        the committed entry could never be loaded: every run stored it, failed the load
+        as "Corrupted artifact", evicted it and stored it again.
+        """
+        graph = ExecutionGraph()
+        graph.add_stage("stage1", MockStage("stage1", transform_fn=lambda _x: value), inputs={})
+
+        first = executor.execute(graph=graph, inputs={"value": 0}, output_dir=output_dir)
+        assert not store.exists(first.stage_results[0].cache_key)
+
+        caplog.clear()
+        second = executor.execute(graph=graph, inputs={"value": 0}, output_dir=output_dir)
+
+        assert second.stage_results[0].cache_hit is False
+        assert second.outputs["stage1.output"] == value
+        assert type(second.outputs["stage1.output"]) is type(value)
+        assert "Cache load failed" not in caplog.text
+
 
 class TestExecutionContext:
     """Tests for ExecutionContext."""

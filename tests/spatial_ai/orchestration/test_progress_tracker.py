@@ -294,9 +294,35 @@ class TestProgressTrackerStageEvents:
             tracker.start_stage("ingest", "Linear Ingest")
 
             event = mock_emit.call_args[0][0]
-            # Note: current implementation doesn't calculate estimated_remaining correctly
-            # This tests current behavior
-            assert event.estimated_remaining is None or isinstance(event.estimated_remaining, (int, float))
+            # Both stages are still ahead (the starting one included)
+            assert event.estimated_remaining == 15.0
+
+    def test_estimated_remaining_excludes_completed_stages(self):
+        """Regression (O-5): the estimate sums the historical times of the stages not yet completed."""
+        historical = {"ingest": 5.0, "segment": 30.0, "materials": 60.0}
+        tracker = ProgressTracker(total_stages=3, historical_times=historical)
+        tracker.start_pipeline()
+
+        with patch.object(tracker, "_emit_event") as mock_emit:
+            tracker.start_stage("ingest", "Linear Ingest")
+            assert mock_emit.call_args[0][0].estimated_remaining == 95.0
+
+            tracker.complete_stage("ingest", success=True)
+            tracker.start_stage("segment", "Segmentation")
+            assert mock_emit.call_args[0][0].estimated_remaining == 90.0
+
+            tracker.complete_stage("segment", success=True)
+            tracker.start_stage("materials", "Materials")
+            assert mock_emit.call_args[0][0].estimated_remaining == 60.0
+
+    def test_estimated_remaining_disabled(self):
+        """The estimate stays None when time estimation is disabled."""
+        tracker = ProgressTracker(total_stages=1, enable_time_estimation=False, historical_times={"ingest": 5.0})
+        tracker.start_pipeline()
+
+        with patch.object(tracker, "_emit_event") as mock_emit:
+            tracker.start_stage("ingest", "Linear Ingest")
+            assert mock_emit.call_args[0][0].estimated_remaining is None
 
     def test_update_stage(self):
         """Test stage progress update."""
@@ -454,6 +480,34 @@ class TestProgressTrackerTimeTracking:
         # Should be frozen at completion time
         assert elapsed1 == elapsed2
         assert elapsed1 >= 0.1
+
+    def test_reused_tracker_resets_state_of_previous_run(self):
+        """A second run on the same tracker must not inherit the first run's state.
+
+        Regression (O-1): start_pipeline kept the previous run's end time, completed-stage
+        count and stage metrics, so a reused pipeline reported a negative execution_time
+        and progress above 100 %.
+        """
+        tracker = ProgressTracker(total_stages=2)
+        tracker.start_pipeline()
+        for name in ("ingest", "segment"):
+            tracker.start_stage(name, name.title())
+            tracker.complete_stage(name, success=True)
+        tracker.complete_pipeline(success=True)
+
+        time.sleep(0.05)
+        tracker.start_pipeline()
+        assert tracker._get_elapsed_time() >= 0.0
+        assert tracker.get_progress_percent() == 0.0
+        assert tracker.get_summary()["stages"] == {}
+
+        tracker.start_stage("ingest", "Ingest")
+        tracker.complete_stage("ingest", success=True)
+        assert tracker.get_progress_percent() == 50.0
+        assert tracker.get_summary()["completed_stages"] == 1
+
+        tracker.complete_pipeline(success=True)
+        assert tracker._get_elapsed_time() >= 0.0
 
 
 class TestProgressTrackerSummary:

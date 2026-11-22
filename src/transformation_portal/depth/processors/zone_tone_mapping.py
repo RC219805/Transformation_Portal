@@ -14,6 +14,8 @@ from typing import Dict, List, Optional
 import numpy as np
 from scipy.ndimage import gaussian_filter
 
+from .base import merge_alpha, split_alpha
+
 logger = logging.getLogger(__name__)
 
 
@@ -127,6 +129,19 @@ class ZoneToneMapping:
         # Validate inputs
         if image.shape[:2] != depth.shape[:2]:
             raise ValueError(f"Image shape {image.shape[:2]} doesn't match depth shape {depth.shape[:2]}")
+
+        # Alpha is coverage, not colour: process RGB only and pass alpha through.
+        rgb, alpha = split_alpha(image)
+        if alpha is not None:
+            return merge_alpha(self.process(rgb, depth, mask), alpha)
+
+        # Every zone needs its own parameters: zip() would silently drop the
+        # zones without an entry and leave them black in the output.
+        if len(self.zone_params) < self.num_zones:
+            raise ValueError(
+                f"zone_params has {len(self.zone_params)} entries but num_zones is {self.num_zones}; "
+                "provide one parameter dict per depth zone"
+            )
 
         # Create depth zones
         zone_masks = self._create_depth_zones(depth)
@@ -349,14 +364,14 @@ class ZoneToneMapping:
         if config:
             # Override parameters temporarily
             old_zone_params = self.zone_params
-            if "zone_params" in config:
-                self.zone_params = config["zone_params"]
+            try:
+                if "zone_params" in config:
+                    self.zone_params = config["zone_params"]
 
-            result = self.process(image, depth)
-
-            # Restore
-            self.zone_params = old_zone_params
-            return result
+                return self.process(image, depth)
+            finally:
+                # Restore even when process() raises
+                self.zone_params = old_zone_params
         else:
             return self.process(image, depth)
 

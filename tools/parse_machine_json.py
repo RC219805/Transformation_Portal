@@ -49,6 +49,17 @@ def parse_machine_json(json_str: str) -> Dict[str, Any]:
     if schema != "tp.meta.machine.v1":
         raise ValueError(f"Unsupported schema: {schema} " f"(this parser only supports tp.meta.machine.v1)")
 
+    # The envelope exit_code is forwarded as this process's exit status, so it
+    # must be a real integer in 0..255 (``sys.exit(None)`` would report success
+    # for an error envelope) and agree with ``success`` (producers emit
+    # ``success == (exit_code == 0)``). Anything else is a malformed envelope.
+    if "exit_code" in payload:
+        exit_code = payload["exit_code"]
+        if type(exit_code) is not int or not 0 <= exit_code <= 255:
+            raise ValueError(f"Invalid envelope exit_code: expected integer in 0..255, got {exit_code!r}")
+        if "success" in payload and payload["success"] is not (exit_code == 0):
+            raise ValueError(f"Inconsistent envelope: success={payload['success']!r} does not match exit_code={exit_code}")
+
     return payload
 
 

@@ -140,6 +140,11 @@ def test_quality_policy_apply_preset_exact_fields(
         ("segmentation", CachingPolicy(cache_material_masks=False), False),
         ("enhance", CachingPolicy(cache_enhanced=False), False),
         ("upscale", CachingPolicy(cache_enhanced=True), True),
+        ("upscale", CachingPolicy(cache_enhanced=False), False),
+        # Names the registered stages actually carry.
+        ("enhancement", CachingPolicy(cache_enhanced=False), False),
+        ("upscaling", CachingPolicy(cache_enhanced=False), False),
+        ("upscaling", CachingPolicy(cache_enhanced=True), True),
         ("white_balance", CachingPolicy(), True),
     ],
 )
@@ -149,6 +154,17 @@ def test_caching_policy_should_cache_stage_matrix(
     expected: bool,
 ) -> None:
     assert policy.should_cache_stage(stage_name) is expected
+
+
+def test_caching_policy_covers_the_registered_enhanced_output_stages() -> None:
+    """The selective flag must apply to the stage names the pipeline really uses."""
+    from transformation_portal.stage_graph.stages.enhancement import EnhancementStage
+    from transformation_portal.stage_graph.stages.upscaling import UpscalingStage
+
+    policy = CachingPolicy(cache_enhanced=False)
+
+    assert policy.should_cache_stage(EnhancementStage().name) is False
+    assert policy.should_cache_stage(UpscalingStage().name) is False
 
 
 def test_caching_policy_disabled_overrides_stage_specific_flags() -> None:

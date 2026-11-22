@@ -80,6 +80,10 @@ class _SourceImage:
     rgb01: np.ndarray
     bit_depth: int
     dtype: str
+    # Factor that maps ``rgb01`` back to the source's own value range. It is 1.0
+    # except for float sources with samples above 1.0 (scene-linear renders),
+    # which are processed divided by their maximum and written back at scale.
+    value_scale: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -131,11 +135,11 @@ def run_depth_aware_dof(options: DepthAwareDofOptions) -> DepthAwareDofResult:
     summary_json = opts.out_dir / f"{stem}_depth_dof_summary.json"
     package_zip = opts.out_dir / f"{stem}_depth_dof_package.zip"
 
-    _save_tiff_preserve_depth(production_tiff, composite, bit_depth=source.bit_depth)
-    _save_preview(preview_jpeg, composite, long_edge=opts.preview_long_edge)
+    _save_tiff_preserve_depth(production_tiff, composite, bit_depth=source.bit_depth, value_scale=source.value_scale)
+    _save_preview(preview_jpeg, _to_source_scale(composite, source.value_scale), long_edge=opts.preview_long_edge)
     _save_contact_sheet(
         diagnostic_contact_sheet,
-        source.rgb01,
+        _to_source_scale(source.rgb01, source.value_scale),
         depth,
         intermediates,
         focus_depth=focus_depth,
@@ -269,6 +273,25 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 def _normalize_options(options: DepthAwareDofOptions) -> DepthAwareDofOptions:
     if options.preview_long_edge <= 0:
         raise ValueError("preview_long_edge must be positive")
+    # Coerce str/os.PathLike inputs before any Path method is used on them.
+    options = DepthAwareDofOptions(
+        source=Path(options.source),
+        depth_npy=Path(options.depth_npy),
+        out_dir=Path(options.out_dir),
+        metadata=Path(options.metadata) if options.metadata is not None else None,
+        protect_mask=Path(options.protect_mask) if options.protect_mask is not None else None,
+        sky_mask=Path(options.sky_mask) if options.sky_mask is not None else None,
+        edge_mask=Path(options.edge_mask) if options.edge_mask is not None else None,
+        focus_depth=options.focus_depth,
+        focus_roi=options.focus_roi,
+        depth_convention=options.depth_convention,
+        preview_long_edge=options.preview_long_edge,
+        near_strength=float(options.near_strength),
+        far_strength=float(options.far_strength),
+        haze_strength=float(options.haze_strength),
+        edge_protection=float(options.edge_protection),
+        focus_protection=float(options.focus_protection),
+    )
     for field_name in ("source", "depth_npy"):
         path = getattr(options, field_name)
         if not path.exists():
@@ -290,24 +313,7 @@ def _normalize_options(options: DepthAwareDofOptions) -> DepthAwareDofOptions:
         raise ValueError("focus_depth must be finite")
     if options.depth_convention is not None and options.depth_convention not in _VALID_CONVENTIONS:
         raise ValueError(f"Unsupported depth convention: {options.depth_convention!r}")
-    return DepthAwareDofOptions(
-        source=Path(options.source),
-        depth_npy=Path(options.depth_npy),
-        out_dir=Path(options.out_dir),
-        metadata=Path(options.metadata) if options.metadata is not None else None,
-        protect_mask=Path(options.protect_mask) if options.protect_mask is not None else None,
-        sky_mask=Path(options.sky_mask) if options.sky_mask is not None else None,
-        edge_mask=Path(options.edge_mask) if options.edge_mask is not None else None,
-        focus_depth=options.focus_depth,
-        focus_roi=options.focus_roi,
-        depth_convention=options.depth_convention,
-        preview_long_edge=options.preview_long_edge,
-        near_strength=float(options.near_strength),
-        far_strength=float(options.far_strength),
-        haze_strength=float(options.haze_strength),
-        edge_protection=float(options.edge_protection),
-        focus_protection=float(options.focus_protection),
-    )
+    return options
 
 
 def _load_metadata(metadata_path: Optional[Path]) -> dict[str, Any]:
@@ -367,6 +373,7 @@ def _load_source_image(source_path: Path) -> _SourceImage:
         raise ValueError(f"Unsupported source image shape: {arr.shape}")
 
     bit_depth: int
+    value_scale = 1.0
     if np.issubdtype(arr.dtype, np.uint16):
         bit_depth = 16
         rgb01 = arr.astype(np.float32) / 65535.0
@@ -377,13 +384,20 @@ def _load_source_image(source_path: Path) -> _SourceImage:
         bit_depth = 32
         rgb01 = np.asarray(arr, dtype=np.float32)
         if float(np.nanmax(rgb01)) > 1.0:
-            rgb01 = rgb01 / max(float(np.nanmax(rgb01)), 1.0)
+            value_scale = float(np.nanmax(rgb01))
+            rgb01 = rgb01 / value_scale
     else:
         raise ValueError(f"Unsupported source image dtype: {arr.dtype}")
 
     if not np.isfinite(rgb01).all():
         raise ValueError(f"Source image contains non-finite values: {source_path}")
-    return _SourceImage(path=source_path, rgb01=np.clip(rgb01, 0.0, 1.0), bit_depth=bit_depth, dtype=str(arr.dtype))
+    return _SourceImage(
+        path=source_path,
+        rgb01=np.clip(rgb01, 0.0, 1.0),
+        bit_depth=bit_depth,
+        dtype=str(arr.dtype),
+        value_scale=value_scale,
+    )
 
 
 def _load_depth_npy(depth_path: Path) -> np.ndarray:
@@ -533,14 +547,23 @@ def _smoothstep(values: np.ndarray) -> np.ndarray:
     return x * x * (3.0 - 2.0 * x)
 
 
-def _save_tiff_preserve_depth(path: Path, rgb01: np.ndarray, *, bit_depth: int) -> None:
+def _to_source_scale(rgb01: np.ndarray, value_scale: float) -> np.ndarray:
+    """Map normalised ``rgb01`` back to the source's value range (identity at 1.0)."""
+
+    if value_scale == 1.0:
+        return rgb01
+    return (rgb01 * np.float32(value_scale)).astype(np.float32, copy=False)
+
+
+def _save_tiff_preserve_depth(path: Path, rgb01: np.ndarray, *, bit_depth: int, value_scale: float = 1.0) -> None:
     if not _TIFFFILE_AVAILABLE:
         raise ImportError("tifffile is required to write production TIFF output")
     path.parent.mkdir(parents=True, exist_ok=True)
     if bit_depth == 16:
         payload = np.rint(np.clip(rgb01, 0.0, 1.0) * 65535.0).astype(np.uint16)
     elif bit_depth == 32:
-        payload = np.clip(rgb01, 0.0, 1.0).astype(np.float32)
+        # Float sources keep their own range: undo the load-time division by the maximum.
+        payload = _to_source_scale(np.clip(rgb01, 0.0, 1.0).astype(np.float32), value_scale)
     else:
         payload = np.rint(np.clip(rgb01, 0.0, 1.0) * 255.0).astype(np.uint8)
     tifffile.imwrite(path, payload, photometric="rgb", compression="deflate")

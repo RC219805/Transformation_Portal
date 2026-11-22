@@ -29,11 +29,14 @@ def compute_image_stats(image: np.ndarray, sample_stride: int = 10) -> ImageStat
     Analyze image content to derive storage requirements.
 
     Args:
-        image: Numpy array (H, W, C) or (C, H, W).
+        image: Numpy array (H, W, C), (C, H, W) or single-channel (H, W).
         sample_stride: Stride for faster statistics on massive images.
     """
     # Ensure (H, W, C) layout for analysis
-    if image.ndim == 3 and image.shape[0] <= 4:
+    if image.ndim == 2:
+        # Single-channel image such as a depth map
+        img_view = image[:, :, np.newaxis]
+    elif image.ndim == 3 and image.shape[0] <= 4:
         # Likely (C, H, W), transpose
         img_view = image.transpose(1, 2, 0)
     else:

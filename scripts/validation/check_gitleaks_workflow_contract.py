@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import sys
 import tomllib
 from pathlib import Path
@@ -41,7 +42,14 @@ EXPECTED_CATALOG_SOURCE_HASH_REGEX = (
     r"(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\."
     r'(?:py|pyi|js|mjs|cjs|ts|tsx|jsx|json|toml|ya?ml|sh|css|html|md|rst|txt|in)": "[0-9a-f]{64}",?$'
 )
-EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX = r"^7194b5cc25808899836fcbd4651b2f93c79616458b3ccca69b49febded7bcde1$"
+EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX = (
+    r"^(?:7194b5cc25808899836fcbd4651b2f93c79616458b3ccca69b49febded7bcde1|"
+    r"4c9265b65315d7b5e19704ec7bbff490d18ba9da06267f9094923e1c6f9f1e7a)$"
+)
+EXPECTED_SEED_FIXTURE_COMMIT = "7d48f550f184e160b670e0ad915cf38b19294531"
+EXPECTED_SEED_FIXTURE_PATH_REGEX = r"^web/secure-landing/tests/seed-frontdoor-user\.test\.mjs$"
+# Pin the exact quoted fixture pattern without duplicating it in code.
+EXPECTED_SEED_FIXTURE_PATTERN_SHA256 = "430aefe2b580ad7869d2f6068e56ed92c8667c0d1f2031c7c22576284e870132"
 EXPECTED_CI_SNIPPET = "GITLEAKS_CONFIG: .gitleaks.toml"
 EXPECTED_FIREWALL_SNIPPET = "detect --config .gitleaks.toml --source . --verbose --no-git --exit-code 1"
 
@@ -70,6 +78,15 @@ def validate_gitleaks_contract(
     return errors
 
 
+def _matches_seed_fixture_pattern(patterns: object) -> bool:
+    return (
+        isinstance(patterns, list)
+        and len(patterns) == 1
+        and isinstance(patterns[0], str)
+        and hashlib.sha256(patterns[0].encode("utf-8")).hexdigest() == EXPECTED_SEED_FIXTURE_PATTERN_SHA256
+    )
+
+
 def _validate_config(config: dict[str, object]) -> list[str]:
     errors: list[str] = []
 
@@ -89,18 +106,19 @@ def _validate_config(config: dict[str, object]) -> list[str]:
             for path_regex in allowlist.get("paths", []):
                 if "public/portal-assets" in str(path_regex):
                     errors.append("gitleaks config must not define a global allowlist for portal assets")
-        if legacy_global_allowlists:
-            errors.append("gitleaks global allowlist must use singular [allowlist] syntax for v8.21.x")
+    if legacy_global_allowlists:
+        errors.append("gitleaks global allowlist must use singular [allowlist] syntax for v8.21.x")
 
     global_allowlist = config.get("allowlist")
     if not isinstance(global_allowlist, dict):
         errors.append("gitleaks config must define exactly one ignored generated artifact directory allowlist")
     else:
-        path_patterns = [str(path_regex) for path_regex in global_allowlist.get("paths", [])]
+        paths = global_allowlist.get("paths", [])
+        path_patterns = [str(path_regex) for path_regex in paths] if isinstance(paths, list) else []
         for path_regex in path_patterns:
             if "public/portal-assets" in str(path_regex):
                 errors.append("gitleaks config must not define a global allowlist for portal assets")
-        if path_patterns != [EXPECTED_ARTIFACT_PATH_REGEX]:
+        if path_patterns != [EXPECTED_ARTIFACT_PATH_REGEX] or set(global_allowlist) - {"description", "paths"}:
             errors.append("gitleaks global allowlist must be scoped only to ignored generated artifact directories")
 
     rules = config.get("rules", [])
@@ -110,14 +128,31 @@ def _validate_config(config: dict[str, object]) -> list[str]:
     if len(matching_rules) != 1:
         return errors + ["gitleaks config must define exactly one generic-api-key rule extension"]
 
-    allowlists = matching_rules[0].get("allowlists", [])
-    if not isinstance(allowlists, list) or len(allowlists) != 4:
-        return errors + ["generic-api-key rule extension must define exactly four narrow allowlists"]
+    for rule in rules:
+        if not isinstance(rule, dict) or rule.get("id") == EXPECTED_RULE_ID:
+            continue
+        other_allowlists = rule.get("allowlists", [])
+        for allowlist in other_allowlists if isinstance(other_allowlists, list) else []:
+            if not isinstance(allowlist, dict):
+                continue
+            patterns = allowlist.get("regexes")
+            if isinstance(patterns, list) and EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX in patterns:
+                errors.append("public catalog chunk digest exceptions must belong only to generic-api-key")
+            if _matches_seed_fixture_pattern(patterns) or allowlist.get("paths") == [EXPECTED_SEED_FIXTURE_PATH_REGEX]:
+                errors.append("historical seed-user fixture exception must belong only to generic-api-key")
+
+    matching_rule = matching_rules[0]
+    if set(matching_rule) - {"id", "allowlists"}:
+        errors.append("generic-api-key rule extension must only define governed allowlists")
+    allowlists = matching_rule.get("allowlists", [])
+    if not isinstance(allowlists, list) or len(allowlists) != 5:
+        return errors + ["generic-api-key rule extension must define exactly five narrow allowlists"]
 
     auth_allowlist_found = False
     sam2_allowlist_found = False
     catalog_allowlist_found = False
     catalog_chunk_allowlist_found = False
+    seed_fixture_allowlist_found = False
     for allowlist in allowlists:
         if not isinstance(allowlist, dict):
             return errors + ["generic-api-key allowlists must be TOML tables"]
@@ -128,6 +163,7 @@ def _validate_config(config: dict[str, object]) -> list[str]:
         path_patterns = allowlist.get("paths", [])
         match_patterns = allowlist.get("regexes", [])
         expected_regex_target = EXPECTED_REGEX_TARGET
+        allowed_fields = {"description", "condition", "regexTarget", "regexes", "paths"}
         if path_patterns == [EXPECTED_PATH_REGEX] and match_patterns == [EXPECTED_MATCH_REGEX]:
             auth_allowlist_found = True
         elif path_patterns == EXPECTED_SAM2_TILING_PATH_REGEXES and match_patterns == [EXPECTED_SAM2_TILING_MATCH_REGEX]:
@@ -140,8 +176,15 @@ def _validate_config(config: dict[str, object]) -> list[str]:
         elif path_patterns == [EXPECTED_CATALOG_PATH_REGEX] and match_patterns == [EXPECTED_CATALOG_CHUNK_SOURCE_HASH_REGEX]:
             catalog_chunk_allowlist_found = True
             expected_regex_target = "secret"
+        elif path_patterns == [EXPECTED_SEED_FIXTURE_PATH_REGEX] and _matches_seed_fixture_pattern(match_patterns):
+            seed_fixture_allowlist_found = True
+            allowed_fields.add("commits")
+            if allowlist.get("commits") != [EXPECTED_SEED_FIXTURE_COMMIT]:
+                errors.append("historical seed-user fixture exception must bind exactly one reviewed commit")
         else:
             errors.append("generic-api-key allowlists must be scoped only to approved false-positive patterns")
+        if set(allowlist) - allowed_fields:
+            errors.append("generic-api-key allowlists must use only their governed match fields")
         if allowlist.get("regexTarget") != expected_regex_target:
             if expected_regex_target == "secret":
                 errors.append("documentation catalog chunk allowlist must target only its exact public source digest")
@@ -158,6 +201,8 @@ def _validate_config(config: dict[str, object]) -> list[str]:
         )
     if not catalog_chunk_allowlist_found:
         errors.append("generic-api-key allowlist must match only the exact public catalog chunk source SHA256")
+    if not seed_fixture_allowlist_found:
+        errors.append("generic-api-key allowlist must match only the exact historical seed-user fixture lines")
 
     return errors
 

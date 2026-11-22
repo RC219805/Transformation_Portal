@@ -22,6 +22,7 @@ import copy
 import hashlib
 import json
 import logging
+import math
 from typing import TYPE_CHECKING, Any, Callable
 
 from transformation_portal.evals.auto_opt_types import (
@@ -33,6 +34,7 @@ from transformation_portal.evals.auto_opt_types import (
     OptimizationStatus,
     PipelineState,
 )
+from transformation_portal.evals.metrics import psnr_to_score
 from transformation_portal.evals.self_heal_policy import (
     SelfHealPolicy,
     can_auto_apply,
@@ -63,6 +65,12 @@ def _compute_composite_score(
 ) -> float:
     """Compute weighted composite score from metrics.
 
+    Every term is brought onto the 0..1 scale before weighting: ``psnr`` is
+    reported in dB and is mapped with :func:`psnr_to_score` (20 dB -> 0,
+    40 dB -> 1, ``+inf`` for identical images -> 1). Non-finite values (NaN, or
+    an infinite value for any other metric) fail closed and contribute the worst
+    score for their term instead of poisoning or inflating the composite.
+
     Args:
         metrics: Dictionary of metric values
         weights: Dictionary of metric weights (can be negative)
@@ -75,12 +83,18 @@ def _compute_composite_score(
 
     for metric, weight in weights.items():
         if metric in metrics:
-            # Normalize LPIPS (lower is better, so we invert)
-            value = metrics[metric]
-            if weight < 0:
-                # Negative weight means lower is better
+            value = float(metrics[metric])
+            lower_is_better = weight < 0
+            weight = abs(weight)
+            if metric == "psnr" and not math.isnan(value):
+                # PSNR is in dB; normalise it onto the 0..1 scale of the other terms.
+                value = psnr_to_score(value)
+            elif not math.isfinite(value):
+                # Unknown/invalid measurement: worst score for this term (fail closed).
+                value = 1.0 if lower_is_better else 0.0
+            if lower_is_better:
+                # Negative weight means lower is better (e.g. LPIPS), so invert.
                 value = 1.0 - min(value, 1.0)
-                weight = abs(weight)
 
             score += value * weight
             total_weight += weight
@@ -168,9 +182,11 @@ class AutoOptimizer:
 
         # Convergence tracking
         low_improvement_count = 0
+        iterations_run = 0
 
         # Main optimization loop
         for i in range(self.config.max_iterations):
+            iterations_run = i + 1
             logger.info("=== Iteration %d/%d ===", i + 1, self.config.max_iterations)
 
             # Generate diff and fix suggestions
@@ -207,7 +223,7 @@ class AutoOptimizer:
                 best_candidate_score=best_result.score if best_result else current.score,
                 improvement=best_result.improvement if best_result else 0.0,
                 accepted=best_result is not None and best_result.improvement >= self.config.min_gain,
-                fixes_tried=[f.action for f in applicable_fixes[: self.config.beam_width]],
+                fixes_tried=[str(r.candidate.fix.get("action", "")) for r in candidate_results],
             )
             self._iteration_summaries.append(summary)
 
@@ -230,10 +246,17 @@ class AutoOptimizer:
             low_improvement_count = 0
             result.accepted_improvements += 1
 
+            # The accepted state carries the candidate's own output and metrics, so the
+            # next iteration diffs and suggests fixes against what the pipeline now does.
+            if best_result.output is not None:
+                base_output = best_result.output
+            else:
+                base_output = self.run_fn(best_result.candidate.pipeline)
+
             current = PipelineState(
                 pipeline=best_result.candidate.pipeline,
                 score=best_result.score,
-                metrics=base_output.get("metrics", {}),  # Updated in next iteration
+                metrics=base_output.get("metrics", {}),
                 iteration=i + 1,
                 parent_hash=_hash_pipeline(current.pipeline),
             )
@@ -249,10 +272,7 @@ class AutoOptimizer:
                 best_result.improvement,
             )
 
-            # Update for next iteration
-            base_output = self.run_fn(current.pipeline)
-
-        result.iterations = len(history) - 1  # Subtract initial state
+        result.iterations = iterations_run
         result.history = history
 
         if result.status == OptimizationStatus.RUNNING:
@@ -340,6 +360,7 @@ class AutoOptimizer:
                         score=score,
                         improvement=improvement,
                         success=True,
+                        output=output,
                     )
                 )
 
@@ -393,6 +414,7 @@ class AutoOptimizer:
                         score=score,
                         improvement=improvement,
                         success=True,
+                        output=output,
                     )
                 )
 

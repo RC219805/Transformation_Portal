@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from contextlib import suppress
+from contextlib import AbstractAsyncContextManager, nullcontext, suppress
 from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,12 +26,13 @@ from transformation_portal.orchestrator.execution_diagnostics import annotate_jo
 from transformation_portal.orchestrator.queue.base import JobEnqueueRequest
 from transformation_portal.orchestrator.storage.base import JobRecord, JobRepository, RepositoryError
 from transformation_portal.orchestrator.storage.operational import DispatchAuthorityLost
-from transformation_portal.orchestrator.worker import RetryableExecutorUnavailable
+from transformation_portal.orchestrator.worker import RetryableExecutorUnavailable, lease_was_lost
 
 LOGGER = logging.getLogger(__name__)
 TERMINAL_JOB_STATES = frozenset({"succeeded", "partial", "failed", "canceled", "worker_lost"})
 _active_plan: ContextVar[bytes | None] = ContextVar("job_execution_plan", default=None)
 _active_bindings: ContextVar[bytes | None] = ContextVar("job_execution_bindings", default=None)
+_active_cancellation: ContextVar[asyncio.Event | None] = ContextVar("job_execution_cancellation", default=None)
 
 
 class ExecutionJob(Protocol):
@@ -104,6 +105,7 @@ class JobExecutionRuntime(Generic[_JobT]):
     resolve_output_root: Callable[[str], Path]
     allow_legacy_commands: bool = False
     release_job: Callable[[str], None] | None = None
+    legacy_terminal_guard: Callable[[_JobT], AbstractAsyncContextManager[Any]] | None = None
 
 
 def execution_error(
@@ -113,6 +115,35 @@ def execution_error(
     if retriable is not None:
         result["retriable"] = retriable
     return result
+
+
+def _lease_lost() -> bool:
+    """True when the worker stopped this run because it could not confirm its lease."""
+    signal = _active_cancellation.get()
+    return signal is not None and lease_was_lost(signal)
+
+
+def _stop_requested(job: ExecutionJob) -> bool:
+    return job.cancel_requested or _lease_lost()
+
+
+def _mark_stopped(job: ExecutionJob) -> None:
+    """Classify a run that was stopped before it could finish.
+
+    Only an orchestrator-requested cancel is ``canceled``. A stop caused by an
+    unconfirmed lease is the worker's own infrastructure abort: it is recorded
+    like the reclaim paths, as ``worker_lost`` with a retriable error, so retry
+    tooling does not mistake it for a decision somebody made.
+    """
+    if job.cancel_requested:
+        job.state = "canceled"
+        return
+    job.state = "worker_lost"
+    job.error = execution_error(
+        "worker_lost_via_lease_reclaim",
+        "Worker could not confirm its lease and stopped the job; job marked worker_lost.",
+        retriable=True,
+    )
 
 
 class JobExecutionService(Generic[_JobT]):
@@ -151,7 +182,9 @@ class JobExecutionService(Generic[_JobT]):
             await cancellation_event.wait()
             # Signal the live subprocess immediately: it may be silent while
             # ``_run_job`` is awaiting stdout and never start another iteration.
-            if not job.cancel_requested:
+            # A lost lease stops the child the same way, but nobody asked for a
+            # cancel: ``cancel_requested`` stays reserved for requested cancels.
+            if not job.cancel_requested and not lease_was_lost(cancellation_event):
                 job.cancel_requested = True
             if job.proc is not None and (
                 job.proc.returncode is None or self.runtime.owned_process_group(job.proc) is not None
@@ -163,6 +196,7 @@ class JobExecutionService(Generic[_JobT]):
         execution_output_root = None
         plan_token = None
         bindings_token = None
+        cancellation_token = _active_cancellation.set(cancellation_event)
         try:
             if isinstance(request, DispatchLocator):
                 from transformation_portal.orchestrator.execution_dispatch import (
@@ -232,6 +266,7 @@ class JobExecutionService(Generic[_JobT]):
                 return 0
             await (run_job or self.run)(job, command)
         finally:
+            _active_cancellation.reset(cancellation_token)
             if plan_token is not None:
                 _active_plan.reset(plan_token)
             if bindings_token is not None:
@@ -260,8 +295,12 @@ class JobExecutionService(Generic[_JobT]):
         publishing_success = job.state in {"succeeded", "partial"}
 
         def require_publication_authority() -> None:
-            if job.cancel_requested and (publishing_success or job.state in {"succeeded", "partial"}):
+            if not (publishing_success or job.state in {"succeeded", "partial"}):
+                return
+            if job.cancel_requested:
                 raise DispatchAuthorityLost("publication canceled before generation commit")
+            if _lease_lost():
+                raise DispatchAuthorityLost("publication abandoned after the worker lost its lease")
 
         publisher_type = GenerationPublisher
         if schema == "tp.execution.plan.v5":
@@ -350,8 +389,8 @@ class JobExecutionService(Generic[_JobT]):
         try:
             if job.done_published_at is not None or job.finished_at is not None:
                 return
-            if job.cancel_requested:
-                job.state = "canceled"
+            if _stop_requested(job):
+                _mark_stopped(job)
                 return
             job.state = "running"
             job.started_at = self.runtime.now()
@@ -361,8 +400,8 @@ class JobExecutionService(Generic[_JobT]):
             # not launch native work after either path has withdrawn authority.
             if job.done_published_at is not None or job.finished_at is not None:
                 return
-            if job.cancel_requested:
-                job.state = "canceled"
+            if _stop_requested(job):
+                _mark_stopped(job)
                 return
             # NO SHELL EXECUTION.
             spawn_kwargs: Dict[str, Any] = {
@@ -385,8 +424,8 @@ class JobExecutionService(Generic[_JobT]):
                 except (OSError, RepositoryError, SQLAlchemyError, self.runtime.repository_unavailable) as exc:
                     raise RetryableExecutorUnavailable(job.id) from exc
                 # The authority read yields to the broker cancellation bridge.
-                if job.cancel_requested:
-                    job.state = "canceled"
+                if _stop_requested(job):
+                    _mark_stopped(job)
                     return
             proc = await asyncio.create_subprocess_exec(*argv, **spawn_kwargs)
             if spawn_kwargs.get("start_new_session"):
@@ -400,7 +439,7 @@ class JobExecutionService(Generic[_JobT]):
 
             while True:
                 if (
-                    job.cancel_requested
+                    _stop_requested(job)
                     and (proc.returncode is None or self.runtime.owned_process_group(proc) is not None)
                     and (job.terminate_task is None or job.terminate_task.done())
                 ):
@@ -447,8 +486,8 @@ class JobExecutionService(Generic[_JobT]):
             if job.done_published_at is not None or job.finished_at is not None:
                 return
             job.exit_code = int(rc)
-            if job.cancel_requested:
-                job.state = "canceled"
+            if _stop_requested(job):
+                _mark_stopped(job)
             else:
                 job.state = "succeeded" if rc == 0 else "failed"
                 if rc != 0:
@@ -629,11 +668,11 @@ class JobExecutionService(Generic[_JobT]):
                     await self._publish_fenced_result(job, fence)
                 except DispatchAuthorityLost:
                     LOGGER.warning("job %s publication rejected after authority loss", job.id)
-                    if job.cancel_requested:
-                        job.state = "canceled"
+                    if _stop_requested(job):
+                        _mark_stopped(job)
                         with suppress(DispatchAuthorityLost):
                             await self.runtime.operational_records().finish_dispatch(
-                                fence, state="canceled", exit_code=job.exit_code, error=job.error
+                                fence, state=job.state, exit_code=job.exit_code, error=job.error
                             )
                 except Exception:
                     LOGGER.exception("job %s generation publication failed", job.id)
@@ -658,22 +697,40 @@ class JobExecutionService(Generic[_JobT]):
                     self.runtime.cache_job(self.runtime.job_from_record(committed))
                 return
 
-            # Index artifacts and publish terminal events BEFORE setting finished_at.
-            # This ensures late-connecting SSE clients can deterministically check
-            # done_published_at to know if they need to wait for real events or can
-            # safely synthesize a 'done' from job state. Indexing also computes
-            # bounded SHA-256 fingerprints, so run it in a worker thread to keep
-            # the event loop responsive while large jobs are wrapping up.
-            indexed_artifacts = await asyncio.to_thread(self.runtime.index_artifacts, job)
-            await self.runtime.mirror_artifacts(job)
-            self.runtime.refresh_summary(job)
-            for artifact in indexed_artifacts:
-                await self.runtime.publish_event(
-                    job.id,
-                    "artifact",
-                    {"id": job.id, **artifact},
-                )
+            await self._finalize_legacy_job(job)
 
+    async def _finalize_legacy_job(self, job: _JobT) -> None:
+        """Finalize only while the runner still owns the legacy outcome."""
+        indexed_artifacts: list[dict[str, Any]] = []
+        try:
+            if not _lease_lost():
+                indexed_artifacts = await asyncio.to_thread(self.runtime.index_artifacts, job)
+                if job.finished_at is not None or job.done_published_at is not None:
+                    return
+                if not _lease_lost():
+                    await self.runtime.mirror_artifacts(job)
+                    if job.finished_at is not None or job.done_published_at is not None:
+                        return
+                    if not _lease_lost():
+                        self.runtime.refresh_summary(job)
+        except Exception:
+            LOGGER.exception("job %s artifact recording failed", job.id)
+            if job.state in {"succeeded", "partial"}:
+                job.state = "failed"
+                job.error = execution_error("ARTIFACT_STORE_UNAVAILABLE", "Job artifacts could not be recorded.")
+
+        # The memory broker and API share this job object. Serialize only the
+        # final publication with reclamation so a stalled mirror cannot hold
+        # up the reclaim sweep, and exactly one path owns the terminal event.
+        guard = self.runtime.legacy_terminal_guard
+        async with guard(job) if guard is not None else nullcontext():
+            if job.finished_at is not None or job.done_published_at is not None:
+                return
+            if not _lease_lost():
+                for artifact in indexed_artifacts:
+                    await self.runtime.publish_event(job.id, "artifact", {"id": job.id, **artifact})
+            if _stop_requested(job):
+                _mark_stopped(job)
             await self.runtime.publish_event(
                 job.id,
                 "done",
@@ -686,8 +743,8 @@ class JobExecutionService(Generic[_JobT]):
                     "run_summary": job.run_summary or None,
                 },
             )
-            # Mark timestamps AFTER all events are published, so SSE endpoint knows
-            # it's safe to synthesize 'done' if done_published_at is set.
+            # Completion evidence follows indexing, mirroring and event
+            # publication. A provisional terminal state remains reclaimable.
             job.done_published_at = self.runtime.now()
             job.finished_at = job.done_published_at
             try:
@@ -695,4 +752,4 @@ class JobExecutionService(Generic[_JobT]):
             except Exception:  # noqa: BLE001 - repository lag must not rewrite runner outcome
                 LOGGER.exception("job repository final state persist failed for %s", job.id)
             self.runtime.cache_job(job)
-            await self.runtime.cleanup_jobs(self.runtime.now(), force=False)
+        await self.runtime.cleanup_jobs(self.runtime.now(), force=False)
