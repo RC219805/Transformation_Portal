@@ -34,7 +34,7 @@ numpy==2.4.6
     #   pandas
 pandas==3.0.6
     # via -r tools-archive.in
-pycparser==3.11
+pycparser==3.12
     # via
     #   -c all.txt
     #   cffi
@@ -42,7 +42,7 @@ python-dateutil==2.9.0.post0
     # via
     #   -c all.txt
     #   pandas
-pyyaml==6.0.3
+pyyaml==6.0.4
     # via
     #   -c all.txt
     #   -r tools-archive.in
