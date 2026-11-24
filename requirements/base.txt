@@ -191,7 +191,7 @@ six==1.17.0
     # via
     #   -c all.txt
     #   python-dateutil
-sqlalchemy[asyncio]==2.1.4
+sqlalchemy[asyncio]==2.1.8
     # via
     #   -c all.txt
     #   -r base.in
