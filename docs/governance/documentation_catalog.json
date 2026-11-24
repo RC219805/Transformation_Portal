@@ -9316,7 +9316,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "abaf7a777a66bba3e4483856c50a33f89ca98bd6",
+      "source_commit": "2cb376c514b30c805b61e61be728946cc6e15991",
       "content_sha256": "2a6f2bea011393d405ada181fd9b4274ddb807d8b73a8fcd72330c596c982490",
       "source_references": [
         "Makefile",
@@ -9325,7 +9325,7 @@
       ],
       "source_sha256": {
         "Makefile": "8b1142bc9087d03a790984cba842ee371d31584b78cfbe4409cc9f4c38cb39af",
-        "requirements/base.txt": "b6d6509cb5c95081d96a50d39a84872f630535b3aba3516c753de27e342d38a7",
+        "requirements/base.txt": "d4551e440d5072616b826e2e21f636acdad62de533ca8b718e8707ccf97d5547",
         "requirements/dev.txt": "8e98985c880679c0e91e63319da57e40baa553f3962cea01b87523b97e423ff9"
       },
       "validation_commands": [
@@ -9762,7 +9762,7 @@
       "successors": [],
       "review_status": "source-reviewed",
       "evidence_tier": "source-contract",
-      "source_commit": "abaf7a777a66bba3e4483856c50a33f89ca98bd6",
+      "source_commit": "2cb376c514b30c805b61e61be728946cc6e15991",
       "content_sha256": "e06f97c74909e60c951910a60cce133f4908fcff07b7d98b0830a916361a2217",
       "source_references": [
         "Makefile",
@@ -9771,7 +9771,7 @@
       ],
       "source_sha256": {
         "Makefile": "8b1142bc9087d03a790984cba842ee371d31584b78cfbe4409cc9f4c38cb39af",
-        "requirements/base.txt": "b6d6509cb5c95081d96a50d39a84872f630535b3aba3516c753de27e342d38a7",
+        "requirements/base.txt": "d4551e440d5072616b826e2e21f636acdad62de533ca8b718e8707ccf97d5547",
         "requirements/dev.txt": "8e98985c880679c0e91e63319da57e40baa553f3962cea01b87523b97e423ff9"
       },
       "validation_commands": [
@@ -15402,7 +15402,7 @@
       ],
       "prior_classification": null,
       "prior_review_status": null,
-      "source_commit": "5345848969ad3d0128224835fa9697cf446c0c10",
+      "source_commit": "d226e04c315cb7470a50ec60748918ed37e0b7d7",
       "content_sha256": "2e85757c25651c205d6419e0b032b29edce96cac47148660b08075be81022862",
       "source_sha256": {
         "app.py": "cda30970050698ff41dfdcf6b20e010e606dd2506c483770c28567d95a317fbb",
@@ -15432,7 +15432,7 @@
         "web/secure-landing/portal-src/internal/photographic-profiles.js": "a3a47598808d61b68cdec5b75d0320e42c4145b51ce9d0efc0cee2073e0d40b1",
         "web/secure-landing/portal-src/photographic-review.js": "1b8d34de2eea444668f3e5b8bceb138897f442ed61e02aff483b8e499831a98e",
         "web/secure-landing/portal-src/portal.template.js": "6dc1b705f5532e1888cc22e47259ac6193934750bf207d6f683f360957a65a37",
-        "web/secure-landing/package.json": "6edde187cd7b2deb04832c51117635aec7e254aea909eca4ae35d68ca7d22c97",
+        "web/secure-landing/package.json": "4b27deeb5db06b194f840eb63d37de7739dbbd2d41a25d013f2cad03c167cf03",
         "config/portal_asset_budgets.json": "7e9126ea50ae88b41d81299fab86f114eb03f784ccfbc36c505a536cb2faf037",
         "tests/orchestrator/test_photographic_review_access.py": "ce26e93505e14b904d6330f14c0a1bd07fd06408bb3880e4931938f06d276848",
         "tests/orchestrator/test_photographic_review_http.py": "48d7ae202dee06dbbfac5d1b8d11d595d9f0d1a51ece1b48c85d505c591b6df4",
