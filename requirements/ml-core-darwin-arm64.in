@@ -42,7 +42,7 @@ coremltools>=7.0,<10  # Apple tooling: bounded in platform lock inputs per depen
 # Vision / segmentation helpers (cross-platform)
 controlnet-aux>=0.0.6,<1
 efficientsam==1.0.0  # Model contract: keep segmentation helper deterministic across runs
-open-clip-torch==3.3.0  # Model contract: keep CLIP helper deterministic across runs
+open-clip-torch==4.2.2  # Model contract: keep CLIP helper deterministic across runs
 
 # Vision / image processing
 scikit-image>=0.21.0,<1
