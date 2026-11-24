@@ -350,7 +350,7 @@ six==1.17.0
     # via python-dateutil
 sortedcontainers==2.4.0
     # via hypothesis
-sqlalchemy[asyncio]==2.1.4
+sqlalchemy[asyncio]==2.1.8
     # via
     #   -r base.in
     #   alembic
