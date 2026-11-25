@@ -93,12 +93,15 @@ Indices: `jobs(created_at)`, `jobs(state)`, `jobs(finished_at)`,
 
 The three job tables are created by
 `migrations/versions/0001_initial_orchestrator_schema.py`. Apply the complete
-migration chain through `0007_photography_bindings`: 0002 adds operational
-audit, 0003 adds admission/dispatch/publication authority, 0004 bounds replay
-with monotonic counters, 0005 tracks private attempt/staging cleanup, 0006
-adds an indexed periodic scrub cursor for late writes from orphaned subprocesses,
-and 0007 adds immutable physical bindings for opt-in managed V5 photography.
-Do not stop at an earlier revision.
+migration chain through the current head, `0010_upload_receipts`: 0002 adds
+operational audit, 0003 adds admission/dispatch/publication authority, 0004
+bounds replay with monotonic counters, 0005 tracks private attempt/staging
+cleanup, 0006 adds an indexed periodic scrub cursor for late writes from
+orphaned subprocesses, 0007 adds immutable physical bindings for opt-in managed
+V5 photography, 0008 adds durable photographic review state and mutation
+history, 0009 adds submission keys on dispatch attempts for accepted-job
+reconciliation, and 0010 adds staged-upload receipts and retained job
+references. Do not stop at an earlier revision.
 
 Existing V1 attempts retain null physical bindings. Migration 0007 refuses
 downgrade while any V5 attempt remains, including terminal tombstones; retain a
