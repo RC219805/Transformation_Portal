@@ -120,6 +120,7 @@ jobs:
               /^\.nvmrc$/,
               /^wrangler\.jsonc$/,
               /^\.github\/workflows\/build\.yml$/,
+              /^scripts\/validation\/check_portal_asset_budgets\.py$/,
               /^scripts\/validation\/validate_frontdoor_browser_smoke\.py$/,
               /^scripts\/validation\/validate_portal_css_layer_parity\.py$/,
               /^tests\/fixtures\/portal-css\//,
@@ -608,6 +609,9 @@ jobs:
           set -euo pipefail
           cd web/secure-landing
           npm run build
+
+      - name: Check built portal asset budgets
+        run: python -I scripts/validation/check_portal_asset_budgets.py
 
       - name: Cache Playwright browsers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
