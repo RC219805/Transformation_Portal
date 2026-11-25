@@ -407,7 +407,7 @@ def _resolve_backend_api_key(args: argparse.Namespace) -> str:
 def _format_frontdoor_health_failure(status: int, body: dict) -> str:
     checks = body.get("checks") if isinstance(body.get("checks"), dict) else {}
     failing_checks = []
-    for key in ("backend", "access_config", "user_source", "session_store", "session_scaling"):
+    for key in ("backend", "access_config", "user_source", "session_store", "session_scaling", "public_origin"):
         check = checks.get(key)
         if isinstance(check, dict) and check.get("required") and not check.get("ok"):
             reason = str(check.get("reason") or "unknown").strip() or "unknown"

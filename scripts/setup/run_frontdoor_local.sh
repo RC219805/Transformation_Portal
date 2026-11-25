@@ -108,6 +108,9 @@ fi
 
 export NODE_ENV=development
 export TP_ALLOW_LOCAL_ACCESS_BYPASS=1
+# This launcher is the loopback, bypass-mode lane. A public origin is never
+# honoured there and would fail /healthz, so do not inherit one from the shell.
+unset TP_FRONTDOOR_PUBLIC_ORIGIN
 export TP_FASTAPI_ORIGIN="${FASTAPI_ORIGIN}"
 export TP_BACKEND_API_KEY="${BACKEND_API_KEY}"
 export TP_FRONTDOOR_SESSION_DB="${SESSION_DB}"

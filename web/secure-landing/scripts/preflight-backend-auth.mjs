@@ -8,6 +8,8 @@
 // Behaviour:
 //   - Always fails closed on missing env (TP_BACKEND_API_KEY, TP_FASTAPI_ORIGIN,
 //     user source). In production, also requires Cloudflare Access config.
+//   - Fails closed when TP_FRONTDOOR_PUBLIC_ORIGIN is set but is not one
+//     canonical https origin, or is set while the local Access bypass is active.
 //   - Probes GET ${origin}/v1/config-metadata?pipeline=lux-depth-v3 with the
 //     `x-api-key` header. 401/403 always fails closed (key mismatch).
 //   - Connection failures (refused, DNS, timeout) fail closed in production;
@@ -17,7 +19,12 @@
 //     entirely. Use only for emergencies.
 
 import { readFileSync } from "node:fs";
-import { isTruthyEnvFlag } from "../lib/config.js";
+import {
+  isTruthyEnvFlag,
+  PUBLIC_ORIGIN_BYPASS_CONFLICT_REASON,
+  PUBLIC_ORIGIN_INVALID_REASON,
+  resolvePublicOrigin
+} from "../lib/config.js";
 import { hasIdentitySecret } from "../lib/frontdoor-identity.js";
 
 const PROTECTED_PROBE_PATH = "/v1/config-metadata?pipeline=lux-depth-v3";
@@ -153,6 +160,20 @@ function validateEnv() {
         "Cloudflare Access JWT audience is required for verification."
       );
     }
+  }
+  // Checked last so earlier, more basic failures keep their own messages.
+  const publicOrigin = resolvePublicOrigin();
+  if (publicOrigin.reason === PUBLIC_ORIGIN_INVALID_REASON) {
+    failClosed(
+      "TP_FRONTDOOR_PUBLIC_ORIGIN is not a canonical https origin",
+      "Use exactly https://<host>[:<port>] in lower case, as a browser sends it in the Origin header: a DNS name, no path, trailing slash, query, fragment, credentials, IP literal or default port."
+    );
+  }
+  if (publicOrigin.reason === PUBLIC_ORIGIN_BYPASS_CONFLICT_REASON) {
+    failClosed(
+      "TP_FRONTDOOR_PUBLIC_ORIGIN is set while the local Access bypass is active",
+      "The bypass is for non-public local development only. Unset TP_FRONTDOOR_PUBLIC_ORIGIN for local runs, or disable TP_ALLOW_LOCAL_ACCESS_BYPASS."
+    );
   }
 }
 

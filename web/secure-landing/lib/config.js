@@ -97,6 +97,61 @@ export function normalizeAccessTeamDomain(value) {
   }
 }
 
+// TP_FRONTDOOR_PUBLIC_ORIGIN names the one origin browsers reach this front
+// door on. The accepted form is exactly what a browser serialises in the
+// Origin header, so nothing is normalised: a value that would need it is
+// rejected. See "Trusted Host And Proxy Trust" in
+// docs/architecture/PORTAL_EDGE_HARDENING_IMPLEMENTATION_STANDARD.md.
+export const PUBLIC_ORIGIN_INVALID_REASON = "invalid_public_origin";
+export const PUBLIC_ORIGIN_BYPASS_CONFLICT_REASON = "public_origin_conflicts_with_local_access_bypass";
+
+const PUBLIC_ORIGIN_MAX_HOST_LENGTH = 253;
+const PUBLIC_ORIGIN_MAX_PORT = 65535;
+const PUBLIC_ORIGIN_DEFAULT_PORT = 443;
+// https, a lower-case DNS name of at least two labels whose last label starts
+// with a letter (so no IP literal), and an optional port without leading zero.
+const PUBLIC_ORIGIN_PATTERN =
+  /^https:\/\/((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?)(?::([1-9][0-9]{0,4}))?$/;
+
+export function isCanonicalPublicOrigin(value) {
+  if (typeof value !== "string") return false;
+
+  const match = PUBLIC_ORIGIN_PATTERN.exec(value);
+  if (!match) return false;
+
+  const [, host, port] = match;
+  if (host.length > PUBLIC_ORIGIN_MAX_HOST_LENGTH || host.endsWith(".localhost")) return false;
+  if (port !== undefined) {
+    const portNumber = Number(port);
+    if (portNumber > PUBLIC_ORIGIN_MAX_PORT || portNumber === PUBLIC_ORIGIN_DEFAULT_PORT) return false;
+  }
+
+  // The grammar already implies this; the URL parser is kept as a second opinion.
+  try {
+    return new URL(value).origin === value;
+  } catch {
+    return false;
+  }
+}
+
+// Never throws. An origin is returned only when it is in force; `reason` says
+// why a configured value is not honoured, and readiness reports it.
+export function resolvePublicOrigin(env = process.env) {
+  const raw = String(env.TP_FRONTDOOR_PUBLIC_ORIGIN ?? "").replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "");
+  if (!raw) {
+    return { configured: false, origin: "", reason: null };
+  }
+  if (!isCanonicalPublicOrigin(raw)) {
+    return { configured: true, origin: "", reason: PUBLIC_ORIGIN_INVALID_REASON };
+  }
+  // The bypass is for non-public local development only, so a bypass-mode
+  // front door must stay unusable from a public origin.
+  if (isLocalAccessBypassEnabled(env)) {
+    return { configured: true, origin: "", reason: PUBLIC_ORIGIN_BYPASS_CONFLICT_REASON };
+  }
+  return { configured: true, origin: raw, reason: null };
+}
+
 function parseUsersJson(raw) {
   if (!raw) return [];
 

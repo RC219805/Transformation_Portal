@@ -22,6 +22,7 @@ const ENV_KEYS = [
   "TP_FRONTDOOR_USERS_FILE",
   "TP_FRONTDOOR_USERS_JSON",
   "TP_FRONTDOOR_SESSION_DB",
+  "TP_FRONTDOOR_PUBLIC_ORIGIN",
   "TP_FRONTDOOR_SESSION_SCALING_MODE",
   "TP_FRONTDOOR_SESSION_STORE",
   "TP_FRONTDOOR_REDIS_URL",
@@ -200,7 +201,7 @@ function withTempEnvironment(overrides = {}) {
     delete process.env.TP_PORTAL_FASTVLM_CAPTIONING_ENABLED;
   }
 
-  for (const key of ["TP_PHOTO_REVIEW_HISTORY_UI_ENABLED"]) {
+  for (const key of ["TP_PHOTO_REVIEW_HISTORY_UI_ENABLED", "TP_FRONTDOOR_PUBLIC_ORIGIN"]) {
     if (typeof overrides[key] === "string") process.env[key] = overrides[key];
     else delete process.env[key];
   }
@@ -348,6 +349,8 @@ test("playwright frontdoor smoke config uses local preflight-safe fixtures", asy
     assert.equal(frontdoor.command, "npm run dev -- --webpack --port 3000");
     assert.equal(env.NODE_ENV, "development");
     assert.equal(env.TP_ALLOW_LOCAL_ACCESS_BYPASS, "1");
+    // The bypass lane must not inherit a public origin from the shell.
+    assert.equal(env.TP_FRONTDOOR_PUBLIC_ORIGIN, "");
     assert.equal(env.TP_FASTAPI_ORIGIN, "http://127.0.0.1:9999");
     assert.equal(env.TP_BACKEND_API_KEY, "frontdoor-browser-smoke");
     assert.equal(env.WATCHPACK_POLLING, "true");
@@ -410,6 +413,7 @@ test("run_frontdoor_local launcher supports isolated port, distdir, and local us
   const script = readFileSync(scriptPath, "utf-8");
 
   assert.match(script, /TP_FRONTDOOR_PORT/);
+  assert.match(script, /^unset TP_FRONTDOOR_PUBLIC_ORIGIN$/m);
   assert.match(script, /TP_FRONTDOOR_DIST_DIR/);
   assert.match(script, /TP_NEXT_DIST_DIR/);
   assert.match(script, /TP_FRONTDOOR_NEXT_DEV_ENGINE:-webpack/);

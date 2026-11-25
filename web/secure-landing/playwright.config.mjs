@@ -141,6 +141,9 @@ export default defineConfig({
         TP_BACKEND_API_KEY: "frontdoor-browser-smoke",
         TP_FRONTDOOR_USERS_JSON: frontdoorSmokeUsersJson,
         TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
+        // Loopback, bypass-mode lane: never inherit a public origin from
+        // the shell. It is not honoured with the bypass and fails /healthz.
+        TP_FRONTDOOR_PUBLIC_ORIGIN: "",
         WATCHPACK_POLLING: "true",
         CHOKIDAR_USEPOLLING: "true",
       },

@@ -16,6 +16,7 @@ const ENV_KEYS = [
   "TP_FRONTDOOR_USERS_FILE",
   "TP_FRONTDOOR_USERS_JSON",
   "TP_FRONTDOOR_SESSION_DB",
+  "TP_FRONTDOOR_PUBLIC_ORIGIN",
   "TP_CF_ACCESS_TEAM_DOMAIN",
   "TP_CF_ACCESS_AUD",
   "TP_ALLOW_LOCAL_ACCESS_BYPASS",
@@ -61,6 +62,7 @@ function withRumEnvironment({
   process.env.TP_ALLOW_LOCAL_ACCESS_BYPASS = "1";
   delete process.env.TP_CF_ACCESS_TEAM_DOMAIN;
   delete process.env.TP_CF_ACCESS_AUD;
+  delete process.env.TP_FRONTDOOR_PUBLIC_ORIGIN;
 
   if (rumEnabled) {
     process.env.TP_PORTAL_RUM_ENABLED = rumFlagValue;

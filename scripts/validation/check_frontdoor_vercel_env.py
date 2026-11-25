@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.parse
 from dataclasses import dataclass
@@ -41,6 +42,11 @@ VARIABLES: tuple[Variable, ...] = (
     Variable("TP_FRONTDOOR_REDIS_URL", "optional", "Redis URL required when TP_FRONTDOOR_SESSION_STORE=redis"),
     Variable("TP_CF_ACCESS_TEAM_DOMAIN", "production", "Cloudflare Access team domain"),
     Variable("TP_CF_ACCESS_AUD", "production", "Cloudflare Access JWT audience"),
+    Variable(
+        "TP_FRONTDOOR_PUBLIC_ORIGIN",
+        "optional",
+        "Exact public https origin; set when browsers reach the frontdoor through an edge proxy or tunnel",
+    ),
     Variable("TP_PORTAL_RUM_ENABLED", "optional", "Shared portal/frontdoor RUM kill switch"),
     Variable("TP_PORTAL_RUM_ROLLOUT_PERCENT", "optional", "Managed portal/bootstrap RUM rollout percent"),
     Variable("TP_FRONTDOOR_RUM_ENABLED", "optional", "Independent landing/login/logout RUM flag"),
@@ -51,6 +57,19 @@ SUPPORTED_SESSION_SCALING_MODES = frozenset({"single_instance"})
 EXTERNAL_SESSION_SCALING_MODES = frozenset({"multi_instance", "ephemeral_runtime"})
 SUPPORTED_SESSION_STORE_BACKENDS = frozenset({"sqlite", "redis"})
 SUPPORTED_REDIS_URL_SCHEMES = frozenset({"redis", "rediss"})
+
+# Mirrors PUBLIC_ORIGIN_PATTERN in web/secure-landing/lib/config.js. Both are
+# driven by web/secure-landing/tests/fixtures/public-origin-vectors.json.
+PUBLIC_ORIGIN_PATTERN = re.compile(
+    r"https://((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?)(?::([1-9][0-9]{0,4}))?"
+)
+PUBLIC_ORIGIN_MAX_HOST_LENGTH = 253
+PUBLIC_ORIGIN_MAX_PORT = 65535
+PUBLIC_ORIGIN_DEFAULT_PORT = 443
+PUBLIC_ORIGIN_FORM_DETAIL = (
+    "TP_FRONTDOOR_PUBLIC_ORIGIN must be exactly https://<host>[:<port>] in lower case, "
+    "as a browser sends it in the Origin header"
+)
 
 
 def _resolve(value_or_alias: str, env: dict[str, str]) -> Optional[str]:
@@ -150,6 +169,30 @@ def _evaluate_redis_url(env: dict[str, str]) -> tuple[bool, str, bool]:
     return valid, detail, bool(raw)
 
 
+def _is_canonical_public_origin(value: str) -> bool:
+    match = PUBLIC_ORIGIN_PATTERN.fullmatch(value)
+    if match is None:
+        return False
+    host, port = match.group(1), match.group(2)
+    if len(host) > PUBLIC_ORIGIN_MAX_HOST_LENGTH or host.endswith(".localhost"):
+        return False
+    if port is not None and (int(port) > PUBLIC_ORIGIN_MAX_PORT or int(port) == PUBLIC_ORIGIN_DEFAULT_PORT):
+        return False
+    return True
+
+
+def _evaluate_public_origin(env: dict[str, str]) -> tuple[bool, str, bool]:
+    raw = env.get("TP_FRONTDOOR_PUBLIC_ORIGIN", "").strip(" \t\r\n")
+    if not raw:
+        return True, "only required when browsers reach the frontdoor through an edge proxy or tunnel", False
+    if not _is_canonical_public_origin(raw):
+        return False, PUBLIC_ORIGIN_FORM_DETAIL, True
+    if env.get("TP_ALLOW_LOCAL_ACCESS_BYPASS", "").strip() == "1":
+        return False, "TP_FRONTDOOR_PUBLIC_ORIGIN cannot be combined with TP_ALLOW_LOCAL_ACCESS_BYPASS=1", True
+    # Echo the accepted origin: a well-formed but wrong value sends browsers to that host.
+    return True, f"redirects and same-origin checks use {raw}", True
+
+
 def _evaluate_session_scaling_mode(env: dict[str, str]) -> tuple[bool, str]:
     raw = env.get("TP_FRONTDOOR_SESSION_SCALING_MODE", "").strip()
     if not raw:
@@ -235,6 +278,16 @@ def _evaluate(
             continue
         if var.name == "TP_FRONTDOOR_REDIS_URL":
             valid, detail, configured = _evaluate_redis_url(env)
+            if valid and configured:
+                rows.append(("ok", var.name, detail))
+            elif valid:
+                rows.append(("optional", var.name, detail))
+            else:
+                ok = False
+                rows.append(("missing", var.name, detail))
+            continue
+        if var.name == "TP_FRONTDOOR_PUBLIC_ORIGIN":
+            valid, detail, configured = _evaluate_public_origin(env)
             if valid and configured:
                 rows.append(("ok", var.name, detail))
             elif valid:
