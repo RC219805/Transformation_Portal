@@ -15,6 +15,7 @@ const ENV_KEYS = [
   "TP_FRONTDOOR_USERS_FILE",
   "TP_FRONTDOOR_USERS_JSON",
   "TP_FRONTDOOR_SESSION_DB",
+  "TP_FRONTDOOR_PUBLIC_ORIGIN",
   "TP_PORTAL_RUM_ENABLED",
   "TP_PORTAL_RUM_ROLLOUT_PERCENT",
   "TP_FRONTDOOR_RUM_ENABLED",
@@ -55,6 +56,7 @@ function withTestEnvironment({
   process.env.TP_FRONTDOOR_SESSION_DB = dbPath;
   process.env.TP_FRONTDOOR_USERS_FILE = usersFilePath;
   process.env.TP_FRONTDOOR_USERS_JSON = "[]";
+  delete process.env.TP_FRONTDOOR_PUBLIC_ORIGIN;
 
   if (rumEnabled) {
     process.env.TP_PORTAL_RUM_ENABLED = "1";

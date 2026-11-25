@@ -15,6 +15,7 @@ const ENV_KEYS = [
   "TP_FRONTDOOR_USERS_FILE",
   "TP_FRONTDOOR_USERS_JSON",
   "TP_FRONTDOOR_SESSION_DB",
+  "TP_FRONTDOOR_PUBLIC_ORIGIN",
   "TP_CF_ACCESS_TEAM_DOMAIN",
   "TP_CF_ACCESS_AUD",
   "TP_ALLOW_LOCAL_ACCESS_BYPASS",
@@ -70,6 +71,7 @@ function withTempEnvironment(overrides = {}) {
     delete process.env.TP_ALLOW_LOCAL_ACCESS_BYPASS;
   }
 
+  delete process.env.TP_FRONTDOOR_PUBLIC_ORIGIN;
   delete process.env.TP_PORTAL_RUM_ENABLED;
   delete process.env.TP_PORTAL_RUM_ROLLOUT_PERCENT;
   delete process.env.TP_FRONTDOOR_RUM_ENABLED;

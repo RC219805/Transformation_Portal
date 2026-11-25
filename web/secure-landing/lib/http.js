@@ -1,3 +1,5 @@
+import { resolvePublicOrigin } from "./config.js";
+
 const BASE_SECURITY_HEADERS = {
   "Referrer-Policy": "same-origin",
   "X-Content-Type-Options": "nosniff",
@@ -77,6 +79,20 @@ function trustedProtoValue(headerValue, fallbackValue) {
 
 export function buildRequestUrl(request, pathname) {
   const url = new URL(pathname, request.url);
+
+  // A configured public origin is the resolved origin for every request. Host
+  // and forwarded headers are not consulted, and only the path, query and
+  // fragment come from the request. They are assigned as components so a path
+  // such as "//host" can never become a new authority.
+  const { origin: publicOrigin } = resolvePublicOrigin();
+  if (publicOrigin) {
+    const resolved = new URL(publicOrigin);
+    resolved.pathname = url.pathname;
+    resolved.search = url.search;
+    resolved.hash = url.hash;
+    return resolved;
+  }
+
   const requestUrl = new URL(request.url);
   const fallbackHost = request.nextUrl.host || requestUrl.host;
   const fallbackProto = request.nextUrl.protocol || requestUrl.protocol || "";

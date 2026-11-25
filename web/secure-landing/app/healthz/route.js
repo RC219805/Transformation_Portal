@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server.js";
 
-import { getConfig } from "../../lib/config.js";
+import { getConfig, resolvePublicOrigin } from "../../lib/config.js";
 import { getDb } from "../../lib/db.js";
 import { applySecurityHeaders } from "../../lib/http.js";
 import { getSessionStore } from "../../lib/session-store/index.js";
@@ -236,6 +236,20 @@ async function evaluateBackend(config) {
   };
 }
 
+// A value is honoured only when it is one canonical https origin and the local
+// Access bypass is off. Anything else is a configuration error, reported here
+// without echoing the configured value.
+function evaluatePublicOrigin() {
+  const { configured, reason } = resolvePublicOrigin();
+
+  return {
+    ok: reason === null,
+    required: true,
+    configured,
+    reason
+  };
+}
+
 export async function GET() {
   const config = getConfig();
   const backend = await evaluateBackend(config);
@@ -245,7 +259,8 @@ export async function GET() {
     access_config: evaluateAccessConfig(config),
     user_source: evaluateUserSource(config),
     session_store: sessionStore,
-    session_scaling: evaluateSessionScaling(config)
+    session_scaling: evaluateSessionScaling(config),
+    public_origin: evaluatePublicOrigin()
   };
   const ok = Object.values(checks).every((check) => !check.required || check.ok);
 

@@ -67,3 +67,41 @@ test("normal path, query, credentials, and manual redirects keep their proxy con
   assert.equal(response, upstreamResponse);
   assert.equal(fetchMock.mock.callCount(), 1);
 });
+
+test("a bodyless POST keeps the browser's Origin, Referer, CSRF token and session cookie", async (t) => {
+  // The front door checks the browser's Origin against its configured public
+  // origin, so the Worker must hand these headers over untouched.
+  const upstreamResponse = new Response(null, {
+    status: 303,
+    headers: { Location: "https://portal.example/login", "Cache-Control": "no-store" }
+  });
+  const fetchMock = t.mock.method(globalThis, "fetch", async (upstreamRequest) => {
+    assert.equal(upstreamRequest.url, `${FRONTDOOR_ORIGIN}/logout`);
+    assert.equal(upstreamRequest.method, "POST");
+    assert.equal(upstreamRequest.redirect, "manual");
+    assert.equal(upstreamRequest.body, null);
+    assert.equal(upstreamRequest.headers.get("origin"), "https://portal.example");
+    assert.equal(upstreamRequest.headers.get("referer"), "https://portal.example/portal");
+    assert.equal(upstreamRequest.headers.get("x-csrf-token"), "test-csrf-token");
+    assert.equal(upstreamRequest.headers.get("cookie"), "__Host-tp_session=test-session");
+    assert.equal(upstreamRequest.headers.get("x-forwarded-host"), "portal.example");
+    assert.equal(upstreamRequest.headers.get("x-forwarded-proto"), "https");
+    return upstreamResponse;
+  });
+
+  const response = await worker.fetch(
+    new Request("https://portal.example/logout", {
+      method: "POST",
+      headers: {
+        Origin: "https://portal.example",
+        Referer: "https://portal.example/portal",
+        "X-CSRF-Token": "test-csrf-token",
+        Cookie: "__Host-tp_session=test-session"
+      }
+    }),
+    { FRONTDOOR_ORIGIN }
+  );
+
+  assert.equal(response, upstreamResponse);
+  assert.equal(fetchMock.mock.callCount(), 1);
+});
