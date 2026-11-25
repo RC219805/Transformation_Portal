@@ -68,26 +68,6 @@ def mock_depth_result():
     return _create
 
 
-@pytest.fixture
-def mock_backend_compute(mock_depth_result):
-    """Mock DA3Backend.compute() for performance tests (ADR-019)."""
-    with patch("transformation_portal.depth.backends.da3.DA3Backend.compute") as mock_compute:
-        # Configure backend compute mock to return realistic depth result
-        def _mock_compute(image, **kwargs):
-            # Extract dimensions from input image
-            if hasattr(image, "size"):
-                width, height = image.size
-            elif hasattr(image, "shape"):
-                height, width = image.shape[:2]
-            else:
-                height, width = 256, 256
-
-            return mock_depth_result(height=height, width=width)
-
-        mock_compute.side_effect = _mock_compute
-        yield mock_compute
-
-
 # Postprocessor mock removed - no longer needed with ADR-019 backend pattern
 # Backend handles its own postprocessing internally
 
@@ -316,32 +296,43 @@ class TestPhase2Performance:
         )
 
     @pytest.mark.benchmark
-    def test_sequential_fallback_no_overhead(self, tmp_path, mock_backend_compute):
-        """Ensure small batches fall back to sequential without penalty."""
+    def test_sequential_fallback_no_overhead(self, tmp_path):
+        """Small batches take the plain per-image path even with parallel processing enabled.
+
+        The fallback is a dispatch decision, so it is asserted as one: below the
+        four-image threshold ``enhance_batch_parallel`` must not enter the parallel
+        preprocessing stage and must call ``enhance_image`` once per input, in
+        order. An earlier wall-clock bound could not express that. It timed backend
+        start-up (a cold model load and a Hub request) on whichever runner ran it.
+        """
         from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
         # Create 2 test images (below 4-image threshold)
+        input_root = tmp_path / "input"
         test_images = []
         for i in range(2):
-            img_path = tmp_path / "input" / f"test_{i}.jpg"
+            img_path = input_root / f"test_{i}.jpg"
             img_path.parent.mkdir(parents=True, exist_ok=True)
             img = Image.new("RGB", (512, 512), color=(i * 100, i * 100, i * 100))
             img.save(img_path, quality=95)
             test_images.append(ImageInput(img_path))
 
-        # Benchmark with parallel enabled (should auto-fallback)
-        config = EnhanceConfig(model_variant=ModelVariant.METRIC_SMALL, enable_parallel_processing=True, enable_v2=False)
+        # Parallel stays enabled so the fallback is the only reason to run
+        # sequentially. The synthetic backend needs no model weights or network.
+        config = EnhanceConfig(depth_backend="synthetic", enable_parallel_processing=True, enable_v2=False)
         orch = EnhanceOrchestrator(config, tmp_path / "output")
+        assert orch._use_parallel
 
-        start = time.time()
-        results = orch.enhance_batch_parallel(test_images, input_root=tmp_path / "input")
-        total_time = time.time() - start
+        with (
+            patch.object(orch, "_parallel_preprocess_batch", wraps=orch._parallel_preprocess_batch) as parallel_stage,
+            patch.object(orch, "enhance_image", wraps=orch.enhance_image) as per_image,
+        ):
+            results = orch.enhance_batch_parallel(test_images, input_root=input_root)
 
-        # Verify: falls back to sequential (total time reasonable)
-        # With 2 images, should complete in < 2 seconds (overhead check)
-        assert total_time < 2.0, f"Sequential fallback too slow: {total_time:.2f}s for 2 images"
-        assert len(results) == 2
-        print(f"✓ Sequential fallback completed in {total_time:.2f}s (no overhead)")
+        parallel_stage.assert_not_called()
+        assert [call.args for call in per_image.call_args_list] == [(image, input_root) for image in test_images]
+        assert [result["status"] for result in results] == ["ok", "ok"]
+        print("✓ Sequential fallback used the per-image path for 2 images (no parallel stage)")
 
     @pytest.mark.benchmark
     def test_cache_store_scalability(self, tmp_path):

@@ -183,10 +183,10 @@ Mirror surface on the managed frontdoor: `web/secure-landing/lib/session-store/`
 
 ### Portal HTTP surfaces
 
-`app.py` (~10.8k lines) is the FastAPI origin. `portal.html` is the direct-debug HTML. `web/secure-landing/` is the **Node 22.x only** managed front door (Next.js) that splits the browser experience into `/`, `/login`, `/portal`. Authoritative routes:
+`app.py` (a large monolith) is the FastAPI origin. `portal.html` is the direct-debug HTML. `web/secure-landing/` is the **Node 22.x only** managed front door (Next.js) that splits the browser experience into `/`, `/login`, `/portal`. Authoritative routes:
 - `GET /healthz` — managed front-door liveness
 - `GET /ready` — backend liveness
-- `GET /v1/readiness` — execution-readiness matrix for the four governed pipelines
+- `GET /v1/readiness` — execution-readiness matrix for the governed pipelines: `lux-depth-v3`, the opt-in managed `lux-depth`, `lux-depth-v5` and `lux-depth-v6`, and archive gates A/B/C
 - `/v1/*` and `/v2/*` — typed envelope contracts (`ApiEnvelope[T]` from `src/transformation_portal/api/v1/envelopes.py`). The route inventory contract requires `/v2/jobs/...` to mirror `/v1/jobs/...` method coverage; response schema names remain the existing `tp.orchestrator.*.v1` envelopes unless intentionally changed.
 - Job lifecycle persists through `JobRepository` first; `JOBS` only carries runtime handles. Repository failures return redacted `503 JOB_REPOSITORY_UNAVAILABLE` rather than falling back to stale process cache.
 

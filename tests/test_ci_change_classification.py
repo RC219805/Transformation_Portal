@@ -100,6 +100,7 @@ def test_runtime_and_governance_changes_require_full_ci(path: str) -> None:
     "path",
     [
         "web/secure-landing/package-lock.json",
+        "web/secure-landing/portal-src/portal.template.js",
         "web/shared/shared-ui-tokens.css",
         "cloudflare/transformationportal-worker/src/index.ts",
         "public/portal-assets/portal.js",
@@ -112,6 +113,7 @@ def test_runtime_and_governance_changes_require_full_ci(path: str) -> None:
         "wrangler.jsonc",
         ".github/workflows/build.yml",
         "portal.html",
+        "scripts/validation/check_portal_asset_budgets.py",
         "scripts/validation/validate_frontdoor_browser_smoke.py",
         "scripts/validation/validate_portal_css_layer_parity.py",
         "tests/fixtures/portal-css/layer-parity-contract.json",

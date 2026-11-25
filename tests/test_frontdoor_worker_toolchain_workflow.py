@@ -1,4 +1,4 @@
-"""Execute the blocking job's owner and Worker shell steps without installing packages."""
+"""Execute blocking Frontdoor workflow shell steps without installing packages."""
 
 from __future__ import annotations
 
@@ -22,6 +22,8 @@ STEP_NAMES = (
     "Run Worker request security contracts",
     "Verify Worker toolchain and root shim",
     "Install frontdoor dependencies",
+    "Build frontdoor production bundle",
+    "Check built portal asset budgets",
 )
 
 
@@ -105,7 +107,7 @@ def test_frontdoor_job_caches_all_owner_locks_and_retains_bounded_blocking_check
             assert not step.get("continue-on-error", False)
 
 
-def test_job_executes_each_owned_install_before_worker_compilation_and_both_bundles(tmp_path: Path) -> None:
+def test_job_installs_owned_toolchains_and_checks_budgets_after_the_frontdoor_build(tmp_path: Path) -> None:
     result, events = _run_owner_steps(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
     assert [event["command"] for event in events] == [
@@ -119,9 +121,11 @@ def test_job_executes_each_owned_install_before_worker_compilation_and_both_bund
         "npm --prefix cloudflare/transformationportal-worker run dry-run",
         "npm run worker:dry-run",
         "npm ci",
+        "npm run build",
+        "python -I scripts/validation/check_portal_asset_budgets.py",
     ]
-    assert events[-1]["cwd"] == str(tmp_path / "web/secure-landing")
-    assert all(event["cwd"] == str(tmp_path) for event in events[:-1])
+    workdirs = [Path(event["cwd"]) for event in events]
+    assert workdirs == [tmp_path] * 9 + [tmp_path / "web/secure-landing"] * 2 + [tmp_path]
 
 
 @pytest.mark.parametrize(
@@ -145,10 +149,11 @@ def test_owner_version_or_manifest_mismatch_prevents_installs(
         "npm --prefix cloudflare/transformationportal-worker run typecheck",
         "npm --prefix cloudflare/transformationportal-worker run dry-run",
         "npm run worker:dry-run",
+        "npm run build",
+        "python -I scripts/validation/check_portal_asset_budgets.py",
     ],
 )
 def test_failed_owner_or_bundle_check_stops_the_job(tmp_path: Path, failure: str) -> None:
     result, events = _run_owner_steps(tmp_path, fail=failure)
     assert result.returncode == 17
     assert events[-1]["command"] == failure
-    assert all(event["cwd"] == str(tmp_path) for event in events)
