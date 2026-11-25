@@ -19,6 +19,7 @@
 //     entirely. Use only for emergencies.
 
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import {
   isTruthyEnvFlag,
   PUBLIC_ORIGIN_BYPASS_CONFLICT_REASON,
@@ -226,6 +227,14 @@ async function main() {
   if (trimmed(process.env.TP_FRONTDOOR_PREFLIGHT_DISABLE) === "1") {
     console.warn("[frontdoor preflight] disabled via TP_FRONTDOOR_PREFLIGHT_DISABLE=1");
     return;
+  }
+  if (process.env.npm_lifecycle_event === "dev") {
+    // Use the loader from this app's pinned Next installation and the same
+    // development phase as the `next dev` command that follows preflight.
+    process.env.NODE_ENV ||= "development";
+    const requireNext = createRequire(import.meta.resolve("next/package.json"));
+    const { loadEnvConfig } = requireNext("@next/env");
+    loadEnvConfig(process.cwd(), true);
   }
   validateEnv();
   await probeBackendAuth();

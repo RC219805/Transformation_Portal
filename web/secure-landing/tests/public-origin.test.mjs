@@ -732,18 +732,21 @@ test("healthz reports the public origin check without echoing the value", async 
     {
       name: "valid",
       env: { TP_FRONTDOOR_PUBLIC_ORIGIN: PUBLIC_ORIGIN },
+      alternateOrigin: "https://other.example",
       status: 200,
       check: { ok: true, required: true, configured: true, reason: null }
     },
     {
       name: "malformed",
       env: { TP_FRONTDOOR_PUBLIC_ORIGIN: `${PUBLIC_ORIGIN}/portal` },
+      alternateOrigin: "https://other.example/portal",
       status: 503,
       check: { ok: false, required: true, configured: true, reason: PUBLIC_ORIGIN_INVALID_REASON }
     },
     {
       name: "set with the local Access bypass",
       env: { NODE_ENV: "development", TP_ALLOW_LOCAL_ACCESS_BYPASS: "1", TP_FRONTDOOR_PUBLIC_ORIGIN: PUBLIC_ORIGIN },
+      alternateOrigin: "https://other.example",
       status: 503,
       check: { ok: false, required: true, configured: true, reason: PUBLIC_ORIGIN_BYPASS_CONFLICT_REASON }
     }
@@ -756,13 +759,16 @@ test("healthz reports the public origin check without echoing the value", async 
     try {
       const { GET } = await importFresh("../app/healthz/route.js");
       const response = await GET();
-      const text = await response.text();
-      const body = JSON.parse(text);
+      const body = await response.json();
 
       assert.equal(response.status, scenario.status, scenario.name);
       assert.deepEqual(body.checks.public_origin, scenario.check, scenario.name);
       assert.equal(body.ok, scenario.status === 200, scenario.name);
-      assert.equal(text.includes(PUBLIC_HOST), false, scenario.name);
+      if (scenario.alternateOrigin) {
+        process.env.TP_FRONTDOOR_PUBLIC_ORIGIN = scenario.alternateOrigin;
+        const alternateResponse = await GET();
+        assert.deepEqual(await alternateResponse.json(), body, scenario.name);
+      }
     } finally {
       restoreFetch();
       env.restore();
@@ -770,41 +776,66 @@ test("healthz reports the public origin check without echoing the value", async 
   }
 });
 
-test("the startup preflight fails closed on a public origin that is not honoured", () => {
+function runStartupPreflight(overrides, cwd = FRONTDOOR_APP_ROOT) {
   const scriptPath = path.join(FRONTDOOR_APP_ROOT, "scripts", "preflight-backend-auth.mjs");
-  const preflight = (overrides) =>
-    spawnSync(process.execPath, [scriptPath], {
-      cwd: FRONTDOOR_APP_ROOT,
-      encoding: "utf-8",
-      env: {
-        ...process.env,
-        NODE_ENV: "development",
-        // Nothing listens here; in development an unreachable backend is a warning.
-        TP_FASTAPI_ORIGIN: "http://127.0.0.1:9",
-        TP_BACKEND_API_KEY: "secret",
-        TP_PILOT_CONTROL_PLANE_ENABLED: "0",
-        TP_FRONTDOOR_PREFLIGHT_DISABLE: "0",
-        TP_FRONTDOOR_USERS_FILE: "",
-        TP_FRONTDOOR_USERS_JSON: JSON.stringify([
-          { username: "admin", password_hash: "hash", access_email: "admin@example.com" }
-        ]),
-        TP_ALLOW_LOCAL_ACCESS_BYPASS: "0",
-        TP_FRONTDOOR_PUBLIC_ORIGIN: "",
-        ...overrides
-      }
-    });
+  return spawnSync(process.execPath, [scriptPath], {
+    cwd,
+    encoding: "utf-8",
+    env: {
+      ...process.env,
+      npm_lifecycle_event: "",
+      NODE_ENV: "development",
+      // Nothing listens here; in development an unreachable backend is a warning.
+      TP_FASTAPI_ORIGIN: "http://127.0.0.1:9",
+      TP_BACKEND_API_KEY: "secret",
+      TP_PILOT_CONTROL_PLANE_ENABLED: "0",
+      TP_FRONTDOOR_PREFLIGHT_DISABLE: "0",
+      TP_FRONTDOOR_USERS_FILE: "",
+      TP_FRONTDOOR_USERS_JSON: JSON.stringify([
+        { username: "admin", password_hash: "hash", access_email: "admin@example.com" }
+      ]),
+      TP_ALLOW_LOCAL_ACCESS_BYPASS: "0",
+      TP_FRONTDOOR_PUBLIC_ORIGIN: "",
+      ...overrides
+    }
+  });
+}
 
-  const malformed = preflight({ TP_FRONTDOOR_PUBLIC_ORIGIN: "portal.example.com" });
+test("the startup preflight fails closed on a public origin that is not honoured", () => {
+  const malformed = runStartupPreflight({ TP_FRONTDOOR_PUBLIC_ORIGIN: "portal.example.com" });
   assert.notEqual(malformed.status, 0);
   assert.match(malformed.stderr, /TP_FRONTDOOR_PUBLIC_ORIGIN is not a canonical https origin/);
 
-  const conflict = preflight({ TP_ALLOW_LOCAL_ACCESS_BYPASS: "1", TP_FRONTDOOR_PUBLIC_ORIGIN: PUBLIC_ORIGIN });
+  const conflict = runStartupPreflight({ TP_ALLOW_LOCAL_ACCESS_BYPASS: "1", TP_FRONTDOOR_PUBLIC_ORIGIN: PUBLIC_ORIGIN });
   assert.notEqual(conflict.status, 0);
   assert.match(conflict.stderr, /TP_FRONTDOOR_PUBLIC_ORIGIN is set while the local Access bypass is active/);
 
   for (const accepted of [{}, { TP_FRONTDOOR_PUBLIC_ORIGIN: PUBLIC_ORIGIN }]) {
-    const result = preflight(accepted);
+    const result = runStartupPreflight(accepted);
     assert.equal(result.status, 0, result.stderr);
     assert.doesNotMatch(result.stderr, /TP_FRONTDOOR_PUBLIC_ORIGIN/);
   }
+});
+
+test("dev preflight loads Next.js dotenv files and honours an explicit loopback override", (t) => {
+  const projectDir = mkdtempSync(path.join(os.tmpdir(), "tp-public-origin-preflight-"));
+  t.after(() => rmSync(projectDir, { recursive: true, force: true }));
+  writeFileSync(path.join(projectDir, ".env.local"), "NODE_ENV=production\nTP_FRONTDOOR_PUBLIC_ORIGIN=portal.example.com\n");
+  writeFileSync(path.join(projectDir, ".env.development"), `TP_FRONTDOOR_PUBLIC_ORIGIN=${PUBLIC_ORIGIN}\n`);
+  const devPreflight = (overrides = {}) => runStartupPreflight({
+    npm_lifecycle_event: "dev", NODE_ENV: undefined, TP_FRONTDOOR_PUBLIC_ORIGIN: undefined, ...overrides
+  }, projectDir);
+
+  const malformed = devPreflight();
+  assert.equal(malformed.status, 1);
+  assert.match(malformed.stderr, /TP_FRONTDOOR_PUBLIC_ORIGIN is not a canonical https origin/);
+
+  const loopback = devPreflight({ TP_ALLOW_LOCAL_ACCESS_BYPASS: "1", TP_FRONTDOOR_PUBLIC_ORIGIN: "" });
+  assert.equal(loopback.status, 0, loopback.stderr);
+  assert.doesNotMatch(loopback.stderr, /TP_FRONTDOOR_PUBLIC_ORIGIN/);
+
+  writeFileSync(path.join(projectDir, ".env.development.local"), `TP_FRONTDOOR_PUBLIC_ORIGIN=${PUBLIC_ORIGIN}\n`);
+  const conflict = devPreflight({ TP_ALLOW_LOCAL_ACCESS_BYPASS: "1" });
+  assert.equal(conflict.status, 1);
+  assert.match(conflict.stderr, /TP_FRONTDOOR_PUBLIC_ORIGIN is set while the local Access bypass is active/);
 });

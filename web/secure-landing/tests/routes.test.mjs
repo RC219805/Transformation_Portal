@@ -413,7 +413,7 @@ test("run_frontdoor_local launcher supports isolated port, distdir, and local us
   const script = readFileSync(scriptPath, "utf-8");
 
   assert.match(script, /TP_FRONTDOOR_PORT/);
-  assert.match(script, /^unset TP_FRONTDOOR_PUBLIC_ORIGIN$/m);
+  assert.match(script, /^export TP_FRONTDOOR_PUBLIC_ORIGIN=""$/m);
   assert.match(script, /TP_FRONTDOOR_DIST_DIR/);
   assert.match(script, /TP_NEXT_DIST_DIR/);
   assert.match(script, /TP_FRONTDOOR_NEXT_DEV_ENGINE:-webpack/);
