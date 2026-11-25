@@ -140,3 +140,54 @@ def test_main_validates_budgeted_assets(
     captured = capsys.readouterr()
     assert "shared-ui-tokens.css: raw=" in captured.out
     assert "portal asset budgets: OK" in captured.out
+
+
+def test_main_fails_when_asset_exceeds_budget(
+    budget_module: ModuleType,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assets_dir = tmp_path / "public" / "portal-assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    (assets_dir / "portal.js").write_text("console.log('over budget');\n", encoding="utf-8")
+
+    budget_path = tmp_path / "portal_asset_budgets.json"
+    budget_path.write_text(
+        json.dumps(
+            {
+                "schema": "tp.portal_asset_budgets.v1",
+                "assets": {
+                    "portal.js": {
+                        "max_bytes": 8,
+                        "max_gzip_bytes": 8,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    budget_module.BUDGET_PATH = budget_path
+    budget_module.PORTAL_ASSETS_DIR = assets_dir
+
+    assert budget_module.main() == 1
+    captured = capsys.readouterr()
+    assert "portal.js: raw size" in captured.err
+    assert "portal.js: gzip size" in captured.err
+    assert "portal asset budgets: OK" not in captured.out
+
+
+def test_repo_portal_assets_fit_their_budgets(
+    budget_module: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Bind the validator to the committed bundles, as `make check-portal-asset-budgets` does."""
+    repo_root = Path(__file__).resolve().parents[2]
+    assert budget_module.BUDGET_PATH == repo_root / "config" / "portal_asset_budgets.json"
+    assert budget_module.PORTAL_ASSETS_DIR == repo_root / "public" / "portal-assets"
+
+    exit_code = budget_module.main()
+
+    captured = capsys.readouterr()
+    assert exit_code == 0, captured.err
+    assert "portal asset budgets: OK" in captured.out
