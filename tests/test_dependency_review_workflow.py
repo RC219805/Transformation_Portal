@@ -9,7 +9,7 @@ pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "dependency-review.yml"
-DEPENDENCY_REVIEW_SHA = "a1d282b36b6f3519aa1f3fc636f609c47dddb294"
+DEPENDENCY_REVIEW_SHA = "bbc44d14a204704ccc493733616cd1e93a0321ec"
 
 
 def _load_workflow() -> dict:
