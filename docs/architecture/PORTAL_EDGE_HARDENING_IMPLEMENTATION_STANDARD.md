@@ -1,6 +1,6 @@
 # Portal Edge Hardening Implementation Standard
 
-Date: 2026-04-13 (v2)
+Date: 2026-11-25 (v3)
 
 ## Summary
 
@@ -19,7 +19,9 @@ change.
 
 ## Terminology
 
-- **Public ingress / upstream edge**: external edge (for example Azure Front Door or WAF)
+- **Public ingress / upstream edge**: external edge (for example Azure Front Door, a WAF, or the
+  Cloudflare Worker edge proxy in `cloudflare/transformationportal-worker/`)
+- **Public origin**: the one origin browsers use to reach the managed frontdoor
 - **Managed frontdoor**: `web/secure-landing`
 - **Origin**: FastAPI (`app.py`)
 
@@ -81,24 +83,53 @@ Implementation rules:
 
 FastAPI host validation is enforced in `app.py` through `TrustedHostMiddleware`.
 
-The managed frontdoor does not implement a trusted-hop model. It enforces an
-equivalence rule:
+The managed frontdoor does not implement a trusted-hop model. It resolves the
+origin it answers as in one of two ways, and never from a forwarded header.
+
+Configured public origin. When `TP_FRONTDOOR_PUBLIC_ORIGIN` holds a value that
+is honoured, that origin is the resolved request origin for every request:
+
+- The value is one exact origin, `https://<host>[:<port>]`, written as a browser
+  sends it in `Origin`: lower case, a DNS name of at least two labels, with no
+  credentials, path, trailing slash, query, fragment, wildcard, IP literal,
+  loopback name, or default port. Nothing is normalised; a value that would
+  need it is rejected.
+- `Host`, `Forwarded`, `X-Forwarded-Host`, `X-Forwarded-Proto`, and the request
+  URL derived by the runtime do not affect the resolved origin. Only the path,
+  query, and fragment come from the request.
+- A browser that reaches the frontdoor under any other origin fails the
+  same-origin check and is redirected to the configured origin.
+- A malformed value, or any value while the local development bypass is
+  active, is not honoured. The frontdoor then behaves as if the variable were
+  unset, and `/healthz`, the startup preflight, and `make check-vercel-env`
+  report the failure.
+
+No configured public origin. The frontdoor keeps the equivalence rule:
 
 - Forwarded host and proto values are accepted only when they match the
   already-derived request URL surface.
 - Any mismatch between forwarded headers and the resolved request URL must be
   ignored.
-- Redirect construction and same-origin checks must use the resolved request
-  URL, not forwarded overrides.
+
+In both cases, redirect construction and same-origin checks must use the
+resolved request origin, not forwarded overrides.
 
 Required posture:
 
 - Keep `TP_ENABLE_TRUSTED_HOSTS=1` outside exceptional troubleshooting.
-- Keep `TP_TRUSTED_HOSTS` aligned with the actual deployed hostnames.
+- Keep `TP_TRUSTED_HOSTS` aligned with the actual deployed hostnames. It governs
+  the `Host` header FastAPI receives, which is the `TP_FASTAPI_ORIGIN` host, not
+  the public origin.
+- Set `TP_FRONTDOOR_PUBLIC_ORIGIN` wherever browsers reach the frontdoor on an
+  origin other than the one its runtime derives for itself. That includes the
+  Cloudflare Worker edge proxy and any tunnel or reverse proxy in front of a
+  self-hosted frontdoor. Set it only for the environment that serves that
+  origin.
 - Do not introduce hop-count or proxy-chain trust logic.
-- Do not treat forwarded headers as authoritative input.
-- Preserve the existing equivalence-based validation behavior in the managed
-  frontdoor.
+- Do not treat forwarded headers as authoritative input, and do not use one to
+  choose between origins.
+- Preserve the equivalence-based validation behavior for deployments that do
+  not configure a public origin.
 
 ### Security Headers And CSP
 
@@ -270,8 +301,13 @@ Minimum acceptance checks:
 
 - Untrusted FastAPI host header returns `400`.
 - Frontdoor redirects ignore untrusted host overrides.
-- Frontdoor redirect and same-origin behavior preserve the equivalence-based
-  proxy trust contract.
+- Without `TP_FRONTDOOR_PUBLIC_ORIGIN`, frontdoor redirect and same-origin
+  behavior preserve the equivalence-based proxy trust contract.
+- With an honoured `TP_FRONTDOOR_PUBLIC_ORIGIN`, redirects target that origin
+  and unsafe requests pass only when `Origin` (or the `Referer` origin when
+  `Origin` is absent) equals it, whatever `Host` and forwarded headers say.
+- A malformed `TP_FRONTDOOR_PUBLIC_ORIGIN`, or one set while the local
+  development bypass is active, fails `/healthz` and is not honoured.
 
 ### Cache Headers
 
@@ -347,3 +383,38 @@ Any deviation must record:
 - reason
 - compensating control
 - owner
+
+### Decision Record: Configured Public Origin (2026-11-25)
+
+Decided by the repository owner on 2026-11-25. This record covers the change to
+"Trusted Host And Proxy Trust" in v3.
+
+- **Surface**: redirect construction for `/login`, `/logout`, and `/portal`;
+  same-origin checks on `POST /login`, `POST /logout`, unsafe `/v1/*` methods,
+  and `POST /v1/portal/rum`.
+- **Reason**: a self-hosted Next.js runtime derives the request URL from its
+  own listener, and a Vercel build derives it from the deployment `Host`.
+  Behind the Cloudflare Worker edge proxy, a tunnel, or a reverse proxy,
+  neither is the origin the browser is on. Redirects left the public origin and
+  unsafe requests failed the same-origin check. This is finding F-01 in the
+  [2026-11-18 forensic audit](../analysis/REPOSITORY_FORENSIC_AUDIT_2026-11-18.md),
+  since reproduced against the production standalone build.
+- **Change**: `TP_FRONTDOOR_PUBLIC_ORIGIN` names one origin the frontdoor
+  answers as. It replaces how the resolved request origin is derived. It does
+  not make any forwarded header an input.
+- **Compensating controls**: the value is operator configuration on a closed
+  grammar; no request header selects or alters it; it is not honoured while the
+  local development bypass is active; `/healthz`, the startup preflight, and
+  `make check-vercel-env` fail on a value that is not honoured; the CSRF token,
+  session cookie, and Cloudflare Access JWT verification are unchanged.
+- **Residual risk**: a well-formed but wrong origin sends browsers to that host
+  and blocks sign-in, so review the accepted origin and repeat a sign-in through
+  the public hostname after each change. With the variable set, only that one
+  origin can sign in. Hosted behavior is established only by a real deployment,
+  not by repository tests.
+- **Alternatives rejected**: honouring `X-Forwarded-Host` when it equals a
+  configured host, which uses a forwarded header to choose the origin and fails
+  when an intermediary rewrites it; deriving same-origin from Fetch Metadata
+  with relative redirects, which changes the CSRF signal and every redirect
+  site.
+- **Owner**: Repository Architect.

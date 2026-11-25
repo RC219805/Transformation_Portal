@@ -24,6 +24,13 @@ the incoming path and query are copied. Session cookies and Access assertions
 are forwarded to the configured frontdoor, with redirects returned to the
 browser rather than followed by the Worker.
 
+Behind the Worker, a tunnel, or any reverse proxy, the front door cannot learn
+the browser's origin from the request: its runtime resolves its own listener or
+deployment host instead. Set `TP_FRONTDOOR_PUBLIC_ORIGIN` to the origin browsers
+use. Without it, redirects point at the front door's internal address and
+sign-in, sign-out, and `/v1/*` writes fail the same-origin check. The rule is
+defined in ["Trusted Host And Proxy Trust"](../architecture/PORTAL_EDGE_HARDENING_IMPLEMENTATION_STANDARD.md#trusted-host-and-proxy-trust).
+
 ## Opt-in photographic jobs
 
 The existing Build workflow exposes `lux-depth-v5` with separate photographic
@@ -71,6 +78,11 @@ Notes:
 - `TP_ALLOW_LOCAL_ACCESS_BYPASS=1` is for local development only and is honored only when `NODE_ENV=development`.
 - Production login expects a valid `Cf-Access-Jwt-Assertion`, a matching username/password pair, and issuer/audience validation against the configured Access team domain and audience tag.
 - Development uses an HTTP-safe `tp_session` cookie. Production uses `__Host-tp_session` with `Secure`.
+- `TP_FRONTDOOR_PUBLIC_ORIGIN` is the one origin browsers reach the front door on, for example `https://portal.example.com`. Leave it unset for loopback development and for a deployment whose runtime already sees the public URL, such as a Vercel project with the public hostname attached directly. Set it when browsers arrive through the Cloudflare Worker edge proxy, a tunnel, or a reverse proxy, and for any self-hosted start reached on a non-loopback hostname.
+- Write the value exactly as a browser sends it in `Origin`: `https://`, a lower-case DNS name, an optional non-default port, and nothing else. A path, trailing slash, upper-case letter, IP literal, or `localhost` is rejected, not corrected.
+- When the variable is set, sign-in works through that origin only. A browser on loopback, the raw origin URL, a preview URL, or a second hostname is redirected to it and cannot sign in. Set it only for the environment that serves that origin.
+- A malformed value, or any value while the local Access bypass is active, is not honoured: the front door behaves as if it were unset and `/healthz` fails with `invalid_public_origin` or `public_origin_conflicts_with_local_access_bypass`.
+- A well-formed but wrong value sends browsers to that host. After every change, sign in once through the public hostname.
 
 A successful `/ready` or frontdoor `/healthz` response does not prove that a
 processing job ran. `/v1/readiness`, a resolved plan, successful inference, and
@@ -436,7 +448,7 @@ Route ownership:
 - `GET /portal/bootstrap` returns the managed-mode bootstrap contract for the browser UI.
 - `/v1/*` stays same-origin at the front door and is proxied to FastAPI with server-side secret injection.
 - `GET /healthz` reports front-door readiness plus backend reachability.
-- `GET /healthz` now returns structured readiness checks under `checks.backend`, `checks.access_config`, `checks.user_source`, `checks.session_store`, and `checks.session_scaling`; required production failures return `503`.
+- `GET /healthz` now returns structured readiness checks under `checks.backend`, `checks.access_config`, `checks.user_source`, `checks.session_store`, `checks.session_scaling`, and `checks.public_origin`; required production failures return `503`.
 
 Static front-door assets:
 - `/brand/dna-symbol-dark.svg` and `/brand/dna-symbol-light.svg` for compact brand marks on dark and light front-door surfaces
@@ -571,6 +583,7 @@ originRequest:
 - Do not route normal browser traffic directly to FastAPI.
 - If the front door is hosted on Vercel, Cloudflare must still front the user-facing hostname, the app must continue to verify the Access JWT, and deployment or preview URLs must be protected with equivalent controls such as Vercel Deployment Protection.
 - If the front door is published through the Cloudflare Worker edge proxy, the Worker deployment URL must also be Access-protected and must not serve the real homepage or login shell unauthenticated.
+- Whenever the Worker edge proxy, a Cloudflare Tunnel hostname, or another reverse proxy is the public entry, set `TP_FRONTDOOR_PUBLIC_ORIGIN` on the front door to the user-facing origin, for that environment only. On Vercel, scope it to the Production environment so preview deployments keep resolving their own URL.
 - Deployment URL protection is distinct from production-domain coverage. Configure the appropriate Cloudflare Access or Vercel Deployment Protection scope for the environment you are validating; protecting only one URL is not sufficient for a production-domain rollout.
 - Treat this posture as a predeploy requirement before any internet-reachable staging or production environment, not as a post-launch hardening task.
 - SQLite sessions support only `TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance`.
@@ -712,7 +725,10 @@ and `TP_CF_ACCESS_AUD` are configured.
 If you want standalone validation with the production auth posture instead of
 the local bypass, keep `NODE_ENV=production`, supply
 `TP_CF_ACCESS_TEAM_DOMAIN` + `TP_CF_ACCESS_AUD`, and run it behind HTTPS (or an
-equivalent trusted edge) so the secure-cookie flow remains valid.
+equivalent trusted edge) so the secure-cookie flow remains valid. Also set
+`TP_FRONTDOOR_PUBLIC_ORIGIN` to that HTTPS origin: a standalone start resolves
+its own listener address, so sign-in from any other hostname is refused without
+it.
 
 If you want browser smoke against an already running managed front door, run it
 from the repo root and point it at that instance instead of
@@ -739,7 +755,8 @@ For release validation, prefer running the browser smoke against
 same `TP_NEXT_DIST_DIR=.next-build-verify` value, not only against `next dev`.
 The start wrapper launches the standalone build output and preserves the
 production-like cookie posture. Local HTTP login validation still needs
-HTTPS (or equivalent) if you want to exercise the full auth flow outside `next dev`.
+HTTPS (or equivalent), plus `TP_FRONTDOOR_PUBLIC_ORIGIN` set to that origin, if
+you want to exercise the full auth flow outside `next dev`.
 
 FastAPI contract gate:
 

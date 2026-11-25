@@ -24,6 +24,7 @@ two values as one secret, set them together, rotate them together.
 | `TP_FRONTDOOR_SESSION_DB` | when using SQLite sessions | Path to the SQLite session DB. Do not use SQLite for multi-instance hosted deployments. | `session_store_unavailable` |
 | `TP_CF_ACCESS_TEAM_DOMAIN` | production | Cloudflare Access team domain (`https://<team>.cloudflareaccess.com`). Validated by the preflight; required when `TP_ALLOW_LOCAL_ACCESS_BYPASS` is unset. | `missing_access_team_domain` |
 | `TP_CF_ACCESS_AUD` | production | Cloudflare Access JWT audience for the protected application. | `missing_access_audience` |
+| `TP_FRONTDOOR_PUBLIC_ORIGIN` | when browsers reach the frontdoor through the Cloudflare Worker edge proxy, a tunnel, or a reverse proxy, and for any self-hosted start on a non-loopback hostname | The one origin browsers use, written exactly as a browser sends it in `Origin`, for example `https://portal.example.com`. Redirects are built on it and the same-origin check expects it; `Host` and forwarded headers are never consulted. Leave it unset when the public hostname is attached directly to the Vercel project. | `invalid_public_origin` (malformed) / `public_origin_conflicts_with_local_access_bypass` |
 
 ## Optional variables
 
@@ -64,6 +65,20 @@ For Redis-backed hosted sessions, the checker requires
 `ephemeral_runtime` scaling. Unsupported session store selectors and unsupported
 scaling modes remain fail-closed.
 
+For `TP_FRONTDOOR_PUBLIC_ORIGIN`, the checker accepts only the canonical form:
+`https://`, a lower-case DNS name of at least two labels, an optional
+non-default port, and nothing else. It prints the accepted origin so it can be
+reviewed, because a well-formed but wrong value sends browsers to that host.
+After every change, sign in once through the public hostname.
+
+- Scope the variable to the environment that serves that origin. On Vercel that
+  is Production only: with it set, a preview or deployment URL redirects to the
+  public origin and cannot sign in.
+- The startup preflight does not run on Vercel, which does not use `npm start`.
+  There, `/healthz` and this checker are the only places a bad value shows up.
+- A malformed value is not honoured: the frontdoor behaves as if the variable
+  were unset while `/healthz` returns `503`.
+
 Expected shape when healthy:
 
 ```
@@ -82,13 +97,15 @@ Expected shape when healthy:
     "access_config": { "ok": true, "mode": "cloudflare_access", "teamDomainConfigured": true, "audienceConfigured": true },
     "user_source":   { "ok": true, "userCount": <n> },
     "session_store": { "ok": true, "configured": true, "backend": "redis" },
-    "session_scaling": { "ok": true, "backend": "redis", "mode": "multi_instance" }
+    "session_scaling": { "ok": true, "backend": "redis", "mode": "multi_instance" },
+    "public_origin": { "ok": true, "required": true, "configured": true, "reason": null }
   }
 }
 ```
 
-If `checks.backend.reason` is non-null, the table above identifies the missing
-configuration. `auth_status: 401` (with `status: 200`) means the upstream is
+`checks.public_origin.configured` says whether a value is set; the value itself
+is never echoed. If `checks.backend.reason` is non-null, the table above
+identifies the missing configuration. `auth_status: 401` (with `status: 200`) means the upstream is
 healthy but the configured `TP_BACKEND_API_KEY` does not match the backend's
 `TP_API_KEY` — rotate them together.
 
